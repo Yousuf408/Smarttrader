@@ -2,8 +2,92 @@
 // SCREENER PAGE
 // ================================================================
 
-// Strategy Dropdown - Change strategy and update table
-function onStrategyChange() {
+// ================================================================
+// FETCH ADVANCE ORB FROM BACKEND API
+// ================================================================
+async function fetchAdvanceORB() {
+    try {
+        const response = await fetch('/api/strategies/advanceorb');
+        if (!response.ok) {
+            throw new Error(`API returned ${response.status}`);
+        }
+        const result = await response.json();
+        return result;
+    } catch (error) {
+        console.error('Error fetching Advance ORB:', error);
+        showToast('⚠️ Error', 'Failed to fetch stock data from backend');
+        return null;
+    }
+}
+
+// ================================================================
+// RENDER STRATEGY DATA (from API)
+// ================================================================
+function renderStrategyData(result) {
+    const strategyId = document.getElementById('strategySelect').value;
+    const strategy = STRATEGIES[strategyId];
+    if (!strategy) return;
+
+    const data = result.data || [];
+    const columns = result.columns || strategy.columns || [];
+
+    // Update table headers
+    const thead = document.querySelector('#screenerHead tr');
+    const headerColumns = [...columns];
+    headerColumns.push('Action');
+    thead.innerHTML = headerColumns.map(col => `<th>${col}</th>`).join('');
+
+    // Update table rows
+    const tbody = document.getElementById('screenerBody');
+    if (data.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="${headerColumns.length}" style="text-align:center;padding:40px;color:var(--text-muted);">No stocks found for this strategy.</td></tr>`;
+    } else {
+        tbody.innerHTML = data.map(row => {
+            // Build values based on column order
+            const values = [];
+            headerColumns.forEach(col => {
+                if (col === 'Action') return;
+                
+                // Map column names to row properties
+                const colKey = col.replace(/ /g, '').replace(/\//g, '');
+                let value = row[col] || row[colKey] || row[col.toLowerCase()] || '';
+                
+                // Special formatting for price
+                if (col === 'Price' && typeof value === 'number') {
+                    value = `₹${value.toFixed(2)}`;
+                }
+                // Special formatting for CHG%
+                if (col === 'CHG%' && typeof value === 'number') {
+                    value = `${value > 0 ? '+' : ''}${value.toFixed(2)}%`;
+                }
+                // Special formatting for GAP%
+                if (col === 'GAP%' && typeof value === 'number') {
+                    value = `${value > 0 ? '+' : ''}${value.toFixed(2)}%`;
+                }
+                
+                values.push(value);
+            });
+
+            const symbol = row.Symbol || row.symbol || 'Unknown';
+            return `<tr>
+                ${values.map(val => `<td>${val}</td>`).join('')}
+                <td>
+                    <button class="btn-place-order btn-sm" onclick="placeOrder('${symbol}')" ${autoBuyEnabled ? 'disabled' : ''}>
+                        Place Order
+                    </button>
+                </td>
+            </tr>`;
+        }).join('');
+    }
+
+    document.getElementById('screenerCount').textContent = `Showing ${data.length} stocks`;
+    updatePlaceOrderButtons();
+}
+
+// ================================================================
+// STRATEGY DROPDOWN - Change strategy and update table
+// ================================================================
+async function onStrategyChange() {
     const strategyId = document.getElementById('strategySelect').value;
     const strategy = STRATEGIES[strategyId];
     if (!strategy) return;
@@ -13,6 +97,29 @@ function onStrategyChange() {
     document.getElementById('infoRule').textContent = strategy.entryRule;
     document.getElementById('infoRisk').textContent = strategy.risk;
 
+    // Check if this is Advance ORB (needs API call)
+    if (strategyId === 'advanceorb') {
+        // Show loading state
+        const tbody = document.getElementById('screenerBody');
+        const thead = document.querySelector('#screenerHead tr');
+        const columns = [...strategy.columns];
+        columns.push('Action');
+        thead.innerHTML = columns.map(col => `<th>${col}</th>`).join('');
+        tbody.innerHTML = `<tr><td colspan="${columns.length}" style="text-align:center;padding:40px;">⏳ Loading stocks from TradingView...</td></tr>`;
+        document.getElementById('screenerCount').textContent = 'Loading...';
+
+        // Fetch from backend
+        const result = await fetchAdvanceORB();
+        if (result) {
+            renderStrategyData(result);
+        } else {
+            tbody.innerHTML = `<tr><td colspan="${columns.length}" style="text-align:center;padding:40px;color:var(--color-danger);">❌ Failed to load data. Please try again.</td></tr>`;
+            document.getElementById('screenerCount').textContent = '0 stocks';
+        }
+        return;
+    }
+
+    // For other strategies (SmartMoney, Big Players) - use hardcoded data
     // Update table headers
     const thead = document.querySelector('#screenerHead tr');
     const columns = [...strategy.columns];
