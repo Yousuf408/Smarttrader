@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TradeAlgo Pro · Premium</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+    <!-- ================================================================ -->
+    <!-- NAVBAR -->
+    <!-- ================================================================ -->
+    <nav class="navbar">
+        <div class="logo">📊 <span>TradeAlgo</span>Pro</div>
+        <ul class="nav-links">
+            <li><a class="active" data-page="home">🏠 Home</a></li>
+            <li><a data-page="strategies">📋 Strategies</a></li>
+            <li><a data-page="screener">🔍 Screener</a></li>
+            <li><a data-page="portfolio">💰 Portfolio</a></li>
+            <li><a data-page="backtest">📊 Backtest</a></li>
+            <li><a data-page="settings">⚙️ Settings</a></li>
+        </ul>
+        <div class="nav-right">
+            <span class="status"><span class="dot"></span> Live</span>
+            <span class="balance">₹1,24,500</span>
+            <div class="avatar">JD</div>
+        </div>
+    </nav>
+
+    <!-- ================================================================ -->
+    <!-- MAIN CONTENT -->
+    <!-- ================================================================ -->
+    <div class="container">
+
+        <!-- ============================================================= -->
+        <!-- HOME -->
+        <!-- ============================================================= -->
+        <div id="page-home" class="page active">
+            <div class="stats-row">
+                <div class="stat-box"><div class="label">📊 Shortlisted</div><div class="value" id="s1">42</div><div class="sub green">↑ 6 new today</div></div>
+                <div class="stat-box"><div class="label">⚡ Active Trades</div><div class="value" id="s2">18</div><div class="sub green">↑ 3 this hour</div></div>
+                <div class="stat-box"><div class="label">🏆 Win Rate</div><div class="value" id="s3">68%</div><div class="sub green">↑ 4.2%</div></div>
+                <div class="stat-box"><div class="label">💰 P&L Today</div><div class="value" style="color:var(--color-success);" id="s4">+₹4,280</div><div class="sub green">↑ +2.3%</div></div>
+            </div>
+
+            <div class="home-grid">
+                <div>
+                    <div class="panel-glass">
+                        <div class="panel-head"><h3>⚡ Quick Actions</h3></div>
+                        <div class="panel-body action-buttons">
+                            <button class="btn btn-primary" onclick="navigateTo('screener')">🔍 Open Screener</button>
+                            <button class="btn btn-success" onclick="showToast('✅ Started','All strategies running')">▶ Start All</button>
+                            <button class="btn btn-danger" onclick="showToast('⛔ Stopped','All trades stopped')">⏹ Stop All</button>
+                        </div>
+                    </div>
+                    <div class="panel-glass">
+                        <div class="panel-head"><h3>📈 Recent Trades</h3></div>
+                        <div class="panel-body table-wrap" id="recentTrades"></div>
+                    </div>
+                </div>
+                <div>
+                    <div class="panel-glass">
+                        <div class="panel-head"><h3>📊 Market Overview</h3></div>
+                        <div class="panel-body" id="marketOverview"></div>
+                    </div>
+                    <div class="panel-glass" style="background:var(--gradient-brand);color:#fff;border:none;">
+                        <div class="panel-head" style="border-bottom-color:rgba(255,255,255,0.15);">
+                            <h3 style="color:#fff;">💡 Pro Tip</h3>
+                        </div>
+                        <div class="panel-body">
+                            <p style="font-weight:400;opacity:0.9;font-size:14px;">Try different strategies from the Screener dropdown!</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============================================================= -->
+        <!-- STRATEGIES -->
+        <!-- ============================================================= -->
+        <div id="page-strategies" class="page">
+            <div class="page-header"><h2>📋 Your Strategies</h2><button class="btn btn-primary" onclick="openModal('new')">+ New Strategy</button></div>
+            <div class="strategy-grid" id="strategyGrid"></div>
+            <div class="panel-glass" style="margin-top:24px;">
+                <div class="panel-head"><h3>📝 Performance Summary</h3></div>
+                <div class="panel-body table-wrap" id="strategyPerformance"></div>
+            </div>
+        </div>
+
+        <!-- ============================================================= -->
+        <!-- SCREENER – with Strategy Dropdown -->
+        <!-- ============================================================= -->
+        <div id="page-screener" class="page">
+            <div class="panel-glass">
+                <div class="panel-head">
+                    <h3>🔍 Stock Screener</h3>
+                    <div class="screener-controls">
+                        <!-- ===== STRATEGY DROPDOWN ===== -->
+                        <label>Strategy:</label>
+                        <select id="strategySelect" class="strategy-select" onchange="onStrategyChange()">
+                            <option value="advanceorb">📈 Advance ORB</option>
+                            <option value="smartmoney">💰 SmartMoney</option>
+                            <option value="bigplayers">🏢 Big Players</option>
+                        </select>
+                        <button class="btn btn-primary" onclick="runScreener()">🔄 Run Screener</button>
+                        
+                        <!-- ===== AUTO BUY TOGGLE ===== -->
+                        <div class="toggle-wrapper">
+                            <span class="toggle-label">Auto Buy</span>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="autoBuyToggle" onchange="toggleAutoBuyMode()" />
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <span class="toggle-status" id="toggleStatus">OFF</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="table-wrap">
+                    <table class="table-modern">
+                        <thead id="screenerHead">
+                            <tr>
+                                <th>Symbol</th>
+                                <th>Price</th>
+                                <th>CHG%</th>
+                                <th>GAP%</th>
+                                <th>Volume</th>
+                                <th>RELVOL</th>
+                                <th>Inside</th>
+                                <th>Breakout</th>
+                                <th>200 EMA</th>
+                                <th>9:15 HIGH</th>
+                                <th>PREV HIGH</th>
+                                <th>MaxQty</th>
+                                <th>Sector</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="screenerBody"></tbody>
+                    </table>
+                </div>
+                <div class="panel-footer">
+                    <span id="screenerCount">Showing 0 stocks</span>
+                    <div style="display:flex;gap:8px;">
+                        <button class="btn btn-outline btn-sm">📥 Export</button>
+                    </div>
+                </div>
+            </div>
+            <div class="panel-glass">
+                <div class="panel-head"><h3>📋 Strategy Details</h3></div>
+                <div class="panel-body info-grid">
+                    <div><div class="info-label">Strategy</div><div class="info-value" id="infoStrategy">Advance ORB</div></div>
+                    <div><div class="info-label">Entry Rule</div><div class="info-value" id="infoRule">Opening Range Breakout</div></div>
+                    <div><div class="info-label">Risk Per Trade</div><div class="info-value" style="color:var(--color-success);" id="infoRisk">2%</div></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============================================================= -->
+        <!-- PORTFOLIO -->
+        <!-- ============================================================= -->
+        <div id="page-portfolio" class="page">
+            <h2 class="section-title">💰 Portfolio</h2>
+            <div class="stats-row" id="portfolioStats"></div>
+            <div class="panel-glass">
+                <div class="panel-head"><h3>📊 Holdings</h3></div>
+                <div class="panel-body table-wrap" id="holdingsTable"></div>
+            </div>
+        </div>
+
+        <!-- ============================================================= -->
+        <!-- BACKTEST -->
+        <!-- ============================================================= -->
+        <div id="page-backtest" class="page">
+            <h2 class="section-title">📊 Backtest</h2>
+            <div class="panel-glass">
+                <div class="panel-head">
+                    <h3>⚙️ Configuration</h3>
+                    <div class="screener-controls" style="flex-wrap:wrap;">
+                        <select id="backtestStrategy">
+                            <option value="advanceorb">📈 Advance ORB</option>
+                            <option value="smartmoney">💰 SmartMoney</option>
+                            <option value="bigplayers">🏢 Big Players</option>
+                        </select>
+                        <input type="date" id="backtestStart" value="2025-01-01" />
+                        <input type="date" id="backtestEnd" value="2025-07-22" />
+                        <button class="btn btn-primary" onclick="runBacktest()">▶ Run Backtest</button>
+                    </div>
+                </div>
+                <div class="panel-body" id="backtestResults">
+                    <div class="chart-placeholder"><div><div class="big-icon">📊</div><p>Run a backtest to see results</p></div></div>
+                </div>
+            </div>
+            <div class="panel-glass">
+                <div class="panel-head"><h3>📋 Results</h3></div>
+                <div class="panel-body table-wrap" id="backtestMetrics"></div>
+            </div>
+        </div>
+
+        <!-- ============================================================= -->
+        <!-- SETTINGS -->
+        <!-- ============================================================= -->
+        <div id="page-settings" class="page">
+            <h2 class="section-title">⚙️ Settings</h2>
+
+            <div class="panel-glass">
+                <div class="panel-head"><h3>🔌 Broker Connection</h3></div>
+                <div class="panel-body">
+                    <div class="settings-group">
+                        <label>Select Broker</label>
+                        <select id="brokerSelect" onchange="toggleBrokerFields()">
+                            <option value="">— Choose —</option>
+                            <option value="dhan" selected>Dhan</option>
+                            <option value="zerodha">Zerodha</option>
+                            <option value="fyers">Fyers</option>
+                            <option value="upstox">Upstox</option>
+                        </select>
+                    </div>
+                    <div id="dhanFields" class="broker-fields">
+                        <div class="field-group field-full"><label>Client ID</label><input type="text" placeholder="Your Dhan Client ID" value="" /></div>
+                        <div class="field-group"><label>TOTP</label><input type="text" placeholder="TOTP secret" value="" /></div>
+                        <div class="field-group"><label>PIN</label><input type="password" placeholder="Trading PIN" value="" /></div>
+                        <div class="field-group field-full"><label>Secret Key</label><input type="password" placeholder="API Secret Key" value="" /></div>
+                    </div>
+                    <div id="otherBrokerFields"><p>🔑 Enter credentials for your selected broker.</p></div>
+                </div>
+            </div>
+
+            <div class="panel-glass">
+                <div class="panel-head"><h3>⚡ Risk Management</h3></div>
+                <div class="panel-body settings-grid">
+                    <div class="settings-group"><label>Max Risk Per Trade (%)</label><input type="number" value="2" /></div>
+                    <div class="settings-group"><label>Max Daily Loss (%)</label><input type="number" value="5" /></div>
+                    <div class="settings-group"><label>Max Positions</label><input type="number" value="10" /></div>
+                    <div class="settings-group"><label>Stop Loss (%)</label><input type="number" value="3" /></div>
+                </div>
+                <div style="padding:0 24px 24px 24px;">
+                    <button class="btn btn-primary" onclick="showToast('✅ Saved','Settings saved successfully')">💾 Save Settings</button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- ================================================================ -->
+    <!-- TOAST -->
+    <!-- ================================================================ -->
+    <div id="toast" class="toast">
+        <button class="toast-close" onclick="hideToast()">×</button>
+        <div class="toast-title" id="toastTitle">✅ Success</div>
+        <div id="toastMessage">Action completed</div>
+    </div>
+
+    <!-- ================================================================ -->
+    <!-- MODAL -->
+    <!-- ================================================================ -->
+    <div id="modalOverlay" class="modal-overlay">
+        <div class="modal">
+            <h2 id="modalTitle">✏️ Edit Strategy</h2>
+            <div class="form-group"><label>Strategy Name</label><input type="text" id="modalStrategyName" /></div>
+            <div class="form-group"><label>Description</label><input type="text" id="modalStrategyDesc" /></div>
+            <div class="form-group"><label>Entry Rule</label>
+                <select id="modalEntryRule">
+                    <option>Opening Range Breakout</option>
+                    <option>Breakout + Volume Confirmation</option>
+                    <option>Support & Resistance</option>
+                </select>
+            </div>
+            <div class="form-group"><label>Risk Per Trade (%)</label><input type="number" id="modalRisk" value="2" /></div>
+            <div class="modal-actions">
+                <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="saveStrategy()">💾 Save Strategy</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================================================================ -->
+    <!-- JAVASCRIPT - LOAD IN ORDER -->
+    <!-- ================================================================ -->
+    <script src="js/main.js"></script>
+    <script src="js/home.js"></script>
+    <script src="js/strategies.js"></script>
+    <script src="js/screener.js"></script>
+    <script src="js/portfolio.js"></script>
+    <script src="js/backtest.js"></script>
+    <script src="js/settings.js"></script>
+    <script>
+        // Initialize app
+        loadHome();
+        onStrategyChange();
+        toggleBrokerFields();
+        console.log('🚀 TradeAlgo Pro · Strategies: Advance ORB (full columns), SmartMoney, Big Players (reduced)');
+    </script>
+
+</body>
+</html>
