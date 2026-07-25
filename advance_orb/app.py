@@ -1,5 +1,8 @@
+from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from tradingview_screener import Query, col
 import pandas as pd
 
@@ -23,7 +26,7 @@ PRICE_MAX = 3000
 GAP_THRESHOLD = 2.0
 MARKET_CAP_MIN = 41_000_000_000  # 41 Billion INR
 
-@app.get("/")
+@app.get("/api")
 def root():
     return {
         "status": "ok",
@@ -141,6 +144,25 @@ def get_advance_orb():
 @app.get("/api/health")
 def health():
     return {"status": "healthy"}
+
+
+# Serve only the frontend assets from the same origin as the API. Do not expose
+# the repository root, which also contains backend source and project metadata.
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+
+@app.get("/", include_in_schema=False)
+def frontend():
+    return FileResponse(PROJECT_ROOT / "index.html", media_type="text/html")
+
+
+@app.get("/style.css", include_in_schema=False)
+def stylesheet():
+    return FileResponse(PROJECT_ROOT / "style.css", media_type="text/css")
+
+
+app.mount("/js", StaticFiles(directory=PROJECT_ROOT / "js"), name="frontend-js")
+
 
 if __name__ == "__main__":
     import uvicorn
