@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+pandas
+numpy
+yfinance
+tradingview-screener
+python-dotenv
+pytz
