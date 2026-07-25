@@ -28,14 +28,7 @@ const STRATEGIES = {
         entryRule: 'Opening Range Breakout',
         risk: '2%',
         columns: ['Symbol', 'Price', 'CHG%', 'GAP%', 'Volume', 'RELVOL', 'Inside', 'Breakout', '200 EMA', '9:15 HIGH', 'PREV HIGH', 'MaxQty', 'Sector'],
-        data: [
-            { symbol: 'NEPHROPLUS', price: '67.65', change: '+7.37%', gap: '+1.04%', volume: '379.0K', relvol: '1.41x', inside: '✗', breakout: 'Waiting', ema: '630.82', high915: '2,654.10', prevHigh: '2,640.25', maxQty: '0', sector: 'Health Services' },
-            { symbol: 'PANGJL', price: '2', change: '+7.37%', gap: '+1.04%', volume: '379.0K', relvol: '1.41x', inside: '✗', breakout: 'Waiting', ema: '630.82', high915: '2,654.10', prevHigh: '2,640.25', maxQty: '0', sector: 'Health Services' },
-            { symbol: 'SEDEMAC', price: '63.60', change: '+5.97%', gap: '+0.86%', volume: '2.5M', relvol: '4.31x', inside: '✗', breakout: 'Waiting', ema: '2,695.1', high915: '2,739.00', prevHigh: '2,748.00', maxQty: '0', sector: 'Consumer Durability' },
-            { symbol: 'ELIGIBL', price: '2,775.20', change: '+3.74%', gap: '+0.22%', volume: '156.0K', relvol: '1.96x', inside: '✗', breakout: 'Waiting', ema: '2,695.1', high915: '2,739.00', prevHigh: '2,748.00', maxQty: '0', sector: 'Process Industries' },
-            { symbol: 'APOLLO', price: '40.94', change: '+3.67%', gap: '+0.00%', volume: '13.7M', relvol: '1.60x', inside: '✗', breakout: 'Waiting', ema: '2,695.1', high915: '2,739.00', prevHigh: '2,748.00', maxQty: '0', sector: 'Technology Services' },
-            { symbol: 'SENDOC', price: '39.61', change: '+3.67%', gap: '+0.45%', volume: '5.5M', relvol: '1.82x', inside: '✗', breakout: 'Waiting', ema: '2,695.1', high915: '2,739.00', prevHigh: '2,748.00', maxQty: '0', sector: 'Technology Services' }
-        ]
+       
     },
     smartmoney: {
         id: 'smartmoney',
