@@ -1,4 +1,5 @@
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -6,6 +7,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from tradingview_screener import Query, col
 import pandas as pd
+import yfinance as yf
 
 app = FastAPI(
     title="TradeAlgo Pro - Advance ORB",
@@ -26,6 +28,74 @@ PRICE_MIN = 200
 PRICE_MAX = 3000
 GAP_THRESHOLD = 2.0
 MARKET_CAP_MIN = 41_000_000_000  # 41 Billion INR
+SMALL_CANDLE_THRESHOLD = 1.5
+IST = ZoneInfo("Asia/Kolkata")
+ADVANCE_ORB_COLUMNS = [
+    "Symbol",
+    "Price",
+    "CHG%",
+    "GAP%",
+    "Volume",
+    "RELVOL",
+    "Sector",
+    "Small Candle",
+]
+
+
+def has_small_opening_candle(symbol: str) -> bool:
+    """Return whether the latest available 9:15 IST five-minute candle is small."""
+    ticker = f"{str(symbol).strip().upper()}.NS"
+    try:
+        candles = yf.download(
+            tickers=ticker,
+            period="5d",
+            interval="5m",
+            progress=False,
+            auto_adjust=False,
+            prepost=False,
+            threads=False,
+        )
+    except Exception:
+        return False
+
+    if candles.empty:
+        return False
+
+    # yfinance can return a MultiIndex even for one ticker.
+    if isinstance(candles.columns, pd.MultiIndex):
+        try:
+            candles = candles.xs(ticker, axis=1, level=-1)
+        except (KeyError, IndexError):
+            try:
+                candles = candles.xs(ticker, axis=1, level=0)
+            except (KeyError, IndexError):
+                return False
+
+    if "High" not in candles or "Low" not in candles:
+        return False
+
+    local_index = pd.DatetimeIndex(candles.index)
+    if local_index.tz is None:
+        local_index = local_index.tz_localize(IST)
+    else:
+        local_index = local_index.tz_convert(IST)
+    candles = candles.copy()
+    candles.index = local_index
+
+    opening_candles = candles[
+        (candles.index.hour == 9) & (candles.index.minute == 15)
+    ]
+    if opening_candles.empty:
+        return False
+
+    candle = opening_candles.iloc[-1]
+    high = pd.to_numeric(candle["High"], errors="coerce")
+    low = pd.to_numeric(candle["Low"], errors="coerce")
+    if pd.isna(high) or pd.isna(low) or low <= 0:
+        return False
+
+    candle_range = (high - low) / low * 100
+    return candle_range <= SMALL_CANDLE_THRESHOLD
 
 @app.get("/api")
 def root():
@@ -79,7 +149,7 @@ def get_advance_orb():
                 "name": "Advance ORB",
                 "count": 0,
                 "data": [],
-                "columns": ["Symbol", "Price", "CHG%", "GAP%", "Volume", "RELVOL", "Sector"],
+                "columns": ADVANCE_ORB_COLUMNS,
                 "message": "No stocks found matching the conditions"
             }
 
@@ -93,7 +163,7 @@ def get_advance_orb():
                 "name": "Advance ORB",
                 "count": 0,
                 "data": [],
-                "columns": ["Symbol", "Price", "CHG%", "GAP%", "Volume", "RELVOL", "Sector"],
+                "columns": ADVANCE_ORB_COLUMNS,
                 "message": f"No stocks with gap < {GAP_THRESHOLD}%"
             }
 
@@ -101,7 +171,10 @@ def get_advance_orb():
         result = []
         for _, row in df.iterrows():
             symbol = row['name']
-            
+            small_candle = has_small_opening_candle(symbol)
+            if not small_candle:
+                continue
+
             # Format volume
             vol = row.get('volume', 0)
             if vol >= 1_000_000:
@@ -122,7 +195,8 @@ def get_advance_orb():
                 "GAP%": round(row['gap'], 2),
                 "Volume": volume_str,
                 "RELVOL": relvol_str,
-                "Sector": row.get('sector', 'Unknown')
+                "Sector": row.get('sector', 'Unknown'),
+                "Small Candle": "✓" if small_candle else "✗",
             })
 
         return {
@@ -130,17 +204,19 @@ def get_advance_orb():
             "name": "Advance ORB",
             "count": len(result),
             "data": result,
-            "columns": ["Symbol", "Price", "CHG%", "GAP%", "Volume", "RELVOL", "Sector"],
+            "columns": ADVANCE_ORB_COLUMNS,
             "conditions": {
                 "price": f"{PRICE_MIN} to {PRICE_MAX} INR",
                 "gap": f"< {GAP_THRESHOLD}%",
                 "market_cap": f"> {MARKET_CAP_MIN/1e9:.0f}B INR",
-                "exchange": "NSE"
+                "exchange": "NSE",
+                "small_candle": f"9:15 IST range <= {SMALL_CANDLE_THRESHOLD}%",
             }
         }
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/api/health")
 def health():
