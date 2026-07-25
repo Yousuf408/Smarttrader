@@ -7,7 +7,7 @@
 // ================================================================
 async function fetchAdvanceORB() {
     try {
-        const response = await fetch('https://[your-function-id].appwrite.network/api/strategies/advanceorb');
+        const response = await fetch('/api/strategies/advanceorb');
         if (!response.ok) {
             throw new Error(`API returned ${response.status}`);
         }

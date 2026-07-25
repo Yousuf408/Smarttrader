@@ -1,0 +1,1 @@
+- [Least-privilege frontend hosting](secure-static-hosting.md) — serve explicit frontend files and asset directories; never mount the repository root in a web app.
