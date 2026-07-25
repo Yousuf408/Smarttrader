@@ -27,8 +27,8 @@ const STRATEGIES = {
         icon: '📈',
         entryRule: 'Opening Range Breakout',
         risk: '2%',
-        columns: ['Symbol', 'Price', 'CHG%', 'GAP%', 'Volume', 'RELVOL', 'Inside', 'Breakout', '200 EMA', '9:15 HIGH', 'PREV HIGH', 'MaxQty', 'Sector'],
-       
+        columns: ['Symbol', 'Price', 'CHG%', 'GAP%', 'Volume', 'RELVOL', 'Inside', 'Breakout', '200 EMA', '9:15 HIGH', 'PREV HIGH', 'MaxQty', 'Sector']
+        // ✅ data array removed - will come from backend API
     },
     smartmoney: {
         id: 'smartmoney',
