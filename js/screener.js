@@ -19,12 +19,24 @@ let _stepperRefreshTimer = null;
 function _getBudgetInput() { return document.getElementById("budgetInput"); }
 function _getPartsInput()  { return document.getElementById("partsInput"); }
 
-function _readBudget() {
+// Indian grouping: 100000 -> "1,00,000",  50000 -> "50,000",
+// 5500 -> "5,500". Used as both display format and the canonical
+// string representation of Budget in the input.
+function _formatIndianNumber(n) {
+    return Number(n || 0).toLocaleString('en-IN');
+}
+
+// Parsed integer ignoring commas / ₹ / spaces — source of truth for
+// every code path that needs to fetch with a numeric budget.
+function _readRawBudget() {
     const el = _getBudgetInput();
     if (!el) return BUDGET_DEFAULT;
-    const v = parseInt(el.value, 10);
+    const raw = (el.dataset.value || el.value || '').replace(/[^\d]/g, '');
+    const v = parseInt(raw, 10);
     return (Number.isFinite(v) && v > 0) ? v : BUDGET_DEFAULT;
 }
+// Backwards-compat alias — fetchAdvanceORB() calls _readBudget().
+function _readBudget() { return _readRawBudget(); }
 function _readParts() {
     const el = _getPartsInput();
     if (!el) return PARTS_DEFAULT;
@@ -46,8 +58,41 @@ function _restoreSteppers() {
     } catch (e) {}
     const bEl = _getBudgetInput();
     const pEl = _getPartsInput();
-    if (bEl) bEl.value = budget;
+    if (bEl) {
+        bEl.dataset.value = String(budget);
+        bEl.value         = _formatIndianNumber(budget);
+    }
     if (pEl) pEl.value = parts;
+}
+
+// Idempotent — wires focus / input / blur listeners that keep the
+// budget field formatted as Indian grouping whenever the user
+// edits it. Called once at DOMContentLoaded.
+function _attachBudgetFormatter() {
+    const el = _getBudgetInput();
+    if (!el || el.dataset.fmtAttached === '1') return;
+    el.dataset.fmtAttached = '1';
+
+    el.addEventListener('focus', () => {
+        const raw = el.dataset.value || (el.value || '').replace(/[^\d]/g, '');
+        el.dataset.value = raw;
+        el.value = raw;
+        setTimeout(() => { try { el.select(); } catch (_) {} }, 0);
+    });
+    el.addEventListener('input', () => {
+        const raw = (el.value || '').replace(/[^\d]/g, '').slice(0, 9);
+        el.dataset.value = raw;
+        el.value = raw ? _formatIndianNumber(parseInt(raw, 10)) : '';
+    });
+    el.addEventListener('blur', () => {
+        let raw = parseInt(el.dataset.value || '0', 10);
+        if (!Number.isFinite(raw) || raw <= 0) raw = BUDGET_DEFAULT;
+        raw = Math.max(5000, raw);
+        el.dataset.value = String(raw);
+        el.value         = _formatIndianNumber(raw);
+        _persistBudget(raw);
+        _scheduleScreenerRefresh();
+    });
 }
 
 function stepBudget(delta) {
@@ -103,6 +148,7 @@ document.addEventListener("DOMContentLoaded", () => {
             _scheduleScreenerRefresh();
         });
     }
+    _attachBudgetFormatter();
     _restoreSteppers();
 });
 

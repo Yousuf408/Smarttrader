@@ -692,4 +692,96 @@ body {
     margin: 0;
 }
 
+/* ================================================================
+   BUDGET CONTROL — text input with Indian comma grouping (no ±)
+   ================================================================ */
+.budget-control {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: var(--bg-secondary);
+    border: 2px solid rgba(0,0,0,0.06);
+    padding: 4px 10px;
+    border-radius: var(--radius-sm);
+    transition: var(--transition);
+}
+.budget-control:focus-within {
+    border-color: #6C5CE7;
+    box-shadow: 0 0 0 4px rgba(108,92,231,0.10);
+}
+.budget-control .field-label {
+    color: var(--text-secondary);
+    font-weight: 600;
+    font-size: 12px;
+    user-select: none;
+}
+.budget-control .prefix-rupee {
+    color: var(--text-muted);
+    font-weight: 700;
+    font-size: 13px;
+}
+.budget-control input {
+    width: 78px;
+    border: none;
+    background: transparent;
+    font-weight: 700;
+    text-align: right;
+    font-size: 13px;
+    color: var(--text-primary);
+    padding: 4px 2px;
+    outline: none;
+    -moz-appearance: textfield;
+}
+.budget-control input::-webkit-outer-spin-button,
+.budget-control input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+/* ================================================================
+   PARTS STEPPER (narrow) — ~50% of default stepper width
+   ================================================================ */
+.stepper-narrow .field-label { font-size: 12px; margin-right: 4px; }
+.stepper-narrow input {
+    width: 40px;
+    font-size: 12px;
+    padding: 2px 4px;
+    text-align: center;
+}
+.stepper-narrow button {
+    width: 22px;
+    height: 22px;
+    font-size: 12px;
+}
+
+/* ================================================================
+   AUTO BUY INLINE — fits the same row as Strategy / Budget / Parts
+   ================================================================ */
+.auto-buy-inline {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--bg-secondary);
+    border: 2px solid rgba(0,0,0,0.06);
+    padding: 4px 10px;
+    border-radius: var(--radius-sm);
+    transition: var(--transition);
+}
+.auto-buy-inline .auto-buy-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    user-select: none;
+}
+.auto-buy-inline .toggle-switch { width: 38px; height: 22px; }
+.auto-buy-inline .toggle-slider::before {
+    width: 16px;
+    height: 16px;
+    left: 3px;
+    bottom: 3px;
+}
+.auto-buy-inline .toggle-switch input:checked + .toggle-slider::before {
+    transform: translateX(16px);
+}
+
 /* Auto-deploy trigger - v1 */
