@@ -1,0 +1,303 @@
+# ================================================================
+# QUANTITY CALCULATOR - Dhan API Integration
+# Streamlit code removed, FastAPI compatible
+# ================================================================
+
+import requests
+import pandas as pd
+import math
+import io
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+# ================================================================
+# DHAN CREDENTIALS
+# ================================================================
+DHAN_CLIENT_ID = "1102302753"
+DHAN_PIN = "786786"
+DHAN_TOTP_SECRET = "THWBRO5KI5N7ACJUNY7W3JUDKL4M2LML"
+DHAN_MANUAL_ACCESS_TOKEN = ""
+
+# ================================================================
+# PROXY CONFIGURATION
+# ================================================================
+DHAN_PROXY_HOST = "151.242.178.149"
+DHAN_PROXY_PORT = "50100"
+DHAN_PROXY_USERNAME = "yousufshaikh420"
+DHAN_PROXY_PASSWORD = "cVTbJi6VVA"
+DHAN_PROXY_URL = f"http://{DHAN_PROXY_USERNAME}:{DHAN_PROXY_PASSWORD}@{DHAN_PROXY_HOST}:{DHAN_PROXY_PORT}"
+DHAN_PROXIES = {"http": DHAN_PROXY_URL, "https": DHAN_PROXY_URL}
+
+# ================================================================
+# DHAN API URLS
+# ================================================================
+DHAN_MARGIN_CALCULATOR_URL = "https://api.dhan.co/v2/margincalculator"
+DHAN_SCRIP_MASTER_URL = "https://images.dhan.co/api-data/api-scrip-master-detailed.csv"
+DHAN_TOKEN_GENERATE_URL = "https://auth.dhan.co/app/generateAccessToken"
+DHAN_FUND_LIMIT_URL = "https://api.dhan.co/v2/fundlimit"
+
+# ================================================================
+# ACCESS TOKEN (Hardcoded for now, will be dynamic via popup later)
+# ================================================================
+DHAN_ACCESS_TOKEN = DHAN_MANUAL_ACCESS_TOKEN or "your_dhan_access_token_here"
+
+# Cache for security ID map
+SECURITY_ID_CACHE = {}
+MASTER_CSV_CACHE = None
+
+
+# ================================================================
+# LOAD INSTRUMENT MASTER
+# ================================================================
+def load_instrument_master():
+    """Load Dhan instrument master CSV - cache for performance"""
+    global MASTER_CSV_CACHE
+
+    if MASTER_CSV_CACHE is not None:
+        return MASTER_CSV_CACHE
+
+    try:
+        response = requests.get(DHAN_SCRIP_MASTER_URL, timeout=30)
+        if response.status_code != 200:
+            print(f"❌ Failed to load master CSV: {response.status_code}")
+            return pd.DataFrame()
+
+        MASTER_CSV_CACHE = pd.read_csv(io.StringIO(response.text), low_memory=False)
+        print(f"✅ Loaded {len(MASTER_CSV_CACHE)} instruments from Dhan master")
+        return MASTER_CSV_CACHE
+    except Exception as e:
+        print(f"❌ Error loading master CSV: {e}")
+        return pd.DataFrame()
+
+
+# ================================================================
+# GET SECURITY ID
+# ================================================================
+def get_security_id(symbol):
+    """Get Security ID from Dhan master CSV"""
+    if not symbol:
+        return None
+
+    # Check cache first
+    if symbol.upper() in SECURITY_ID_CACHE:
+        return SECURITY_ID_CACHE[symbol.upper()]
+
+    try:
+        df = load_instrument_master()
+        if df.empty:
+            return None
+
+        # Find UNDERLYING_SYMBOL column
+        symbol_col = next(
+            (c for c in df.columns if "UNDERLYING_SYMBOL" in c.upper()), None
+        )
+        if not symbol_col:
+            symbol_col = next((c for c in df.columns if "SYMBOL" in c.upper()), None)
+
+        # Find SECURITY_ID column
+        sec_id_col = next((c for c in df.columns if "SECURITY_ID" in c.upper()), None)
+
+        if not symbol_col or not sec_id_col:
+            print(f"❌ Required columns not found in master CSV")
+            return None
+
+        # Filter for NSE
+        nse_df = df[df["SEM_EXM_EXCH_ID"].astype(str).str.upper() == "NSE"]
+        row = nse_df[nse_df[symbol_col].str.upper() == symbol.upper()]
+
+        if row.empty:
+            print(f"⚠️ Symbol {symbol} not found in master CSV")
+            return None
+
+        sec_id = str(row[sec_id_col].values[0])
+        SECURITY_ID_CACHE[symbol.upper()] = sec_id
+        return sec_id
+    except Exception as e:
+        print(f"❌ Error getting security ID for {symbol}: {e}")
+        return None
+
+
+# ================================================================
+# GET MARGIN PER SHARE
+# ================================================================
+def get_margin_per_share(security_id, price, access_token=None):
+    """Call Dhan margin calculator API for single stock"""
+    token = access_token or DHAN_ACCESS_TOKEN
+
+    if not token or token == "your_dhan_access_token_here":
+        print("⚠️ Access token not set")
+        return 0
+
+    try:
+        payload = {
+            "dhanClientId": str(DHAN_CLIENT_ID),
+            "exchangeSegment": "NSE_EQ",
+            "transactionType": "BUY",
+            "quantity": 1,
+            "productType": "INTRADAY",
+            "securityId": str(security_id),
+            "price": float(price),
+            "triggerPrice": 0,
+        }
+
+        headers = {
+            "Content-Type": "application/json",
+            "access-token": token,
+        }
+
+        response = requests.post(
+            DHAN_MARGIN_CALCULATOR_URL,
+            json=payload,
+            headers=headers,
+            proxies=DHAN_PROXIES,
+            timeout=10,
+        )
+
+        if response.status_code == 200:
+            data = response.json()
+            margin = float(data.get("totalMargin", 0))
+            return margin
+        else:
+            print(f"⚠️ Dhan API error: {response.status_code}")
+            return 0
+    except Exception as e:
+        print(f"❌ Error calculating margin for security {security_id}: {e}")
+        return 0
+
+
+# ================================================================
+# CALCULATE SINGLE STOCK QTY
+# ================================================================
+def calculate_qty(symbol, price, total_capital, num_parts=4, access_token=None):
+    """Calculate max quantity for single stock"""
+    if not symbol or not price or total_capital <= 0:
+        return 0
+
+    try:
+        # Get security ID
+        sec_id = get_security_id(symbol)
+        if not sec_id:
+            print(f"⚠️ Could not get security ID for {symbol}")
+            return 0
+
+        # Get margin per share
+        margin = get_margin_per_share(sec_id, price, access_token)
+        if margin <= 0:
+            print(f"⚠️ Invalid margin for {symbol}: {margin}")
+            return 0
+
+        # Split capital into parts (4 parts = 25% per trade)
+        part_capital = total_capital / num_parts
+
+        # Calculate qty: capital / margin per share
+        qty = math.floor(part_capital / margin)
+
+        return max(qty, 0)
+    except Exception as e:
+        print(f"❌ Error calculating qty for {symbol}: {e}")
+        return 0
+
+
+# ================================================================
+# CALCULATE MULTIPLE STOCKS (PARALLEL)
+# ================================================================
+def calculate_max_quantities(
+    symbols, prices, total_capital=100000, num_parts=4, access_token=None
+):
+    """Calculate quantities for multiple stocks in parallel"""
+    if not symbols or not prices or len(symbols) != len(prices):
+        return {}
+
+    results = {}
+
+    def fetch_qty(symbol, price):
+        qty = calculate_qty(symbol, price, total_capital, num_parts, access_token)
+        return symbol, qty
+
+    try:
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            futures = {
+                executor.submit(fetch_qty, sym, price): sym
+                for sym, price in zip(symbols, prices)
+            }
+
+            for future in as_completed(futures):
+                try:
+                    symbol, qty = future.result()
+                    results[symbol] = qty
+                except Exception as e:
+                    symbol = futures[future]
+                    print(f"❌ Error processing {symbol}: {e}")
+                    results[symbol] = 0
+    except Exception as e:
+        print(f"❌ Error in parallel processing: {e}")
+        for symbol in symbols:
+            results[symbol] = 0
+
+    return results
+
+
+# ================================================================
+# ADD MAXQTY COLUMN TO DATAFRAME
+# ================================================================
+def calculate_max_quantity_column(
+    df, total_capital=100000, num_parts=4, access_token=None
+):
+    """Add MaxQty column to dataframe"""
+    try:
+        if df.empty:
+            df["MaxQty"] = 0
+            return df
+
+        # Extract symbols and prices
+        symbol_col = next((c for c in df.columns if c.upper() == "SYMBOL"), None)
+        price_col = next((c for c in df.columns if c.upper() == "PRICE"), None)
+
+        if not symbol_col or not price_col:
+            print("⚠️ Symbol or Price column not found")
+            df["MaxQty"] = 0
+            return df
+
+        symbols = df[symbol_col].astype(str).tolist()
+        prices = pd.to_numeric(df[price_col], errors="coerce").tolist()
+
+        # Calculate quantities in parallel
+        qty_map = calculate_max_quantities(
+            symbols, prices, total_capital, num_parts, access_token
+        )
+
+        # Add to dataframe
+        df["MaxQty"] = df[symbol_col].map(qty_map).fillna(0).astype(int)
+
+        return df
+    except Exception as e:
+        print(f"❌ Error adding MaxQty column: {e}")
+        df["MaxQty"] = 0
+        return df
+
+
+# ================================================================
+# TEST FUNCTION
+# ================================================================
+def test_qty_calculation():
+    """Test qty calculation"""
+    print("\n📊 Testing Qty Calculator...")
+
+    # Test data
+    test_symbols = ["RELIANCE", "TCS", "INFY"]
+    test_prices = [2856.40, 3920.00, 1545.00]
+
+    print(f"Testing with symbols: {test_symbols}")
+    print(f"Testing with prices: {test_prices}")
+
+    # Calculate
+    results = calculate_max_quantities(test_symbols, test_prices, total_capital=100000)
+
+    print("\n✅ Results:")
+    for symbol, qty in results.items():
+        print(f"  {symbol}: Qty = {qty}")
+
+    return results
+
+
+if __name__ == "__main__":
+    test_qty_calculation()
