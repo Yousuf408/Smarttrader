@@ -14,6 +14,39 @@ const BUDGET_KEY = "tradeAlgo.budget";
 const PARTS_KEY  = "tradeAlgo.parts";
 const BUDGET_DEFAULT = 100000;
 const PARTS_DEFAULT  = 4;
+
+// =====================================================================
+// AUTO BUY PRICE-BAND FILTER (9:15 high breakout)
+// =====================================================================
+// Auto-buy only fires when the row's CURRENT PRICE has just broken
+// ABOVE its 9:15 IST opening-candle high by a tight percentage band:
+//     move_pct = (price - high915) / high915 * 100
+// and the move sits inside this band:
+//     [AUTO_BUY_MIN_MOVE_ABOVE_915_PCT,
+//      AUTO_BUY_MAX_MOVE_ABOVE_915_PCT]
+//
+// Why these two thresholds:
+//   • MIN_MOVE_ABOVE_915_PCT (0.15%) — smallest gap above the 9:15
+//     high that still counts as a "real breakout". Tighter (smaller
+//     number) = earlier entries but more false breakouts. The sweet
+//     spot is 0.10–0.20%.
+//   • MAX_MOVE_ABOVE_915_PCT (0.50%) — largest gap above the 9:15
+//     high we'll accept. Beyond this the breakout is already
+//     stretched → late-entry pullback risk.
+//
+// How to retune (no other file/code changes needed):
+//   • Disable lower bound (still allow entry even if price is AT or
+//     BELOW 9:15 high): set MIN_MOVE_ABOVE_915_PCT = 0 (or any negative).
+//   • Disable upper cap (no stretch limit; ride the runaway):
+//     set MAX_MOVE_ABOVE_915_PCT = 100 (or any large number).
+//   • Tighter both bounds  (e.g. 0.10 / 0.30) → fewer but more
+//     confirmed breakouts.
+//   • Looser both bounds   (e.g. 0.20 / 1.00) → more candidates
+//     but later entries / FOMO trades.
+// =====================================================================
+const AUTO_BUY_MIN_MOVE_ABOVE_915_PCT = 0.15;
+const AUTO_BUY_MAX_MOVE_ABOVE_915_PCT = 0.50;
+
 let _stepperRefreshTimer = null;
 
 function _getBudgetInput() { return document.getElementById("budgetInput"); }
@@ -487,7 +520,68 @@ async function autoBuyAllStocks() {
         return;
     }
 
-    const orders = topN.map(r => ({
+    // -----------------------------------------------------------------
+    // 9:15 HIGH PRICE-BAND FILTER
+    // -----------------------------------------------------------------
+    // For every candidate in topN, compute the gap of `price` above
+    // its 9:15 IST opening-candle high. Keep only those whose
+    //   move_pct = (price - high915) / high915 * 100
+    // sits inside
+    //   [AUTO_BUY_MIN_MOVE_ABOVE_915_PCT,
+    //    AUTO_BUY_MAX_MOVE_ABOVE_915_PCT]
+    // Below MIN : not a real breakout yet (price still at/under 9:15
+    //            high). Skip — do NOT place an order.
+    // Above MAX : breakout already stretched, late-entry/pullback
+    //            risk. Skip — do NOT place an order.
+    // Constants at the top of this file: AUTO_BUY_MIN/MAX_MOVE...
+    // -----------------------------------------------------------------
+    const bandFiltered = topN.filter(row => {
+        const high915 = parseFloat(row.high915);
+        const price = parseFloat(row.price);
+        // Skip rows missing either anchor (zero / NaN) — can't decide.
+        if (!Number.isFinite(high915) || high915 <= 0) return false;
+        if (!Number.isFinite(price) || price <= 0) return false;
+        const movePct = ((price - high915) / high915) * 100;
+        // The actual condition the user asked for:
+        //   if price < +0.15% above 9:15 high  → DO NOT execute
+        //   if price > +0.50% above 9:15 high  → DO NOT execute
+        return movePct >= AUTO_BUY_MIN_MOVE_ABOVE_915_PCT
+            && movePct <= AUTO_BUY_MAX_MOVE_ABOVE_915_PCT;
+    });
+
+    if (bandFiltered.length === 0) {
+        // 0/N rows matched. Surface the actual move_pct per row so the
+        // user can see whether the band is too tight, too loose, or
+        // whether price is actually below 9:15 high entirely.
+        const expectedBand = `+${AUTO_BUY_MIN_MOVE_ABOVE_915_PCT}–+${AUTO_BUY_MAX_MOVE_ABOVE_915_PCT}%`;
+        const probes = topN.map(row => {
+            const high915 = parseFloat(row.high915);
+            const price = parseFloat(row.price);
+            if (!Number.isFinite(high915) || high915 <= 0 ||
+                !Number.isFinite(price) || price <= 0) {
+                return `${row.Symbol}: missing price / 9:15 high`;
+            }
+            const m = ((price - high915) / high915) * 100;
+            return `${row.Symbol}: ${m >= 0 ? '+' : ''}${m.toFixed(2)}%`;
+        });
+        const previewProbes = probes.slice(0, 3).join(' · ') + (probes.length > 3 ? '…' : '');
+        showToast(
+            '⚠️ No Setup',
+            `0/${topN.length} in 9:15 ${expectedBand} band — ${previewProbes}`
+        );
+        console.warn('[auto-buy] band filter rejected all', topN.length, 'rows:', {
+            MIN: AUTO_BUY_MIN_MOVE_ABOVE_915_PCT,
+            MAX: AUTO_BUY_MAX_MOVE_ABOVE_915_PCT,
+            probes,
+        });
+        return;
+    }
+
+    if (bandFiltered.length < topN.length) {
+        console.warn(`[auto-buy] band filter selected ${bandFiltered.length}/${topN.length}:`, bandFiltered.map(r => r.Symbol));
+    }
+
+    const orders = bandFiltered.map(r => ({
         symbol: r.Symbol,
         quantity: parseInt(r.MaxQty, 10) || 0,
         transactionType: 'BUY',
@@ -498,7 +592,7 @@ async function autoBuyAllStocks() {
 
     showToast(
         '🚀 Auto-Buy Started',
-        `Submitting ${orders.length} stock(s)${amoEnabled ? ' as AMO' : ''} in parallel`
+        `Submitting ${orders.length} stock(s)${amoEnabled ? ' as AMO' : ''} in parallel — 9:15 +${AUTO_BUY_MIN_MOVE_ABOVE_915_PCT}–+${AUTO_BUY_MAX_MOVE_ABOVE_915_PCT}% band`
     );
 
     try {
@@ -539,6 +633,7 @@ async function autoBuyAllStocks() {
         showToast('❌ Network', e.message || 'request failed');
     }
 }
+
 
 // ================================================================
 // LIGHTWEIGHT REFRESH (TradingView only, no Yahoo candle round-trip)
