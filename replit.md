@@ -20,3 +20,4 @@ The Advance ORB endpoint queries TradingView through `tradingview-screener`, so 
 
 - Keep the existing vanilla HTML/CSS/JavaScript and FastAPI structure unless a future request explicitly asks for a migration.
 - Always include a "Modified files" section at the end of implementation updates for reference.
+- Do not start any code modifications, file edits, or new implementation without explicit user approval. Discuss or debug freely, but pause for approval before writing or running changes.
