@@ -11,7 +11,6 @@ from tradingview_screener.query import HEADERS as TV_HEADERS
 import pandas as pd
 import yfinance as yf
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from broker.dhan import calculate_max_qty_batch
 
 app = FastAPI(
     title="TradeAlgo Pro - Advance ORB",
@@ -45,7 +44,6 @@ ADVANCE_ORB_COLUMNS = [
     "RELVOL",
     "Sector",
     "Small Candle",
-    "MaxQty",
 ]
 
 
@@ -251,10 +249,6 @@ def get_advance_orb():
                 "Sector": row.get('sector', 'Unknown'),
                 "Small Candle": "✓",
             })
-             # ─── Step 4: Calculate MaxQty for first 20 stocks ───
-        total_capital = 60000  # Default, user can change via settings
-        num_parts = 4
-        result = calculate_max_qty_batch(result, total_capital, num_parts)
 
         return {
             "strategy": "advanceorb",
@@ -367,4 +361,4 @@ app.mount("/js", StaticFiles(directory=PROJECT_ROOT / "js"), name="frontend-js")
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=5000)
+    uvicorn.run(app, host="0.0.0.0", port=8000)
