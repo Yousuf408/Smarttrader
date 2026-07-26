@@ -1,11 +1,13 @@
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+import requests
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from tradingview_screener import Query, col
+from tradingview_screener.query import HEADERS as TV_HEADERS
 import pandas as pd
 import yfinance as yf
 
@@ -121,17 +123,17 @@ def get_advance_orb():
     """
     try:
         # ─── Step 1: Fetch from TradingView ───
-        count, df = (Query()
-            .select(
-                'name',           # Stock name
-                'close',          # Current price
-                'change',         # Change %
-                'gap',            # Gap %
-                'volume',         # Volume
-                'relative_volume',# Relative volume
-                'market_cap_basic',# Market cap
-                'sector'          # Sector
-            )
+        # The `tradingview-screener` library only returns the first page from the
+        # /scan endpoint (typically 50 rows) and its built-in pagination is
+        # unstable in this version, so call TradingView directly and request
+        # every matching row in `range`. A fallback paginator handles the
+        # edge case where TradingView caps the page size to a smaller value.
+        tv_columns = [
+            'name', 'close', 'change', 'gap', 'volume',
+            'relative_volume', 'market_cap_basic', 'sector',
+        ]
+        tv_query = (Query()
+            .select(*tv_columns)
             .set_markets('india')
             .where(
                 col('close') > PRICE_MIN,
@@ -140,8 +142,39 @@ def get_advance_orb():
                 col('exchange') == 'NSE'
             )
             .order_by('change', ascending=False)
-            .get_scanner_data()
         )
+        tv_url = tv_query.url
+
+        raw_rows: list[dict] = []
+        total = 0
+        page_size = 1000
+        offset = 0
+        while True:
+            body = dict(tv_query.query)
+            body['range'] = [offset, offset + page_size]
+            response = requests.post(
+                tv_url,
+                json=body,
+                headers=TV_HEADERS,
+                timeout=30,
+            )
+            response.raise_for_status()
+            payload = response.json()
+            total = int(payload.get('totalCount') or 0)
+            rows_batch = payload.get('data') or []
+            if not rows_batch:
+                break
+            for symbol_row in rows_batch:
+                values = symbol_row.get('d') or []
+                ticker = symbol_row.get('s')
+                row_values = [ticker] + list(values)
+                raw_rows.append(dict(zip(['ticker', *tv_columns], row_values)))
+            offset += len(rows_batch)
+            if offset >= total:
+                break
+
+        df = pd.DataFrame(raw_rows)
+        count = total
 
         if count == 0:
             return {
