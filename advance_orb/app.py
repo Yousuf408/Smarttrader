@@ -14,6 +14,7 @@ from tradingview_screener.query import HEADERS as TV_HEADERS
 import pandas as pd
 import yfinance as yf
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from broker.quantity_calculator import calculate_max_quantity_column
 
 app = FastAPI(
     title="TradeAlgo Pro - Advance ORB",
@@ -47,6 +48,7 @@ ADVANCE_ORB_COLUMNS = [
     "RELVOL",
     "Sector",
     "Small Candle",
+    "MaxQty",
 ]
 
 
@@ -223,6 +225,19 @@ def get_advance_orb():
         candidate_symbols = df['name'].dropna().astype(str).tolist()
         small_candle_symbols = filter_small_opening_candles(candidate_symbols)
 
+        # Calculate Max Quantities via Dhan (see broker/quantity_calculator.py).
+        # quantity_calculator expects Symbol/Price cols; df has name/close.
+        # Token from DHAN_ACCESS_TOKEN env var (Replit Secrets).
+        dhan_access_token = os.environ.get('DHAN_ACCESS_TOKEN', '').strip() or None
+        df_qty = df.rename(columns={'name': 'Symbol', 'close': 'Price'})
+        df_qty = calculate_max_quantity_column(
+            df_qty,
+            total_capital=100000,
+            num_parts=4,
+            access_token=dhan_access_token,
+        )
+        df['MaxQty'] = df_qty['MaxQty'].values
+
         result = []
         for _, row in df.iterrows():
             symbol = row['name']
@@ -251,6 +266,7 @@ def get_advance_orb():
                 "RELVOL": relvol_str,
                 "Sector": row.get('sector', 'Unknown'),
                 "Small Candle": "✓",
+                "MaxQty": int(row.get("MaxQty", 0)),
             })
 
         return {

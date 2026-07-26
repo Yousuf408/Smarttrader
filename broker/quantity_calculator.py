@@ -100,8 +100,18 @@ def get_security_id(symbol):
             print(f"❌ Required columns not found in master CSV")
             return None
 
-        # Filter for NSE
-        nse_df = df[df["SEM_EXM_EXCH_ID"].astype(str).str.upper() == "NSE"]
+        # Filter for NSE Equity.
+        # Dhan changed its master CSV: SEM_EXM_EXCH_ID is now EXCH_ID,
+        # and SEGMENT carries the segment code (E = Equity for cash equities).
+        exch_col = next((c for c in df.columns if c.upper() == "EXCH_ID"), None)
+        seg_col = next((c for c in df.columns if c.upper() == "SEGMENT"), None)
+        if not exch_col or not seg_col:
+            print("❌ EXCH_ID / SEGMENT columns not found in master CSV")
+            return None
+        nse_df = df[
+            (df[exch_col].astype(str).str.upper() == "NSE") &
+            (df[seg_col].astype(str).str.upper() == "E")
+        ]
         row = nse_df[nse_df[symbol_col].str.upper() == symbol.upper()]
 
         if row.empty:
