@@ -639,4 +639,57 @@ body {
     border: 2px dashed rgba(0,0,0,0.06);
 }
 .chart-placeholder .big-icon { font-size: 56px; margin-bottom: 12px; }
+/* ================================================================
+   BUDGET / PARTS STEPPERS — wired to MaxQty column
+   ================================================================ */
+.stepper {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: var(--bg-secondary);
+    border: 2px solid rgba(0, 0, 0, 0.06);
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+    transition: var(--transition);
+}
+.stepper:focus-within { border-color: #6C5CE7; box-shadow: 0 0 0 4px rgba(108,92,231,0.10); }
+.stepper > label {
+    margin-right: 6px;
+    color: var(--text-secondary);
+    font-weight: 600;
+    font-size: 13px;
+}
+.stepper button {
+    width: 26px;
+    height: 26px;
+    border: none;
+    background: rgba(108, 92, 231, 0.10);
+    color: #6C5CE7;
+    font-weight: 800;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    transition: var(--transition);
+}
+.stepper button:hover { background: rgba(108, 92, 231, 0.20); transform: scale(1.06); }
+.stepper button:active { transform: scale(0.94); }
+.stepper input {
+    width: 90px;
+    border: none;
+    background: transparent;
+    font-weight: 700;
+    text-align: right;
+    font-size: 14px;
+    color: var(--text-primary);
+    padding: 4px 6px;
+    outline: none;
+    -moz-appearance: textfield;
+}
+.stepper input::-webkit-outer-spin-button,
+.stepper input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
 /* Auto-deploy trigger - v1 */

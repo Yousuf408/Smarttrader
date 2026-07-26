@@ -3,11 +3,119 @@
 // ================================================================
 
 // ================================================================
+// BUDGET / PARTS STEPPERS — wired to MaxQty column
+// ================================================================
+// Persisted user-configurable trading capital + number of equal
+// parts to split it into. Mirrors the calculator inputs:
+//   qty = floor((budget / parts) / margin_per_share)
+// Changes trigger a 300 ms debounced refetch /api/strategies/
+// advanceorb?budget=X&parts=Y so MaxQty column updates live.
+const BUDGET_KEY = "tradeAlgo.budget";
+const PARTS_KEY  = "tradeAlgo.parts";
+const BUDGET_DEFAULT = 100000;
+const PARTS_DEFAULT  = 4;
+let _stepperRefreshTimer = null;
+
+function _getBudgetInput() { return document.getElementById("budgetInput"); }
+function _getPartsInput()  { return document.getElementById("partsInput"); }
+
+function _readBudget() {
+    const el = _getBudgetInput();
+    if (!el) return BUDGET_DEFAULT;
+    const v = parseInt(el.value, 10);
+    return (Number.isFinite(v) && v > 0) ? v : BUDGET_DEFAULT;
+}
+function _readParts() {
+    const el = _getPartsInput();
+    if (!el) return PARTS_DEFAULT;
+    const v = parseInt(el.value, 10);
+    return (Number.isFinite(v) && v >= 1 && v <= 20) ? v : PARTS_DEFAULT;
+}
+
+function _persistBudget(v) { try { localStorage.setItem(BUDGET_KEY, String(v)); } catch (e) {} }
+function _persistParts(v)  { try { localStorage.setItem(PARTS_KEY,  String(v)); } catch (e) {} }
+
+function _restoreSteppers() {
+    let budget = BUDGET_DEFAULT;
+    let parts  = PARTS_DEFAULT;
+    try {
+        const b = localStorage.getItem(BUDGET_KEY);
+        if (b && /^\d+$/.test(b)) budget = Math.max(5000, parseInt(b, 10));
+        const p = localStorage.getItem(PARTS_KEY);
+        if (p && /^\d+$/.test(p)) parts = Math.min(20, Math.max(1, parseInt(p, 10)));
+    } catch (e) {}
+    const bEl = _getBudgetInput();
+    const pEl = _getPartsInput();
+    if (bEl) bEl.value = budget;
+    if (pEl) pEl.value = parts;
+}
+
+function stepBudget(delta) {
+    const el = _getBudgetInput();
+    if (!el) return;
+    const next = Math.max(5000, _readBudget() + delta);
+    el.value = next;
+    _persistBudget(next);
+    _scheduleScreenerRefresh();
+}
+
+function stepParts(delta) {
+    const el = _getPartsInput();
+    if (!el) return;
+    const next = Math.min(20, Math.max(1, _readParts() + delta));
+    el.value = next;
+    _persistParts(next);
+    _scheduleScreenerRefresh();
+}
+
+async function _scheduleScreenerRefresh() {
+    clearTimeout(_stepperRefreshTimer);
+    _stepperRefreshTimer = setTimeout(async () => {
+        const strategyId = document.getElementById("strategySelect")?.value;
+        if (strategyId !== "advanceorb") return;
+        const result = await fetchAdvanceORB();
+        if (result) {
+            lastAdvanceOrbData = result;
+            renderStrategyData(result);
+            if (typeof startAdvanceOrbAutoRefresh === "function") {
+                startAdvanceOrbAutoRefresh();
+            }
+        }
+    }, 300);
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+    const bEl = _getBudgetInput();
+    const pEl = _getPartsInput();
+    if (bEl) {
+        bEl.addEventListener("change", () => {
+            const next = Math.max(5000, _readBudget());
+            bEl.value = next;
+            _persistBudget(next);
+            _scheduleScreenerRefresh();
+        });
+    }
+    if (pEl) {
+        pEl.addEventListener("change", () => {
+            const next = Math.min(20, Math.max(1, _readParts()));
+            pEl.value = next;
+            _persistParts(next);
+            _scheduleScreenerRefresh();
+        });
+    }
+    _restoreSteppers();
+});
+
+// ================================================================
 // FETCH ADVANCE ORB FROM BACKEND API
 // ================================================================
 async function fetchAdvanceORB() {
+    const budget = _readBudget();
+    const parts  = _readParts();
     try {
-        const response = await fetch('/api/strategies/advanceorb');
+        const response = await fetch(
+            `/api/strategies/advanceorb?budget=${budget}&parts=${parts}`
+        );
         if (!response.ok) {
             throw new Error(`API returned ${response.status}`);
         }

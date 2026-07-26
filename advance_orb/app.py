@@ -146,14 +146,22 @@ def root():
     }
 
 @app.get("/api/strategies/advanceorb")
-def get_advance_orb():
+def get_advance_orb(budget: int = 100000, parts: int = 4):
     """
     Fetch stocks from TradingView with 4 conditions:
     1. Price: 200 to 3000 INR
     2. Gap: < 2%
     3. Market Cap: > 41B INR
     4. Exchange: NSE
+    
+    Query params:
+      budget: total capital in INR (default 100000)
+      parts:  number of equal parts to split budget into (default 4)
     """
+    if budget <= 0:
+        raise HTTPException(status_code=400, detail="budget must be > 0")
+    if parts < 1 or parts > 20:
+        raise HTTPException(status_code=400, detail="parts must be between 1 and 20")
     try:
         # ─── Step 1: Fetch from TradingView ───
         # Single POST to TradingView's scan endpoint, capped to MAX_TV_STOCKS
@@ -232,8 +240,8 @@ def get_advance_orb():
         df_qty = df.rename(columns={'name': 'Symbol', 'close': 'Price'})
         df_qty = calculate_max_quantity_column(
             df_qty,
-            total_capital=100000,
-            num_parts=4,
+            total_capital=budget,
+            num_parts=parts,
             access_token=dhan_access_token,
         )
         df['MaxQty'] = df_qty['MaxQty'].values

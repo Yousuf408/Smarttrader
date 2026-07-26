@@ -105,7 +105,20 @@
                             <option value="smartmoney">💰 SmartMoney</option>
                             <option value="bigplayers">🏢 Big Players</option>
                         </select>
-                        <button class="btn btn-primary" onclick="refreshScreener()">🔄 Refresh</button>
+                        <!-- ===== BUDGET / PARTS STEPPERS ===== -->
+                                <div class="stepper">
+                                    <label>Budget:</label>
+                                    <button type="button" onclick="stepBudget(-10000)" aria-label="Decrease budget by ₹10,000">−</button>
+                                    <input type="number" id="budgetInput" value="100000" min="5000" step="1000" />
+                                    <button type="button" onclick="stepBudget(10000)" aria-label="Increase budget by ₹10,000">+</button>
+                                </div>
+                                <div class="stepper">
+                                    <label>Parts:</label>
+                                    <button type="button" onclick="stepParts(-1)" aria-label="Decrease parts">−</button>
+                                    <input type="number" id="partsInput" value="4" min="1" max="20" step="1" />
+                                    <button type="button" onclick="stepParts(1)" aria-label="Increase parts">+</button>
+                                </div>
+                                <button class="btn btn-primary" onclick="refreshScreener()">🔄 Refresh</button>
                         
                         <!-- ===== AUTO BUY TOGGLE ===== -->
                         <div class="toggle-wrapper">
