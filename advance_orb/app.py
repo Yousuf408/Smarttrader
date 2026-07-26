@@ -1,9 +1,12 @@
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+import os
 import requests
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from typing import Optional
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from tradingview_screener import Query, col
@@ -272,6 +275,82 @@ def get_advance_orb():
 @app.get("/api/health")
 def health():
     return {"status": "healthy"}
+
+
+# ================================================================
+# PLACE ORDER (UI queueing endpoint).
+# Until the user wires live Dhan auth, this validates the payload
+# and acknowledges; broker call is skipped when DHAN_ACCESS_TOKEN
+# is empty. The user plugs their TOTP/OAuth-based auth in here.
+# ================================================================
+class PlaceOrderRequest(BaseModel):
+    symbol: str
+    price: Optional[float] = None
+    qty: int = 0
+    side: str = "BUY"
+    product_type: str = "INTRADAY"
+    validity: str = "DAY"
+    source: str = "manual"  # "manual" or "auto_buy"
+    exchange: str = "NSE"
+
+
+@app.post("/api/orders/place")
+def place_order(req: PlaceOrderRequest):
+    if not req.symbol or not isinstance(req.symbol, str):
+        raise HTTPException(status_code=400, detail="symbol required")
+    if req.qty is not None and req.qty < 0:
+        raise HTTPException(status_code=400, detail="qty must be >= 0")
+    if req.side not in ("BUY", "SELL"):
+        raise HTTPException(status_code=400, detail=f"unsupported side: {req.side}")
+    if req.product_type not in ("INTRADAY", "CNC"):
+        raise HTTPException(status_code=400, detail=f"unsupported product: {req.product_type}")
+    if req.validity not in ("DAY", "AMO"):
+        raise HTTPException(status_code=400, detail=f"unsupported validity: {req.validity}")
+
+    if req.qty == 0:
+        return {
+            "status": "rejected",
+            "order_id": None,
+            "symbol": req.symbol,
+            "reason": "qty=0: insufficient margin (MaxQty column was 0). Place Order button should be disabled for this row.",
+        }
+
+    dhan_token = (os.environ.get("DHAN_ACCESS_TOKEN") or "").strip()
+    if not dhan_token:
+        return {
+            "status": "queued",
+            "order_id": None,
+            "symbol": req.symbol,
+            "qty": req.qty,
+            "product_type": req.product_type,
+            "validity": req.validity,
+            "side": req.side,
+            "exchange": req.exchange,
+            "price": req.price,
+            "source": req.source,
+            "broker_call": "skipped",
+            "message": (
+                f"Order queued for {req.symbol} qty={req.qty}. "
+                "Broker call skipped — DHAN_ACCESS_TOKEN is empty."
+            ),
+        }
+    return {
+        "status": "would_call_broker",
+        "order_id": None,
+        "symbol": req.symbol,
+        "qty": req.qty,
+        "product_type": req.product_type,
+        "validity": req.validity,
+        "side": req.side,
+        "exchange": req.exchange,
+        "price": req.price,
+        "source": req.source,
+        "broker_call": "ready_to_call",
+        "message": (
+            f"Broker call ready for {req.side} {req.qty} \u00d7 {req.symbol} "
+            f"({req.product_type}/{req.validity}). User to wire Dhan here."
+        ),
+    }
 
 
 @app.get("/api/strategies/advanceorb/refresh")

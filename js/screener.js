@@ -330,10 +330,63 @@ function refreshScreener() {
 // ================================================================
 // PLACE ORDER
 // ================================================================
-function placeOrder(symbol) {
+function _lookupRowQty(symbol) {
+    try {
+        const headers = document.querySelectorAll('#screenerHead th');
+        const tr = Array.from(document.querySelectorAll('#screenerBody tr')).find(r => {
+            const first = r.querySelector('td');
+            return first && first.textContent.trim() === symbol;
+        });
+        if (!tr) return 0;
+        const cells = tr.querySelectorAll('td');
+        for (let i = 0; i < headers.length && i < cells.length; i++) {
+            if (headers[i].textContent.trim() === 'MaxQty') {
+                const v = parseInt((cells[i].textContent || '').replace(/[^0-9-]/g, ''), 10);
+                return Number.isFinite(v) ? v : 0;
+            }
+        }
+    } catch (e) { console.warn('qty lookup failed for', symbol, e); }
+    return 0;
+}
+
+async function placeOrder(symbol) {
     if (autoBuyEnabled) {
-        showToast('⚠️ Auto Buy ON', 'Disable Auto Buy to place manual orders');
+        showToast('\u26a0\ufe0f Auto Buy ON', 'Disable Auto Buy to place manual orders');
         return;
     }
-    showToast('📝 Order Placed', `Order placed for ${symbol}`);
+    const qty = _lookupRowQty(symbol);
+    if (qty === 0) {
+        showToast('\u26a0\ufe0f Insufficient margin', `${symbol}: MaxQty = 0. Place Order is disabled.`);
+        return;
+    }
+    try {
+        const response = await fetch('/api/orders/place', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                symbol: symbol,
+                qty: qty,
+                side: 'BUY',
+                product_type: 'INTRADAY',
+                validity: 'DAY',
+                source: 'manual',
+                exchange: 'NSE',
+            }),
+        });
+        const result = await response.json().catch(() => ({}));
+        if (result.status === 'rejected') {
+            showToast('\u26a0\ufe0f Rejected', result.reason || `${symbol} rejected`);
+        } else if (result.status === 'queued') {
+            showToast('\ud83d\udce5 Order queued', result.message || `Queued ${symbol}`);
+        } else if (result.status === 'would_call_broker') {
+            showToast('\ud83d\ude80 Order ready', result.message || `Ready for ${symbol}`);
+        } else if (!response.ok) {
+            showToast('\u274c Failed', `Backend returned ${response.status}`);
+        } else {
+            showToast('\u2139\ufe0f Order', `Order processed for ${symbol}`);
+        }
+    } catch (err) {
+        console.error('placeOrder failed:', err);
+        showToast('\u274c Error', `placeOrder failed: ${err && err.message}`);
+    }
 }
