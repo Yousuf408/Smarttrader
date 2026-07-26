@@ -15,6 +15,7 @@ import pandas as pd
 import yfinance as yf
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from broker.quantity_calculator import calculate_max_quantity_column
+from broker.dhan_orders import place_dhan_order
 
 app = FastAPI(
     title="TradeAlgo Pro - Advance ORB",
@@ -296,85 +297,127 @@ def get_advance_orb(budget: int = 100000, parts: int = 4):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/api/orders/place")
+def place_order_endpoint(payload: dict):
+    """Single-order placement for the manual Place-Order button.
+
+    Body: {
+      "symbol": "...", "quantity": int,
+      "transactionType": "BUY"|"SELL" (default BUY),
+      "productType": "INTRADAY"|"CNC" (default INTRADAY),
+      "afterMarketOrder": bool (default False),
+      "amoTime": "OPEN"|"OPEN_30"|"OPEN_60" (default OPEN, only matters when AMO=True)
+    }
+    """
+    symbol = (payload.get("symbol") or "").strip().upper()
+    quantity = payload.get("quantity")
+    transaction_type = (payload.get("transactionType") or "BUY").upper()
+    product_type = (payload.get("productType") or "INTRADAY").upper()
+    after_market_order = bool(payload.get("afterMarketOrder", False))
+    amo_time = str(payload.get("amoTime") or "OPEN").upper()
+
+    # Validate
+    if not symbol:
+        raise HTTPException(status_code=400, detail="symbol required")
+    if not isinstance(quantity, int) or isinstance(quantity, bool) or quantity < 1:
+        raise HTTPException(status_code=400, detail="quantity must be a positive integer")
+    if transaction_type not in ("BUY", "SELL"):
+        raise HTTPException(status_code=400, detail="transactionType must be BUY or SELL")
+    if product_type not in ("INTRADAY", "CNC"):
+        raise HTTPException(status_code=400, detail="productType must be INTRADAY or CNC")
+    if amo_time not in ("OPEN", "OPEN_30", "OPEN_60"):
+        raise HTTPException(status_code=400, detail="amoTime must be OPEN, OPEN_30 or OPEN_60")
+
+    result = place_dhan_order(
+        symbol=symbol,
+        quantity=quantity,
+        transaction_type=transaction_type,
+        product_type=product_type,
+        after_market_order=after_market_order,
+        amo_time=amo_time,
+    )
+    # Mirror place_dhan_order.success to HTTP status — caller can read .error on 4xx/5xx.
+    if isinstance(result, dict) and not result.get("success") and result.get("symbol") == symbol:
+        # Common rejection paths (Symbol not found, Invalid quantity, HTTP non-200) — keep 200 and let client decide.
+        # Only blow up to 502 if uvicorn couldn't reach Dhan at all.
+        if isinstance(result.get("error"), str) and result["error"].startswith("Exception:"):
+            raise HTTPException(status_code=502, detail=result["error"])
+    return result
+
+
+@app.post("/api/orders/place-batch")
+def place_order_batch_endpoint(payload: dict):
+    """Batch placement for Auto Buy. Hard cap: 5 orders (user policy).
+
+    Each order gets submitted via place_dhan_order in parallel using
+    a ThreadPoolExecutor sized to the batch (max 5) so we finish quickly
+    but never burst-rate-limit Dhan's order API. Per-order outcomes are
+    returned — partial successes are normal (e.g. one symbol missing
+    from the instrument master), caller should surface succeeded/failed
+    counts and per-symbol errors.
+    """
+    orders = payload.get("orders") or []
+    source = (payload.get("source") or "auto_buy")
+
+    if not isinstance(orders, list) or len(orders) == 0:
+        raise HTTPException(status_code=400, detail="orders list required (1-5 items)")
+    if len(orders) > 5:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Auto-buy cap is 5 (got {len(orders)}). Selecting top-5 rows only.",
+        )
+
+    validated: list[dict] = []
+    for i, o in enumerate(orders):
+        symbol = (o.get("symbol") or "").strip().upper()
+        quantity = o.get("quantity")
+        if not symbol:
+            raise HTTPException(status_code=400, detail=f"orders[{i}]: symbol required")
+        if not isinstance(quantity, int) or isinstance(quantity, bool) or quantity < 1:
+            raise HTTPException(status_code=400, detail=f"orders[{i}]: quantity must be a positive integer")
+        validated.append({
+            "symbol": symbol,
+            "quantity": quantity,
+            "transaction_type": (o.get("transactionType") or "BUY").upper(),
+            "product_type":   (o.get("productType")   or "INTRADAY").upper(),
+            "after_market_order": bool(o.get("afterMarketOrder", False)),
+            "amo_time": str(o.get("amoTime") or "OPEN").upper(),
+        })
+
+    def submit_one(order):
+        return place_dhan_order(
+            symbol=order["symbol"],
+            quantity=order["quantity"],
+            transaction_type=order["transaction_type"],
+            product_type=order["product_type"],
+            after_market_order=order["after_market_order"],
+            amo_time=order["amo_time"],
+        )
+
+    workers = min(5, len(validated))
+    results: list = [None] * len(validated)
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = {pool.submit(submit_one, o): i for i, o in enumerate(validated)}
+        for fut in as_completed(futures):
+            idx = futures[fut]
+            try:
+                results[idx] = fut.result()
+            except Exception as exc:
+                results[idx] = {"success": False, "error": str(exc), "symbol": validated[idx]["symbol"]}
+
+    succeeded = sum(1 for r in results if r and r.get("success"))
+    return {
+        "source": source,
+        "total": len(validated),
+        "succeeded": succeeded,
+        "failed": len(validated) - succeeded,
+        "results": results,
+    }
+
+
 @app.get("/api/health")
 def health():
     return {"status": "healthy"}
-
-
-# ================================================================
-# PLACE ORDER (UI queueing endpoint).
-# Until the user wires live Dhan auth, this validates the payload
-# and acknowledges; broker call is skipped when DHAN_ACCESS_TOKEN
-# is empty. The user plugs their TOTP/OAuth-based auth in here.
-# ================================================================
-class PlaceOrderRequest(BaseModel):
-    symbol: str
-    price: Optional[float] = None
-    qty: int = 0
-    side: str = "BUY"
-    product_type: str = "INTRADAY"
-    validity: str = "DAY"
-    source: str = "manual"  # "manual" or "auto_buy"
-    exchange: str = "NSE"
-
-
-@app.post("/api/orders/place")
-def place_order(req: PlaceOrderRequest):
-    if not req.symbol or not isinstance(req.symbol, str):
-        raise HTTPException(status_code=400, detail="symbol required")
-    if req.qty is not None and req.qty < 0:
-        raise HTTPException(status_code=400, detail="qty must be >= 0")
-    if req.side not in ("BUY", "SELL"):
-        raise HTTPException(status_code=400, detail=f"unsupported side: {req.side}")
-    if req.product_type not in ("INTRADAY", "CNC"):
-        raise HTTPException(status_code=400, detail=f"unsupported product: {req.product_type}")
-    if req.validity not in ("DAY", "AMO"):
-        raise HTTPException(status_code=400, detail=f"unsupported validity: {req.validity}")
-
-    if req.qty == 0:
-        return {
-            "status": "rejected",
-            "order_id": None,
-            "symbol": req.symbol,
-            "reason": "qty=0: insufficient margin (MaxQty column was 0). Place Order button should be disabled for this row.",
-        }
-
-    dhan_token = (os.environ.get("DHAN_ACCESS_TOKEN") or "").strip()
-    if not dhan_token:
-        return {
-            "status": "queued",
-            "order_id": None,
-            "symbol": req.symbol,
-            "qty": req.qty,
-            "product_type": req.product_type,
-            "validity": req.validity,
-            "side": req.side,
-            "exchange": req.exchange,
-            "price": req.price,
-            "source": req.source,
-            "broker_call": "skipped",
-            "message": (
-                f"Order queued for {req.symbol} qty={req.qty}. "
-                "Broker call skipped — DHAN_ACCESS_TOKEN is empty."
-            ),
-        }
-    return {
-        "status": "would_call_broker",
-        "order_id": None,
-        "symbol": req.symbol,
-        "qty": req.qty,
-        "product_type": req.product_type,
-        "validity": req.validity,
-        "side": req.side,
-        "exchange": req.exchange,
-        "price": req.price,
-        "source": req.source,
-        "broker_call": "ready_to_call",
-        "message": (
-            f"Broker call ready for {req.side} {req.qty} \u00d7 {req.symbol} "
-            f"({req.product_type}/{req.validity}). User to wire Dhan here."
-        ),
-    }
 
 
 @app.get("/api/strategies/advanceorb/refresh")

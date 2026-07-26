@@ -119,6 +119,15 @@
                                     <button type="button" onclick="stepParts(1)" aria-label="Increase parts">+</button>
                                 </div>
                                 <button class="btn btn-primary" onclick="refreshScreener()">🔄 Refresh</button>
+                                <!-- ===== AMO MODE (global switch — Market vs After-Market Order) ===== -->
+                                <div class="amo-inline">
+                                    <span class="amo-label">Order Mode</span>
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" id="amoToggle" onchange="toggleAmoMode()" />
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                    <span class="amo-status" id="amoStatus">MKT</span>
+                                </div>
                                 <!-- ===== AUTO BUY (inline, same row) ===== -->
                                 <div class="auto-buy-inline">
                                     <span class="auto-buy-label">Auto Buy</span>
@@ -305,6 +314,24 @@
         toggleBrokerFields();
         console.log('🚀 TradeAlgo Pro · Strategies: Advance ORB (full columns), SmartMoney, Big Players (reduced)');
     </script>
+
+<!-- ================================================================
+     CONFIRM ORDER MODAL — used by manual Place Order + Auto Buy
+     ================================================================ -->
+<div id="confirmModalOverlay" class="confirm-modal-overlay">
+    <div class="confirm-modal">
+        <h3 id="confirmModalTitle">⚡ Confirm Buy</h3>
+        <div class="confirm-modal-body">
+            <div class="cm-row cm-symbol" id="confirmModalLine1">—</div>
+            <div class="cm-row cm-math"   id="confirmModalLine2">—</div>
+            <div class="cm-row cm-mode"   id="confirmModalLine3">—</div>
+        </div>
+        <div class="confirm-modal-actions">
+            <button type="button" class="btn btn-secondary" onclick="_closeConfirmModal()">Cancel</button>
+            <button type="button" class="btn btn-primary"   id="confirmModalConfirmBtn">Confirm</button>
+        </div>
+    </div>
+</div>
 
 </body>
 </html>

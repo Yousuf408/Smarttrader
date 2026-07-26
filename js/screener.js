@@ -380,17 +380,164 @@ function updatePlaceOrderButtons() {
 }
 
 // ================================================================
-// AUTO BUY ALL STOCKS
+// AMO MODE  (global switch — Market vs After-Market Order)
 // ================================================================
-function autoBuyAllStocks() {
-    const strategyId = document.getElementById('strategySelect').value;
-    const strategy = STRATEGIES[strategyId];
-    if (!strategy || strategy.data.length === 0) {
-        showToast('⚠️ No Stocks', 'No stocks to auto-buy');
+// Toggled from index.html via onchange="toggleAmoMode()". Default
+// false = regular market order. When true, every subsequent
+// placeOrder() / autoBuyAllStocks() submission sets the dhan
+// afterMarketOrder=true flag with amoTime="OPEN" (queued for 9:15).
+let amoEnabled = false;
+
+function toggleAmoMode() {
+    amoEnabled = !!document.getElementById('amoToggle')?.checked;
+    const status = document.getElementById('amoStatus');
+    if (!status) return;
+    status.textContent = amoEnabled ? 'AMO' : 'MKT';
+    status.classList.toggle('active', amoEnabled);
+    showToast(
+        amoEnabled ? '🌙 AMO Mode ON' : '⚡ Market Mode ON',
+        amoEnabled ? 'Orders will queue for market open (9:15 IST)'
+                   : 'Orders will be live market orders'
+    );
+}
+
+// ================================================================
+// ORDER HELPERS
+// ================================================================
+function _orderRowForSymbol(symbol) {
+    if (!lastAdvanceOrbData || !Array.isArray(lastAdvanceOrbData.data)) return null;
+    const target = String(symbol || '').trim().toUpperCase();
+    return lastAdvanceOrbData.data.find(
+        r => r && r.Symbol && String(r.Symbol).toUpperCase() === target
+    ) || null;
+}
+
+function _openConfirmModal(order) {
+    const overlay = document.getElementById('confirmModalOverlay');
+    if (!overlay) return;
+    document.getElementById('confirmModalTitle').textContent =
+        order.afterMarketOrder ? '🌙 Confirm AMO' : '⚡ Confirm Buy';
+    document.getElementById('confirmModalLine1').textContent = order.symbol;
+    const priceText = (typeof order.price === 'number' && order.price)
+        ? `₹${order.price.toFixed(2)}` : 'market price';
+    const totalText = (typeof order.total === 'number' && order.total > 0)
+        ? `≈ ₹${order.total.toFixed(0)}` : '≈ margin-dependent';
+    document.getElementById('confirmModalLine2').textContent =
+        `${order.qty} shares × ${priceText} ${totalText}`;
+    document.getElementById('confirmModalLine3').textContent =
+        `${order.productType}${order.afterMarketOrder ? ' · AMO (queued for 9:15)' : ' · Market'}`;
+    document.getElementById('confirmModalConfirmBtn').onclick = () => _submitOrder(order);
+    overlay.classList.add('show');
+}
+
+function _closeConfirmModal() {
+    const overlay = document.getElementById('confirmModalOverlay');
+    if (overlay) overlay.classList.remove('show');
+}
+
+async function _submitOrder(order, source = 'manual') {
+    const overlay = document.getElementById('confirmModalOverlay');
+    const body = {
+        symbol: order.symbol,
+        quantity: order.qty,
+        transactionType: 'BUY',
+        productType: order.productType || 'INTRADAY',
+        afterMarketOrder: !!order.afterMarketOrder,
+        amoTime: 'OPEN',
+    };
+    try {
+        const r = await fetch('/api/orders/place', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        const result = await r.json().catch(() => ({}));
+        if (overlay) overlay.classList.remove('show');
+        if (r.ok && result.success) {
+            showToast('✅ Order Placed',
+                `${order.symbol} → ${result.order_id}${body.afterMarketOrder ? ' (AMO)' : ''}`);
+        } else {
+            const msg = result?.error || `HTTP ${r.status}`;
+            showToast(`❌ ${order.symbol} failed`, msg);
+            console.error('place_order result:', result);
+        }
+    } catch (e) {
+        if (overlay) overlay.classList.remove('show');
+        showToast('❌ Network', e.message || 'request failed');
+    }
+}
+
+// ================================================================
+// AUTO BUY ALL STOCKS  (top-5 by screener order, parallel submit)
+// ================================================================
+async function autoBuyAllStocks() {
+    if (!lastAdvanceOrbData || !Array.isArray(lastAdvanceOrbData.data) || lastAdvanceOrbData.data.length === 0) {
+        showToast('⚠️ No Stocks', 'Screener has no rows to auto-buy');
         return;
     }
-    const symbols = strategy.data.map(row => row.symbol || 'Unknown');
-    showToast('🚀 Auto-Buy All', `Buying ${symbols.length} stocks from ${strategy.name}: ${symbols.join(', ')}`);
+    // User policy: maximum 5 stocks. The screener's default order is
+    // CHG% desc, so slicing [0:5] is the natural "top movers" pick.
+    const AUTO_BUY_CAP = 5;
+    const topN = lastAdvanceOrbData.data
+        .filter(r => r && r.Symbol && Number(r.MaxQty) > 0)
+        .slice(0, AUTO_BUY_CAP);
+
+    if (topN.length === 0) {
+        showToast('⚠️ No Margin', 'No rows have MaxQty > 0 — adjust budget/parts');
+        return;
+    }
+
+    const orders = topN.map(r => ({
+        symbol: r.Symbol,
+        quantity: parseInt(r.MaxQty, 10) || 0,
+        transactionType: 'BUY',
+        productType: 'INTRADAY',
+        afterMarketOrder: amoEnabled,
+        amoTime: 'OPEN',
+    }));
+
+    showToast(
+        '🚀 Auto-Buy Started',
+        `Submitting ${orders.length} stock(s)${amoEnabled ? ' as AMO' : ''} in parallel`
+    );
+
+    try {
+        const r = await fetch('/api/orders/place-batch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                orders,
+                productType: 'INTRADAY',
+                afterMarketOrder: amoEnabled,
+                amoTime: 'OPEN',
+                source: 'auto_buy',
+            }),
+        });
+        const result = await r.json().catch(() => ({}));
+        if (!r.ok) {
+            showToast('❌ Auto-Buy Failed', result.detail || `HTTP ${r.status}`);
+            console.error('auto_buy batch result:', result);
+            return;
+        }
+        const s = result.succeeded || 0;
+        const t = result.total || orders.length;
+        if (s === t) {
+            showToast('✅ Auto-Buy Complete', `${s}/${t} orders placed`);
+        } else if (s > 0) {
+            const failed = (result.results || [])
+                .filter(x => x && !x.success)
+                .map(x => `${x.symbol}: ${x.error}`)
+                .slice(0, 3)
+                .join('  ·  ');
+            showToast('⚠️ Partial', `${s}/${t} succeeded — ${failed || 'see console'}`);
+            console.warn('Auto-buy partial result:', result);
+        } else {
+            showToast('❌ Auto-Buy Failed', `0/${t} succeeded — see console`);
+            console.error('Auto-buy batch result:', result);
+        }
+    } catch (e) {
+        showToast('❌ Network', e.message || 'request failed');
+    }
 }
 
 // ================================================================
@@ -503,44 +650,46 @@ function _lookupRowQty(symbol) {
     return 0;
 }
 
-async function placeOrder(symbol) {
+function placeOrder(symbol) {
     if (autoBuyEnabled) {
-        showToast('\u26a0\ufe0f Auto Buy ON', 'Disable Auto Buy to place manual orders');
+        showToast('⚠️ Auto Buy ON', 'Disable Auto Buy to place manual orders');
         return;
     }
     const qty = _lookupRowQty(symbol);
-    if (qty === 0) {
-        showToast('\u26a0\ufe0f Insufficient margin', `${symbol}: MaxQty = 0. Place Order is disabled.`);
+    if (qty < 1) {
+        showToast('⚠️ No Margin', `${symbol}: MaxQty = 0 — Place Order is disabled`);
         return;
     }
-    try {
-        const response = await fetch('/api/orders/place', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                symbol: symbol,
-                qty: qty,
-                side: 'BUY',
-                product_type: 'INTRADAY',
-                validity: 'DAY',
-                source: 'manual',
-                exchange: 'NSE',
-            }),
-        });
-        const result = await response.json().catch(() => ({}));
-        if (result.status === 'rejected') {
-            showToast('\u26a0\ufe0f Rejected', result.reason || `${symbol} rejected`);
-        } else if (result.status === 'queued') {
-            showToast('\ud83d\udce5 Order queued', result.message || `Queued ${symbol}`);
-        } else if (result.status === 'would_call_broker') {
-            showToast('\ud83d\ude80 Order ready', result.message || `Ready for ${symbol}`);
-        } else if (!response.ok) {
-            showToast('\u274c Failed', `Backend returned ${response.status}`);
-        } else {
-            showToast('\u2139\ufe0f Order', `Order processed for ${symbol}`);
-        }
-    } catch (err) {
-        console.error('placeOrder failed:', err);
-        showToast('\u274c Error', `placeOrder failed: ${err && err.message}`);
-    }
+    const price = _lookupRowPrice(symbol);
+    _openConfirmModal({
+        symbol,
+        qty,
+        price,
+        total: qty * price,
+        productType: 'INTRADAY',
+        afterMarketOrder: amoEnabled,
+        source: 'manual',
+    });
 }
+
+// Locate the row's Price cell (DOM lookup — works for both live data
+// and the SmartMoney / BigPlayers hardcoded stub rows).
+function _lookupRowPrice(symbol) {
+    try {
+        const headers = document.querySelectorAll('#screenerHead th');
+        const tr = Array.from(document.querySelectorAll('#screenerBody tr')).find(r => {
+            const first = r.querySelector('td');
+            return first && first.textContent.trim() === symbol;
+        });
+        if (!tr) return 0;
+        const cells = tr.querySelectorAll('td');
+        for (let i = 0; i < headers.length && i < cells.length; i++) {
+            if (headers[i].textContent.trim() === 'Price') {
+                const v = parseFloat((cells[i].textContent || '').replace(/[^0-9.]/g, ''));
+                return Number.isFinite(v) ? v : 0;
+            }
+        }
+    } catch (e) { console.warn('price lookup failed for', symbol, e); }
+    return 0;
+}
+

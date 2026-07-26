@@ -784,4 +784,95 @@ body {
     transform: translateX(16px);
 }
 
+/* ================================================================
+   AMO INLINE — global Order Mode switch (Market vs After-Market)
+   ================================================================ */
+.amo-inline {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--bg-secondary);
+    border: 2px solid rgba(0,0,0,0.06);
+    padding: 4px 10px;
+    border-radius: var(--radius-sm);
+    transition: var(--transition);
+}
+.amo-inline .amo-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    user-select: none;
+}
+.amo-inline .toggle-switch { width: 38px; height: 22px; }
+.amo-inline .toggle-slider::before {
+    width: 16px;
+    height: 16px;
+    left: 3px;
+    bottom: 3px;
+}
+.amo-inline .toggle-switch input:checked + .toggle-slider::before {
+    transform: translateX(16px);
+}
+.amo-inline .amo-status {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-muted);
+    min-width: 32px;
+    text-align: center;
+}
+.amo-inline .amo-status.active { color: #6C5CE7; }
+
+/* ================================================================
+   CONFIRM ORDER MODAL
+   ================================================================ */
+.confirm-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(2px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    padding: 16px;
+}
+.confirm-modal-overlay.show { display: flex; }
+.confirm-modal {
+    background: var(--bg-primary, #ffffff);
+    border: 1px solid var(--border-color, rgba(0,0,0,0.08));
+    border-radius: 14px;
+    padding: 22px 24px 18px;
+    max-width: 420px;
+    width: 100%;
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.25);
+    animation: cm-pop 160ms ease-out;
+}
+@keyframes cm-pop {
+    from { opacity: 0; transform: translateY(6px) scale(0.98); }
+    to   { opacity: 1; transform: translateY(0)   scale(1); }
+}
+.confirm-modal h3 {
+    margin: 0 0 14px;
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--text-primary, #222);
+}
+.confirm-modal-body { margin-bottom: 16px; }
+.cm-row {
+    font-size: 14px;
+    color: var(--text-secondary, #555);
+    padding: 6px 0;
+    border-bottom: 1px dashed rgba(0,0,0,0.07);
+}
+.cm-row:last-child { border-bottom: none; }
+.cm-symbol { font-size: 18px; font-weight: 800; color: var(--text-primary, #222); }
+.cm-math   { font-variant-numeric: tabular-nums; font-weight: 600; }
+.cm-mode   { font-size: 12px; color: var(--text-muted, #888); }
+.confirm-modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 6px;
+}
+
 /* Auto-deploy trigger - v1 */
