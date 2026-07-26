@@ -1,1 +1,3 @@
 - [Least-privilege frontend hosting](secure-static-hosting.md) — serve explicit frontend files and asset directories; never mount the repository root in a web app.
+- [Edit persistence on TradeAlgo Pro files](edits-revert-pattern.md) — broker/quantity_calculator.py and advance_orb/app.py edits revert silently; assert count + sed-verify before restart.
+- [Dhan margin-calc 429 limits](dhan-margin-calc-rate-limiting.md) — bulk parallel calls throttle; share an instrument CSV cache + throttle before Auto-Buy.
