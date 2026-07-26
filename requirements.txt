@@ -1,8 +1,9 @@
 fastapi
-numpy
-pandas
-python-dotenv
-pytz
-tradingview-screener
 uvicorn
+pandas
+tradingview-screener
+python-multipart
 yfinance
+pyotp
+cryptography
+requests
