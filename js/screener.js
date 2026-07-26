@@ -273,9 +273,18 @@ async function fetchAdvanceORBRefresh(silent = true) {
             if (typeof updated.RELVOL === 'string') row.RELVOL = updated.RELVOL;
             touched++;
         }
+        // Always update in-memory data so it stays fresh for when the user returns,
+        // but only re-render the table when Advance ORB is actually on-screen so we
+        // don't stomp over SmartMoney / Big Players views.
         if (touched > 0) {
-            renderStrategyData(lastAdvanceOrbData);
-            if (!silent) showToast('🔄 Refreshed', `${touched} stocks updated`);
+            const activePage = document.querySelector('.page.active');
+            const onScreener = activePage && activePage.id === 'page-screener';
+            const strategyId = document.getElementById('strategySelect')?.value;
+            const isAdvanceOrb = strategyId === 'advanceorb';
+            if (onScreener && isAdvanceOrb) {
+                renderStrategyData(lastAdvanceOrbData);
+                if (!silent) showToast('🔄 Refreshed', `${touched} stocks updated`);
+            }
         }
     } catch (e) {
         console.error('Refresh failed:', e);
@@ -284,11 +293,11 @@ async function fetchAdvanceORBRefresh(silent = true) {
 
 function startAdvanceOrbAutoRefresh() {
     stopAdvanceOrbAutoRefresh();
+    // Always tick — the user wants the advanceorb dataset to stay current even when
+    // they're on Home / Portfolio / Strategies / SmartMoney / Big Players pages,
+    // so the upcoming auto-buy logic sees fresh prices. fetchAdvanceORBRefresh will
+    // silently update in-memory data and re-render only when Advance ORB is visible.
     advanceOrbAutoTimer = setInterval(() => {
-        const activePage = document.querySelector('.page.active');
-        if (!activePage || activePage.id !== 'page-screener') return;
-        const strategyId = document.getElementById('strategySelect')?.value;
-        if (strategyId !== 'advanceorb') return;
         fetchAdvanceORBRefresh(true);
     }, AUTO_REFRESH_MS);
 }
