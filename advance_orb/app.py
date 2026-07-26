@@ -11,7 +11,7 @@ from tradingview_screener.query import HEADERS as TV_HEADERS
 import pandas as pd
 import yfinance as yf
 from concurrent.futures import ThreadPoolExecutor, as_completed
-#from broker.quantity_calculator import calculate_max_quantity_column
+from broker.dhan import calculate_max_qty_batch
 
 app = FastAPI(
     title="TradeAlgo Pro - Advance ORB",
@@ -251,16 +251,10 @@ def get_advance_orb():
                 "Sector": row.get('sector', 'Unknown'),
                 "Small Candle": "✓",
             })
-
-        # ─── Step 4: Calculate MaxQty for first 20 stocks ───
+             # ─── Step 4: Calculate MaxQty for first 20 stocks ───
         total_capital = 60000  # Default, user can change via settings
         num_parts = 4
-
-        # Convert result list to DataFrame for quantity_calculator
-        df_qty = pd.DataFrame(result)
-        if not df_qty.empty:
-            df_qty['MaxQty'] = calculate_max_quantity_column(df_qty, total_capital, num_parts)
-            result = df_qty.to_dict('records')
+        result = calculate_max_qty_batch(result, total_capital, num_parts)
 
         return {
             "strategy": "advanceorb",
