@@ -11,7 +11,7 @@ from tradingview_screener.query import HEADERS as TV_HEADERS
 import pandas as pd
 import yfinance as yf
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from broker.quantity_calculator import calculate_max_quantity_column
+#from broker.quantity_calculator import calculate_max_quantity_column
 
 app = FastAPI(
     title="TradeAlgo Pro - Advance ORB",
