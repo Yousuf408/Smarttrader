@@ -30,12 +30,9 @@ function loadHome() {
         </table>
     `;
 
-    // Market Overview
+    // Market Overview (showing only SENSEX per user request)
     const markets = [
-        { name: 'NIFTY 50', value: '+0.8%', up: true },
-        { name: 'SENSEX', value: '+0.6%', up: true },
-        { name: 'BANK NIFTY', value: '-0.3%', up: false },
-        { name: 'VIX', value: '+2.1%', up: true }
+        { name: 'SENSEX', value: '+0.6%', up: true }
     ];
     document.getElementById('marketOverview').innerHTML = markets.map(m => `
         <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(0,0,0,0.04);">
