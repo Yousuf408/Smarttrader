@@ -11,6 +11,7 @@ from tradingview_screener.query import HEADERS as TV_HEADERS
 import pandas as pd
 import yfinance as yf
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from broker.dhan import calculate_max_qty_batch
 
 app = FastAPI(
     title="TradeAlgo Pro - Advance ORB",
@@ -44,6 +45,7 @@ ADVANCE_ORB_COLUMNS = [
     "RELVOL",
     "Sector",
     "Small Candle",
+    "MaxQty",
 ]
 
 
