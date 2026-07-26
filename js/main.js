@@ -75,6 +75,10 @@ function navigateTo(pageId) {
     const targetPage = document.getElementById('page-' + pageId);
     if (targetPage) targetPage.classList.add('active');
     
+    if (pageId !== 'screener' && typeof window.stopAdvanceOrbAutoRefresh === 'function') {
+        window.stopAdvanceOrbAutoRefresh();
+    }
+
     if (pageId === 'home') loadHome();
     else if (pageId === 'strategies') loadStrategies();
     else if (pageId === 'portfolio') loadPortfolio();

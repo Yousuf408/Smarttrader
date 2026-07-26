@@ -111,7 +111,9 @@ async function onStrategyChange() {
         // Fetch from backend
         const result = await fetchAdvanceORB();
         if (result) {
+            lastAdvanceOrbData = result;
             renderStrategyData(result);
+            startAdvanceOrbAutoRefresh();
         } else {
             tbody.innerHTML = `<tr><td colspan="${columns.length}" style="text-align:center;padding:40px;color:var(--color-danger);">❌ Failed to load data. Please try again.</td></tr>`;
             document.getElementById('screenerCount').textContent = '0 stocks';
@@ -238,19 +240,82 @@ function autoBuyAllStocks() {
 }
 
 // ================================================================
-// RUN SCREENER
+// LIGHTWEIGHT REFRESH (TradingView only, no Yahoo candle round-trip)
 // ================================================================
-function runScreener() {
-    const btn = event?.target;
-    const originalText = btn.textContent;
-    btn.innerHTML = '<span class="spinner"></span> Running...';
-    btn.disabled = true;
-    setTimeout(() => {
+let lastAdvanceOrbData = null;
+let advanceOrbAutoTimer = null;
+const AUTO_REFRESH_MS = 30000;
+
+async function fetchAdvanceORBRefresh(silent = true) {
+    if (!lastAdvanceOrbData || !lastAdvanceOrbData.data || lastAdvanceOrbData.data.length === 0) {
+        return;
+    }
+    const symbols = lastAdvanceOrbData.data.map(r => r.Symbol).filter(Boolean);
+    if (symbols.length === 0) return;
+    try {
+        const response = await fetch(
+            `/api/strategies/advanceorb/refresh?tickers=${encodeURIComponent(symbols.join(','))}`,
+            { cache: 'no-store' }
+        );
+        if (!response.ok) return;
+        const result = await response.json();
+        const bySymbol = {};
+        for (const r of (result.refreshed || [])) {
+            bySymbol[r.Symbol] = r;
+        }
+        let touched = 0;
+        for (const row of lastAdvanceOrbData.data) {
+            const updated = bySymbol[row.Symbol];
+            if (!updated) continue;
+            if (typeof updated.Price === 'number') row.Price = updated.Price;
+            if (typeof updated['CHG%'] === 'number') row['CHG%'] = updated['CHG%'];
+            if (typeof updated.Volume === 'string') row.Volume = updated.Volume;
+            if (typeof updated.RELVOL === 'string') row.RELVOL = updated.RELVOL;
+            touched++;
+        }
+        if (touched > 0) {
+            renderStrategyData(lastAdvanceOrbData);
+            if (!silent) showToast('🔄 Refreshed', `${touched} stocks updated`);
+        }
+    } catch (e) {
+        console.error('Refresh failed:', e);
+    }
+}
+
+function startAdvanceOrbAutoRefresh() {
+    stopAdvanceOrbAutoRefresh();
+    advanceOrbAutoTimer = setInterval(() => {
+        const activePage = document.querySelector('.page.active');
+        if (!activePage || activePage.id !== 'page-screener') return;
+        const strategyId = document.getElementById('strategySelect')?.value;
+        if (strategyId !== 'advanceorb') return;
+        fetchAdvanceORBRefresh(true);
+    }, AUTO_REFRESH_MS);
+}
+
+function stopAdvanceOrbAutoRefresh() {
+    if (advanceOrbAutoTimer) {
+        clearInterval(advanceOrbAutoTimer);
+        advanceOrbAutoTimer = null;
+    }
+}
+
+// Expose so main.js can stop the timer when leaving the Screener page.
+window.startAdvanceOrbAutoRefresh = startAdvanceOrbAutoRefresh;
+window.stopAdvanceOrbAutoRefresh = stopAdvanceOrbAutoRefresh;
+
+
+// ================================================================
+// REFRESH BUTTON (formerly "Run Screener")
+// ================================================================
+function refreshScreener() {
+    const strategyId = document.getElementById('strategySelect')?.value;
+    if (strategyId === 'advanceorb') {
+        fetchAdvanceORBRefresh(false);
+    } else {
+        // SmartMoney / Big Players use hardcoded data; just re-render.
         onStrategyChange();
-        showToast('✅ Screener Complete', 'Stocks updated');
-        btn.innerHTML = originalText;
-        btn.disabled = false;
-    }, 600);
+    }
 }
 
 // ================================================================

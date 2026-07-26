@@ -274,6 +274,73 @@ def health():
     return {"status": "healthy"}
 
 
+@app.get("/api/strategies/advanceorb/refresh")
+def refresh_advance_orb(tickers: str = ""):
+    """Lightweight refresh of price/volume/change for a fixed list of tickers.
+
+    Skips the Yahoo candle check so it stays around ~0.5–1.5 s even for
+    ~150 symbols. Returns refreshed values per symbol; symbols TradingView
+    cannot resolve are simply omitted from the response.
+    """
+    try:
+        symbols = [s.strip().upper() for s in tickers.split(",") if s.strip()]
+        if not symbols:
+            return {"refreshed": []}
+
+        tv_query = (Query()
+            .select('name', 'close', 'change', 'volume', 'relative_volume')
+            .set_markets('india')
+            .where(col('exchange') == 'NSE')
+            .set_tickers(*[f'NSE:{sym}' for sym in symbols])
+        )
+
+        body = dict(tv_query.query)
+        body['range'] = [0, max(50, len(symbols) + 10)]
+        response = requests.post(
+            tv_query.url,
+            json=body,
+            headers=TV_HEADERS,
+            timeout=20,
+        )
+        response.raise_for_status()
+        payload = response.json()
+
+        refreshed: list[dict] = []
+        for symbol_row in (payload.get('data') or []):
+            values = symbol_row.get('d') or []
+            if len(values) < 5:
+                continue
+            name = values[0]
+            if not name:
+                continue
+            close = pd.to_numeric(values[1], errors='coerce')
+            change = pd.to_numeric(values[2], errors='coerce')
+            vol = pd.to_numeric(values[3], errors='coerce')
+            relvol = pd.to_numeric(values[4], errors='coerce')
+
+            if pd.notna(vol) and vol >= 1_000_000:
+                volume_str = f"{vol/1_000_000:.1f}M"
+            elif pd.notna(vol) and vol >= 1_000:
+                volume_str = f"{vol/1_000:.1f}K"
+            elif pd.notna(vol):
+                volume_str = str(int(vol))
+            else:
+                volume_str = "0"
+            relvol_str = f"{relvol:.2f}x" if pd.notna(relvol) else "0x"
+
+            refreshed.append({
+                "Symbol": name,
+                "Price": round(float(close), 2) if pd.notna(close) else None,
+                "CHG%": round(float(change), 2) if pd.notna(change) else None,
+                "Volume": volume_str,
+                "RELVOL": relvol_str,
+            })
+
+        return {"refreshed": refreshed}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # Serve only the frontend assets from the same origin as the API. Do not expose
 # the repository root, which also contains backend source and project metadata.
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
