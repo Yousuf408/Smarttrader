@@ -331,3 +331,19 @@ def test_qty_calculation():
 
 if __name__ == "__main__":
     test_qty_calculation()
+
+# ================================================================
+# EAGER INIT: preload master CSV once at process start
+# ================================================================
+# Without this, each of the 8 worker threads independently races to
+# download the 218k-row scrip master CSV on the first screener call,
+# burning ~2-3 s × 8 of duplicate network work per refresh. Eager
+# loading at module-import time means the data is in memory before
+# uvicorn starts accepting connections, so every worker reads from
+# one canonical copy.
+try:
+    load_instrument_master()
+    print("✅ Master CSV preloaded at startup")
+except Exception as _exc:
+    print(f"⚠️  Eager master CSV preload failed: {_exc}")
+
