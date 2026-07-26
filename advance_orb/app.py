@@ -10,6 +10,7 @@ from tradingview_screener import Query, col
 from tradingview_screener.query import HEADERS as TV_HEADERS
 import pandas as pd
 import yfinance as yf
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 app = FastAPI(
     title="TradeAlgo Pro - Advance ORB",
@@ -32,6 +33,8 @@ GAP_THRESHOLD = 2.0
 MARKET_CAP_MIN = 41_000_000_000  # 41 Billion INR
 SMALL_CANDLE_THRESHOLD = 1.5
 IST = ZoneInfo("Asia/Kolkata")
+MAX_TV_STOCKS = 200
+YFINANCE_WORKERS = 8
 ADVANCE_ORB_COLUMNS = [
     "Symbol",
     "Price",
@@ -50,7 +53,7 @@ def has_small_opening_candle(symbol: str) -> bool:
     try:
         candles = yf.download(
             tickers=ticker,
-            period="5d",
+            period="4d",
             interval="5m",
             progress=False,
             auto_adjust=False,
@@ -99,6 +102,31 @@ def has_small_opening_candle(symbol: str) -> bool:
     candle_range = (high - low) / low * 100
     return candle_range <= SMALL_CANDLE_THRESHOLD
 
+
+def filter_small_opening_candles(symbols: list[str]) -> set[str]:
+    """Yahoo Finance 9:15 IST candle check, executed across many symbols in parallel.
+
+    Each unique ticker is fetched with `yf.download` inside a thread pool. Any
+    failure (delisted ticker, missing data, rate limit, exception) is treated
+    as "not a small opening candle" so the symbol is excluded from results.
+    """
+    if not symbols:
+        return set()
+
+    unique = [str(s).strip().upper() for s in symbols if s]
+    matches: set[str] = set()
+
+    with ThreadPoolExecutor(max_workers=YFINANCE_WORKERS) as pool:
+        futures = {pool.submit(has_small_opening_candle, sym): sym for sym in unique}
+        for future in as_completed(futures):
+            try:
+                if future.result():
+                    matches.add(futures[future])
+            except Exception:
+                continue
+    return matches
+
+
 @app.get("/api")
 def root():
     return {
@@ -123,11 +151,8 @@ def get_advance_orb():
     """
     try:
         # ─── Step 1: Fetch from TradingView ───
-        # The `tradingview-screener` library only returns the first page from the
-        # /scan endpoint (typically 50 rows) and its built-in pagination is
-        # unstable in this version, so call TradingView directly and request
-        # every matching row in `range`. A fallback paginator handles the
-        # edge case where TradingView caps the page size to a smaller value.
+        # Single POST to TradingView's scan endpoint, capped to MAX_TV_STOCKS
+        # rows (≈4 pages of the default 50-row page size).
         tv_columns = [
             'name', 'close', 'change', 'gap', 'volume',
             'relative_volume', 'market_cap_basic', 'sector',
@@ -143,38 +168,27 @@ def get_advance_orb():
             )
             .order_by('change', ascending=False)
         )
-        tv_url = tv_query.url
+
+        body = dict(tv_query.query)
+        body['range'] = [0, MAX_TV_STOCKS]
+        response = requests.post(
+            tv_query.url,
+            json=body,
+            headers=TV_HEADERS,
+            timeout=30,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        total = int(payload.get('totalCount') or 0)
 
         raw_rows: list[dict] = []
-        total = 0
-        page_size = 1000
-        offset = 0
-        while True:
-            body = dict(tv_query.query)
-            body['range'] = [offset, offset + page_size]
-            response = requests.post(
-                tv_url,
-                json=body,
-                headers=TV_HEADERS,
-                timeout=30,
-            )
-            response.raise_for_status()
-            payload = response.json()
-            total = int(payload.get('totalCount') or 0)
-            rows_batch = payload.get('data') or []
-            if not rows_batch:
-                break
-            for symbol_row in rows_batch:
-                values = symbol_row.get('d') or []
-                ticker = symbol_row.get('s')
-                row_values = [ticker] + list(values)
-                raw_rows.append(dict(zip(['ticker', *tv_columns], row_values)))
-            offset += len(rows_batch)
-            if offset >= total:
-                break
+        for symbol_row in (payload.get('data') or [])[:MAX_TV_STOCKS]:
+            values = symbol_row.get('d') or []
+            ticker = symbol_row.get('s')
+            raw_rows.append(dict(zip(['ticker', *tv_columns], [ticker, *values])))
 
         df = pd.DataFrame(raw_rows)
-        count = total
+        count = min(total, MAX_TV_STOCKS)
 
         if count == 0:
             return {
@@ -201,11 +215,15 @@ def get_advance_orb():
             }
 
         # ─── Step 3: Format Data for Frontend ───
+        # Run the Yahoo Finance candle check across every candidate in parallel,
+        # then keep only rows whose ticker is in the matching set.
+        candidate_symbols = df['name'].dropna().astype(str).tolist()
+        small_candle_symbols = filter_small_opening_candles(candidate_symbols)
+
         result = []
         for _, row in df.iterrows():
             symbol = row['name']
-            small_candle = has_small_opening_candle(symbol)
-            if not small_candle:
+            if symbol not in small_candle_symbols:
                 continue
 
             # Format volume
@@ -229,7 +247,7 @@ def get_advance_orb():
                 "Volume": volume_str,
                 "RELVOL": relvol_str,
                 "Sector": row.get('sector', 'Unknown'),
-                "Small Candle": "✓" if small_candle else "✗",
+                "Small Candle": "✓",
             })
 
         return {

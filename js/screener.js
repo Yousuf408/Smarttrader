@@ -105,7 +105,7 @@ async function onStrategyChange() {
         const columns = [...strategy.columns];
         columns.push('Action');
         thead.innerHTML = columns.map(col => `<th>${col}</th>`).join('');
-        tbody.innerHTML = `<tr><td colspan="${columns.length}" style="text-align:center;padding:40px;">⏳ Loading stocks from TradingView...</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="${columns.length}" style="text-align:center;padding:40px;">🔎 Filtering best-performing stocks…</td></tr>`;
         document.getElementById('screenerCount').textContent = 'Loading...';
 
         // Fetch from backend
