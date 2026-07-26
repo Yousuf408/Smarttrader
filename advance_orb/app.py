@@ -251,6 +251,10 @@ def get_advance_orb():
                 "Sector": row.get('sector', 'Unknown'),
                 "Small Candle": "✓",
             })
+             # ─── Step 4: Calculate MaxQty for first 20 stocks ───
+        total_capital = 60000  # Default, user can change via settings
+        num_parts = 4
+        result = calculate_max_qty_batch(result, total_capital, num_parts)
 
         return {
             "strategy": "advanceorb",
