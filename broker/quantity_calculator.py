@@ -3,6 +3,7 @@
 # Streamlit code removed, FastAPI compatible
 # ================================================================
 
+import time
 import requests
 import pandas as pd
 import math
@@ -39,6 +40,13 @@ DHAN_FUND_LIMIT_URL = "https://api.dhan.co/v2/fundlimit"
 # ACCESS TOKEN (Hardcoded for now, will be dynamic via popup later)
 # ================================================================
 DHAN_ACCESS_TOKEN = DHAN_MANUAL_ACCESS_TOKEN or "your_dhan_access_token_here"
+
+# Per-symbol margin cache. Survives across screener refreshes so that
+# when stocks shuffle positions in top-N, only newly-arrived symbols
+# trigger a real Dhan call. Stable symbols bypass the round-trip,
+# which keeps us well under Dhan's /margincalculator rate limit.
+MARGIN_CACHE = {}
+MARGIN_CACHE_TTL_SECONDS = 15 * 60  # 15 minutes
 
 # Cache for security ID map
 SECURITY_ID_CACHE = {}
@@ -133,6 +141,16 @@ def get_margin_per_share(security_id, price, access_token=None):
     """Call Dhan margin calculator API for single stock"""
     token = access_token or DHAN_ACCESS_TOKEN
 
+    # Margin cache hit returns immediately. Keyed on (security_id,
+    # rounded price) with a 15 min TTL. When stocks shuffle in the
+    # top-N screener, only newly-arrived symbols trigger a real Dhan
+    # call; stable symbols reuse the cached margin. We never cache
+    # 429 / error returns so retries are not masked.
+    cache_key = (str(security_id), round(float(price), 2))
+    cached = MARGIN_CACHE.get(cache_key)
+    if cached is not None and (time.time() - cached[1]) < MARGIN_CACHE_TTL_SECONDS:
+        return cached[0]
+
     if not token or token == "your_dhan_access_token_here":
         print("⚠️ Access token not set")
         return 0
@@ -165,6 +183,8 @@ def get_margin_per_share(security_id, price, access_token=None):
         if response.status_code == 200:
             data = response.json()
             margin = float(data.get("totalMargin", 0))
+            if margin > 0:
+                MARGIN_CACHE[cache_key] = (margin, time.time())
             return margin
         else:
             print(f"⚠️ Dhan API error: {response.status_code}")
