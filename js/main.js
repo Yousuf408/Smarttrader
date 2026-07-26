@@ -75,9 +75,8 @@ function navigateTo(pageId) {
     const targetPage = document.getElementById('page-' + pageId);
     if (targetPage) targetPage.classList.add('active');
     
-    if (pageId !== 'screener' && typeof window.stopAdvanceOrbAutoRefresh === 'function') {
-        window.stopAdvanceOrbAutoRefresh();
-    }
+    // Auto-refresh (advanceorb) keeps running even when the user is on other pages,
+    // so the screener data stays current for the upcoming auto-buy feature.
 
     if (pageId === 'home') loadHome();
     else if (pageId === 'strategies') loadStrategies();
