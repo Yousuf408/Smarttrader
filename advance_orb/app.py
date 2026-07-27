@@ -23,6 +23,7 @@ from broker.quantity_calculator import (
     set_dhan_access_token,
     clear_dhan_credentials,
     _cred as _broker_cred,
+    DHAN_PROXIES,
 )
 from broker.dhan_orders import place_dhan_order
 
@@ -849,9 +850,25 @@ def broker_connect(payload: dict):
     set_dhan_credentials(client_id, pin, totp_secret, broker_name="dhan")
 
     try:
+        # Dhan's /app/generateAccessToken takes the auth params as
+        # QUERY STRING on the POST, not as a JSON or form body.
+        # The official DhanHQ-py library does it this way:
+        #   POST 'https://auth.dhan.co/app/generateAccessToken
+        #          ?dhanClientId=...&pin=...&totp=...'
+        # Sending them as a body or with the wrong field name
+        # (e.g. userId instead of dhanClientId) gets a 400 from
+        # Dhan with no clear message — exactly what we hit when
+        # this endpoint was first wired up. The proxy must route
+        # this through the static-IP whitelist (Dhan requires
+        # whitelisted IPs for /generateAccessToken too).
         r = requests.post(
             "https://auth.dhan.co/app/generateAccessToken",
-            data={"userId": client_id, "pin": pin, "totp": totp_code},
+            params={
+                "dhanClientId": client_id,
+                "pin":          pin,
+                "totp":         totp_code,
+            },
+            proxies=DHAN_PROXIES,
             timeout=10,
         )
     except Exception as e:
