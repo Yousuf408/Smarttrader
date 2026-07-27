@@ -518,11 +518,22 @@ body {
     pointer-events: auto;
     opacity: 1;
     transform: translateY(0);
-    animation: toast-in 0.22s ease both;
+    /* Two animations chained via delay — IN runs immediately, OUT
+       fires after the auto-hide delay. Both fill forwards so the
+       start frame holds until the animation begins and the end
+       frame holds after it finishes. The `toast-out` animation
+       drives the auto-hide independently of any JS setTimeout. */
+    animation:
+        toast-in  0.22s ease both 0s,
+        toast-out 0.30s ease both 4s;
 }
 @keyframes toast-in {
     from { opacity: 0; transform: translateY(20px); }
     to   { opacity: 1; transform: translateY(0);   }
+}
+@keyframes toast-out {
+    from { opacity: 1; transform: translateY(0);    }
+    to   { opacity: 0; transform: translateY(20px); }
 }
 .toast .toast-title { font-weight: 700; font-size: 15px; margin-bottom: 4px; }
 .toast .toast-close {
