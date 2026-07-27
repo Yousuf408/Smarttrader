@@ -396,21 +396,30 @@ async function onStrategyChange() {
 function toggleAutoBuyMode() {
     const toggle = document.getElementById('autoBuyToggle');
     const status = document.getElementById('toggleStatus');
-    
+
     autoBuyEnabled = toggle.checked;
-    
+
     if (autoBuyEnabled) {
         status.textContent = 'ON';
         status.classList.add('active');
         showToast('🤖 Auto Buy ON', 'Auto-buy enabled for current strategy');
-        autoBuyAllStocks();
+        // Toggling Auto-Buy ON/OFF must NOT re-fetch the screener.
+        // The table already has the candidate set in `lastAdvanceOrbData`
+        // from the last Refresh / auto-refresh / strategy load. If the
+        // screener hasn't been loaded yet, we surface a "Run Screener
+        // First" toast and bail. (Previously this function called
+        // onStrategyChange() which wiped the table to the loading
+        // placeholder and re-fired fetchAdvanceORB() — wrong.)
+        if (lastAdvanceOrbData && Array.isArray(lastAdvanceOrbData.data) && lastAdvanceOrbData.data.length > 0) {
+            autoBuyAllStocks();
+        } else {
+            showToast('⚠️ Run Screener First', 'Click Refresh to load stocks before auto-buy.');
+        }
     } else {
         status.textContent = 'OFF';
         status.classList.remove('active');
         showToast('👤 Manual Mode ON', 'Click Place Order to buy stocks');
     }
-    
-    onStrategyChange();
 }
 
 // ================================================================
