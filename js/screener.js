@@ -158,17 +158,58 @@ function stepParts(delta) {
 }
 
 async function _scheduleScreenerRefresh() {
+    // 300ms debounce — collapse rapid +/- clicks into a single
+    // refetch. We never trigger a full screener refresh (TV scan
+    // + 200 EMA pull + 9:15 candle pull) on a budget/parts stepper
+    // change; that's expensive and not needed. MaxQty is a pure
+    // formula on price + budget + parts + margin-per-share — so
+    // we recompute it locally over the existing snapshot.
     clearTimeout(_stepperRefreshTimer);
     _stepperRefreshTimer = setTimeout(async () => {
         const strategyId = document.getElementById("strategySelect")?.value;
         if (strategyId !== "advanceorb") return;
-        const result = await fetchAdvanceORB();
-        if (result) {
-            lastAdvanceOrbData = result;
-            renderStrategyData(result);
-            if (typeof startAdvanceOrbAutoRefresh === "function") {
-                startAdvanceOrbAutoRefresh();
+
+        // No snapshot yet — fall back to a heavy full fetch (the
+        // Refresh button and Strategy dropdown paths already do
+        // this; calling onStrategyChange() covers both cases).
+        if (!lastAdvanceOrbData || !Array.isArray(lastAdvanceOrbData.data) || lastAdvanceOrbData.data.length === 0) {
+            await onStrategyChange();
+            return;
+        }
+
+        // Snapshot exists: hit the lightweight qty-only endpoint
+        // POST /api/strategies/advanceorb/qty with {Symbol,Price}
+        // pairs and merge MaxQty back into the row buffer in place.
+        const budget = _readBudget();
+        const parts  = _readParts();
+        const symbols = lastAdvanceOrbData.data
+            .map(r => ({ Symbol: r.Symbol, Price: r.Price }))
+            .filter(p => p.Symbol && Number.isFinite(parseFloat(p.Price)));
+
+        try {
+            const resp = await fetch('/api/strategies/advanceorb/qty', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ budget, parts, symbols }),
+            });
+            if (!resp.ok) throw new Error(`qty-refetch HTTP ${resp.status}`);
+            const json = await resp.json();
+            const qtyMap = new Map();
+            for (const e of (json.data || [])) qtyMap.set(e.Symbol, e.MaxQty);
+            let touched = 0;
+            for (const row of lastAdvanceOrbData.data) {
+                if (qtyMap.has(row.Symbol)) {
+                    row.MaxQty = qtyMap.get(row.Symbol);
+                    touched++;
+                }
             }
+            if (typeof renderStrategyData === 'function') {
+                renderStrategyData(lastAdvanceOrbData);
+            }
+            console.info(`[qty-stepper] refreshed MaxQty on ${touched}/${lastAdvanceOrbData.data.length} rows (budget=${budget} parts=${parts})`);
+        } catch (e) {
+            console.error('[qty-stepper] lightweight recompute failed:', e);
+            showToast('⚠️ Stale MaxQty', 'Failed to refresh MaxQty — hit Refresh to retry.');
         }
     }, 300);
 }
@@ -245,10 +286,26 @@ function renderStrategyData(result) {
             const values = [];
             headerColumns.forEach(col => {
                 if (col === 'Action') return;
-                
-                // Map column names to row properties
-                const colKey = col.replace(/ /g, '').replace(/\//g, '');
-                let value = row[col] || row[colKey] || row[col.toLowerCase()] || '';
+
+                // ---- column-name -> row-key fallbacks ----
+                // Server columns ("200 EMA", "9:15 HIGH") use spaces
+                // but row keys are snake-style ("ema", "high915").
+                // Map those by hand before falling back to the generic
+                // row[col] | row[col-no-spaces] | row[col-lower] chain
+                // (which would otherwise yield empty cells because
+                // the row payload uses different keys than the
+                // headers).
+                let value;
+                if (col === '200 EMA') {
+                    const ema = parseFloat(row.ema);
+                    value = Number.isFinite(ema) ? ema : '';
+                } else if (col === '9:15 HIGH') {
+                    const h = parseFloat(row.high915);
+                    value = Number.isFinite(h) ? h : '';
+                } else {
+                    const colKey = col.replace(/ /g, '').replace(/\//g, '');
+                    value = row[col] || row[colKey] || row[col.toLowerCase()] || '';
+                }
                 
                 // Special formatting for price
                 if (col === 'Price' && typeof value === 'number') {

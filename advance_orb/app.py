@@ -56,7 +56,6 @@ ADVANCE_ORB_COLUMNS = [
     "Volume",
     "RELVOL",
     "Sector",
-    "Small Candle",
     "200 EMA",
     "MaxQty",
 ]
@@ -439,7 +438,6 @@ def get_advance_orb(budget: int = 100000, parts: int = 4):
                 "Volume": volume_str,
                 "RELVOL": relvol_str,
                 "Sector": row.get('sector', 'Unknown'),
-                "Small Candle": "✓",
                 "ema": (
                     round(float(row["ema"]), 2)
                     if pd.notna(row.get("ema"))
@@ -472,6 +470,60 @@ def get_advance_orb(budget: int = 100000, parts: int = 4):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/strategies/advanceorb/qty")
+def recompute_advanceorb_qty(payload: dict):
+    """Lightweight MaxQty recompute for the Advance ORB screener.
+
+    Body: {budget:int, parts:int, symbols:[{Symbol,Price},...]}
+    Returns: {data:[{Symbol,MaxQty},...]}
+
+    Skips TradingView scan + yfinance EMA + 9:15 candle pulls so
+    budget/parts steppers refresh MaxQty instantly. The caller
+    must already hold a screener snapshot from the heavy
+    /api/strategies/advanceorb endpoint (Refresh click / strategy
+    switch / first load).
+    """
+    budget  = payload.get("budget")
+    parts   = payload.get("parts")
+    symbols = payload.get("symbols") or []
+    if not isinstance(budget, int) or budget <= 0:
+        raise HTTPException(status_code=400, detail="budget must be a positive integer")
+    if not isinstance(parts, int) or parts <= 0:
+        raise HTTPException(status_code=400, detail="parts must be a positive integer")
+    if not isinstance(symbols, list) or not symbols:
+        return {"data": []}
+    rows = []
+    for entry in symbols:
+        if not isinstance(entry, dict):
+            continue
+        sym = entry.get("Symbol") or entry.get("symbol")
+        price = entry.get("Price") or entry.get("price")
+        if not sym or price is None:
+            continue
+        try:
+            price = float(price)
+        except (TypeError, ValueError):
+            continue
+        if price <= 0:
+            continue
+        rows.append({"Symbol": sym, "Price": price})
+    if not rows:
+        return {"data": []}
+    df_qty = calculate_max_quantity_column(
+        pd.DataFrame(rows),
+        total_capital=budget,
+        num_parts=parts,
+        access_token=os.environ.get("DHAN_ACCESS_TOKEN", "").strip() or None,
+    )
+    out = []
+    for sym, q in zip(df_qty["Symbol"], df_qty["MaxQty"]):
+        out.append({
+            "Symbol": sym,
+            "MaxQty": int(q) if pd.notna(q) else 0,
+        })
+    return {"data": out}
 
 
 @app.post("/api/orders/place")
