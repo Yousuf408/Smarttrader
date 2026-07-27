@@ -16,8 +16,12 @@ function toggleBrokerFields() {
     if (broker === 'dhan') {
         dhan.style.display  = 'block';
         other.style.display = 'none';
-        // Open the popup so the user can fill it in immediately.
-        openBrokerModal();
+        // NOTE: this function only toggles panel visibility. The
+        // modal opens *only* via onBrokerSelectChange (deliberate
+        // user pick) or the explicit "🔐 Connect Dhan" button —
+        // never on the page-load boot call. Earlier the boot call
+        // used to slap up the modal on every refresh because the
+        // dropdown defaulted to <option value="dhan" selected>.
     } else if (broker) {
         // Untouched brokers get a friendly nudge + reset.
         if (typeof showToast === 'function') {
@@ -29,6 +33,17 @@ function toggleBrokerFields() {
     } else {
         dhan.style.display  = 'none';
         other.style.display = 'none';
+    }
+}
+
+// Fired ONLY by an explicit `<select onchange>` event — i.e., the
+// user picked something. Distinct from the boot-time
+// toggleBrokerFields() call so we can pop the modal on the user's
+// terms and not on every page refresh.
+function onBrokerSelectChange() {
+    toggleBrokerFields();
+    if (document.getElementById('brokerSelect').value === 'dhan') {
+        openBrokerModal();
     }
 }
 
