@@ -377,10 +377,30 @@ def get_advance_orb(budget: int = 100000, parts: int = 4):
         # then keep only rows whose ticker is in the matching set.
         candidate_symbols = df['name'].dropna().astype(str).tolist()
 
+        # First fetch the 9:15 IST 5-min candle per symbol — the same
+        # single yfinance pull gives us BOTH:
+        #   * `is_small`  (small-candle gate below)
+        #   * `open915`   (today's OPEN price, used by the 200-EMA
+        #                  distance filter below)
+        # We fetch this BEFORE the EMA filter so `df['open915']` is
+        # defined when the EMA filter consumes it.
+        opening_candle_map = batch_opening_candle(candidate_symbols)
+        small_candle_symbols = {
+            s for s, t in opening_candle_map.items()
+            if isinstance(t, tuple) and t and t[0]
+        }
+        # "open915" = today's OPEN price (= the first 5-min candle's Open).
+        # Used for the 200-EMA distance check instead of the live close,
+        # so a stock that opens within the band keeps its row even when
+        # the live price subsequently moves beyond 3% of EMA.
+        df['open915'] = df['name'].map(
+            lambda s: opening_candle_map.get(s, (False, None, None))[2]
+        )
+
         # ── Step 3a: 200-period EMA distance filter ──
-        # Compute EMA per candidate in parallel using a Yahoo Finance
-        # 5-min candle pull (`compute_200_ema_batch`). Drop rows where
-        # the 200-EMA is missing OR |price − EMA| / EMA > EMA_DISTANCE_PCT.
+        # Compute EMA per candidate in parallel via yfinance 5-min candles.
+        # Drop rows where the 200-EMA is missing OR
+        # |today_open − EMA| / EMA × 100 > EMA_DISTANCE_PCT.
         # Also surface `ema` and `change_pct` as numeric columns so the
         # frontend can render the 200 EMA cell and sort numerically.
         ema_map = compute_200_ema_batch(candidate_symbols)
@@ -395,21 +415,6 @@ def get_advance_orb(budget: int = 100000, parts: int = 4):
         df = df[df['open915'].notna()]
         ema_pct = (df['open915'] - df['ema']).abs() / df['ema'] * 100.0
         df = df[ema_pct <= EMA_DISTANCE_PCT]
-
-        # Single yfinance pull per symbol. Returns both pieces of
-        # info we need from the 9:15 IST candle (small-flag + high915).
-        opening_candle_map = batch_opening_candle(candidate_symbols)
-        small_candle_symbols = {
-            s for s, t in opening_candle_map.items()
-            if isinstance(t, tuple) and t and t[0]
-        }
-        # "open915" = today's OPEN price (= the first 5-min candle's Open).
-        # Used for the 200-EMA distance check instead of the live close,
-        # so a stock that opens within the band keeps its row even when
-        # the live price subsequently moves beyond 3% of EMA.
-        df['open915'] = df['name'].map(
-            lambda s: opening_candle_map.get(s, (False, None, None))[2]
-        )
 
         # Calculate Max Quantities via Dhan (see broker/quantity_calculator.py).
         # quantity_calculator expects Symbol/Price cols; df has name/close.
