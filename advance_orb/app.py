@@ -37,6 +37,14 @@ PRICE_MAX = 3000
 GAP_THRESHOLD = 2.0
 MARKET_CAP_MIN = 41_000_000_000  # 41 Billion INR
 SMALL_CANDLE_THRESHOLD = 1.5
+
+# ── 200-period EMA (auto-buy gate) ──
+# Surfaced per row via compute_200_ema_batch so the auto-buy
+# frontend gate `price > ema` has data. Screener does NOT filter
+# rows on EMA distance — the EMA is purely advisory now.
+EMA_SPAN = 200
+EMA_LOOKBACK_DAYS = 4
+
 IST = ZoneInfo("Asia/Kolkata")
 MAX_TV_STOCKS = 200
 YFINANCE_WORKERS = 8
@@ -108,6 +116,62 @@ def has_small_opening_candle(symbol: str) -> bool:
 
     candle_range = (high - low) / low * 100
     return candle_range <= SMALL_CANDLE_THRESHOLD
+
+
+def compute_200_ema(symbol: str):
+    """200-period EMA on 5-min closes over the previous
+    EMA_LOOKBACK_DAYS days, or None if Yahoo returns nothing usable.
+
+    Returns float | None. NOT used as a screener-side row filter—
+    the EMA is only surfaced per row so the auto-buy JS gate
+    `row.price > row.ema` has data. Keeping the EMA off the row-
+    filter chain avoids the IndexError class of bugs that the
+    previous screener-version's drop-on-3%-distance filter hit in
+    production.
+    """
+    if not symbol or not symbol.strip():
+        return None
+    ticker = symbol.strip() if symbol.strip().endswith(".NS") else f"{symbol.strip()}.NS"
+    try:
+        df = yf.download(ticker, period=f"{EMA_LOOKBACK_DAYS}d",
+                         interval="5m", progress=False, auto_adjust=False)
+        if df is None or df.empty:
+            return None
+        if isinstance(df.columns, pd.MultiIndex):
+            try:
+                df = df.xs(ticker, axis=1, level=-1)
+            except (KeyError, IndexError):
+                try:
+                    df = df.xs(ticker, axis=1, level=0)
+                except (KeyError, IndexError):
+                    return None
+        closes = pd.to_numeric(df["Close"], errors="coerce").dropna()
+        if closes.empty or len(closes) < EMA_SPAN:
+            return None
+        ema = closes.ewm(span=EMA_SPAN, adjust=False).mean().iloc[-1]
+        return float(ema) if pd.notna(ema) else None
+    except Exception:
+        return None
+
+
+def compute_200_ema_batch(symbols: list[str]) -> dict:
+    """Parallel EMA fetch for an entire list of symbols. Each
+    result is float | None (None when Yahoo 401, delisted, rate-
+    limited, or fewer than EMA_SPAN closes available).
+    """
+    results: dict = {}
+    unique = list({s for s in symbols if s})
+    if not unique:
+        return results
+    with ThreadPoolExecutor(max_workers=YFINANCE_WORKERS) as pool:
+        futures = {pool.submit(compute_200_ema, sym): sym for sym in unique}
+        for fut in as_completed(futures):
+            sym = futures[fut]
+            try:
+                results[sym] = fut.result(timeout=20)
+            except Exception:
+                results[sym] = None
+    return results
 
 
 def batch_opening_candle(symbols: list[str]) -> dict:
