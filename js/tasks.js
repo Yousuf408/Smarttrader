@@ -4,49 +4,11 @@
  *   - List/Create tasks grouped by status with priority
  *   - Update status (todo → inprogress → done)
  *   - Subtasks with progress % on parent
- *   - All API calls use the Supabase access_token from localStorage
+ *   - Auth surface stripped: no JWT, no redirect, no logout.
  * ================================================================= */
 
 (() => {
     'use strict';
-
-    // ---- Auth gate (mirrors the gate in index.html but inline so
-    //      /tasks is its own page; redirects to /login on 401.)
-    const TOKEN_KEY = 'traderalgopro.auth';
-    const NEXT_PARAM = 'next';
-
-    function getAccessToken() {
-        try {
-            const raw = localStorage.getItem(TOKEN_KEY);
-            if (!raw) return null;
-            // Supabase stores its session under a key like
-            // `traderalgopro.auth-<project_ref>`; the bare TOKEN_KEY
-            // is sometimes a code-verifier. Try both shapes.
-            const direct = JSON.parse(raw);
-            if (direct?.access_token) return direct.access_token;
-        } catch (_) { /* fall through */ }
-        try {
-            for (let i = 0; i < localStorage.length; i++) {
-                const k = localStorage.key(i);
-                if (!k || !k.startsWith(TOKEN_KEY)) continue;
-                const v = JSON.parse(localStorage.getItem(k) || 'null');
-                if (v?.access_token) return v.access_token;
-            }
-        } catch (_) { /* fall through */ }
-        return null;
-    }
-
-    function gateOrRedirect() {
-        const token = getAccessToken();
-        if (token) return token;
-        const next = encodeURIComponent('/tasks');
-        window.location.replace('/login?' + NEXT_PARAM + '=' + next);
-        return null;
-    }
-
-    // ---- Boot
-    const accessToken = gateOrRedirect();
-    if (!accessToken) return;
 
     // ---- DOM refs
     const $ = (id) => document.getElementById(id);
@@ -133,10 +95,9 @@
         return ({ low:'Low', medium:'Medium', high:'High' })[p] || p;
     }
 
-    // ---- API
+    // ---- API (no auth header; server endpoints are open)
     async function api(path, opts = {}) {
         const headers = Object.assign(
-            { 'Authorization': 'Bearer ' + accessToken },
             opts.body ? { 'Content-Type': 'application/json' } : {},
             opts.headers || {},
         );
@@ -145,11 +106,6 @@
             resp = await fetch(path, Object.assign({ method: 'GET', headers }, opts));
         } catch (e) {
             throw new Error('Network error — ' + (e?.message || e));
-        }
-        if (resp.status === 401) {
-            showToast('🔒 Session expired', 'Please sign in again.', 'error', 4000);
-            setTimeout(() => window.location.assign('/login?next=' + encodeURIComponent('/tasks')), 1200);
-            throw new Error('unauthorized');
         }
         if (resp.status >= 400) {
             let detail = 'HTTP ' + resp.status;
@@ -373,37 +329,11 @@
             form.reset();
         });
 
-        // Logout
-        els.logout?.addEventListener('click', () => {
-            try {
-                for (let i = localStorage.length - 1; i >= 0; i--) {
-                    const k = localStorage.key(i);
-                    if (k && (k.startsWith('traderalgopro.auth') || k === 'traderalgopro.auth.sessionDeadline')) {
-                        localStorage.removeItem(k);
-                    }
-                }
-            } catch (_) {}
-            window.location.assign('/login');
-        });
+        // (logout removed — auth surface stripped)
     }
 
     // ---- Boot
-    function paintUserChip() {
-        try {
-            let email = null;
-            for (let i = 0; i < localStorage.length; i++) {
-                const k = localStorage.key(i);
-                if (!k || !k.startsWith(TOKEN_KEY)) continue;
-                const v = JSON.parse(localStorage.getItem(k) || 'null');
-                if (v?.user?.email) { email = v.user.email; break; }
-                if (v?.currentSession?.user?.email) { email = v.currentSession.user.email; break; }
-            }
-            if (email && els.userChip) els.userChip.textContent = email;
-        } catch (_) {}
-    }
-
     document.addEventListener('DOMContentLoaded', async () => {
-        paintUserChip();
         wireEvents();
         await fetchAll();
     });

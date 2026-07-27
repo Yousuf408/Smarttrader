@@ -25,44 +25,10 @@ from broker.dhan_orders import place_dhan_order
 # SUPABASE_SERVICE_ROLE_KEY) override these when present.
 #
 # Why hardcoded: users of the deployed app log in via Supabase Auth
-# emails, not via these keys; the user-facing layer (email + password)
-# surfaces only the public anon key. The service_role key stays
-# server-side only and is never sent to the browser.
 # =================================================================
-HARDCODED_SUPABASE_URL                  = "https://atyqkbrmrosnoczktsmm.supabase.co"
-HARDCODED_SUPABASE_ANON_KEY             = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0eXFrYnJtcm9zbm9jemt0c21tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1NjI4ODcsImV4cCI6MjA5NjEzODg4N30.f-vn85HGFfPMUNeyJLccZSIVTKvZGXp1Ty5Hw08pFsU"
-HARDCODED_SUPABASE_SERVICE_ROLE_KEY     = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0eXFrYnJtcm9zbm9jemt0c21tIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MDU2Mjg4NywiZXhwIjoyMDk2MTM4ODg3fQ.w3PiYb4G09QAam7hZ1rkZPjrHy934ywc8BUfDR77syo"
-
-
-def _sb_url() -> str:
-    return (
-        os.environ.get("SUPABASE_URL")
-        or os.environ.get("SUPABASE_PROJECT_URL")
-        or HARDCODED_SUPABASE_URL
-    ).strip()
-
-
-def _sb_anon() -> str:
-    return (
-        os.environ.get("SUPABASE_ANON_KEY")
-        or os.environ.get("SUPABASE_KEY")
-        or HARDCODED_SUPABASE_ANON_KEY
-    ).strip()
-
-
-def _sb_service_role() -> str:
-    return (
-        os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
-        or os.environ.get("SUPABASE_SERVICE_KEY")
-        or HARDCODED_SUPABASE_SERVICE_ROLE_KEY
-    ).strip()
-
-
-# Tiny in-process TTL cache for username → (id, email) lookups.
-# Keeps repeat sign-in attempts off the Supabase REST hot path.
-_USERNAME_LOOKUP_CACHE: dict[str, tuple[float, dict]] = {}
-_USERNAME_CACHE_TTL  = 60      # seconds
-_USERNAME_CACHE_MAX  = 256     # FIFO cap
+# Auth surface removed as of refactor — task endpoints now run on
+# a single shared in-process store, no Supabase creds required.
+# =================================================================
 
 
 app = FastAPI(
@@ -794,186 +760,12 @@ app.mount("/js", StaticFiles(directory=PROJECT_ROOT / "js"), name="frontend-js")
 #                        role key is missing; 401 if the user JWT is
 #                        bad/expired. Future endpoints (e.g. /api/me/
 #                        settings) will piggyback on this lookup.
-@app.get("/login", include_in_schema=False)
-def login_page():
-    return FileResponse(PROJECT_ROOT / "login.html", media_type="text/html")
-
-
 @app.get("/tasks", include_in_schema=False)
 def tasks_page():
     return FileResponse(PROJECT_ROOT / "tasks.html", media_type="text/html")
 
 
-@app.get("/api/auth/config")
-def auth_config():
-    """Public anon key for Supabase. Hardcoded fallback so end users
-    don't have to set anything in Replit Secrets.
-
-    Reads (in priority order):
-      SUPABASE_URL / SUPABASE_PROJECT_URL         (override)
-      SUPABASE_ANON_KEY / SUPABASE_KEY            (override)
-      HARDCODED_* (built-in fallback)
-    """
-    url  = _sb_url()      or None
-    anon = _sb_anon()     or None
-    if not url or not anon:
-        return {
-            "ok":      False,
-            "url":     None,
-            "anonKey": None,
-            "message": "Supabase creds missing — set Replit Secrets or verify hardcoded fallback in advance_orb/app.py.",
-        }
-    return {"ok": True, "url": url, "anonKey": anon}
-
-
-@app.get("/api/me")
-def api_me(authorization: Optional[str] = None):
-    """Verify the user's Supabase JWT and return their id + email.
-
-    Reads (in priority order):
-      SUPABASE_URL / SUPABASE_PROJECT_URL              (override)
-      SUPABASE_SERVICE_ROLE_KEY / SUPABASE_SERVICE_KEY (override)
-      HARDCODED_SUPABASE_SERVICE_ROLE_KEY              (fallback)
-    """
-    supabase_url = _sb_url()
-    service_role = _sb_service_role()
-    if not supabase_url or not service_role:
-        raise HTTPException(
-            status_code=503,
-            detail="Supabase service role not configured (set Replit Secret or verify hardcoded fallback).",
-        )
-    if not authorization or not authorization.lower().startswith("bearer "):
-        raise HTTPException(status_code=401, detail="Missing Authorization Bearer.")
-    token = authorization.split(" ", 1)[1].strip()
-    try:
-        resp = requests.get(
-            supabase_url.rstrip("/") + "/auth/v1/user",
-            headers={
-                "Authorization": "Bearer " + token,
-                "apikey":        service_role,
-            },
-            timeout=10,
-        )
-    except Exception as e:
-        raise HTTPException(status_code=502, detail="Auth roundtrip failed: " + str(e))
-    if resp.status_code != 200:
-        raise HTTPException(status_code=401, detail="Invalid or expired Supabase session.")
-    user = resp.json() or {}
-    return {
-        "id":    user.get("id"),
-        "email": user.get("email"),
-    }
-
-
-@app.get("/api/auth/lookup-username")
-def lookup_username(u: str = ""):
-    """Resolve username → (id, email) for sign-in by username.
-
-    Reads the `public.user_profiles` table via service-role so RLS
-    doesn't gate this. Returns 404 if not found.
-
-    Tiny in-process TTL cache (60s, FIFO 256) so repeat login
-    attempts for a recently-typed username do not re-hit Supabase
-    REST. Negative cache (404) is intentionally NOT cached to keep
-    await-time precise after a signup.
-    """
-    username = (u or "").strip()
-    if not username:
-        raise HTTPException(status_code=400, detail="Missing ?u=...")
-    if not re.fullmatch(r"[a-zA-Z0-9_]{3,20}", username):
-        raise HTTPException(status_code=400, detail="Bad username format.")
-
-    now = time.time()
-    hit = _USERNAME_LOOKUP_CACHE.get(username)
-    if hit is not None and (now - hit[0]) < _USERNAME_CACHE_TTL:
-        return hit[1]
-
-    supabase_url = _sb_url()
-    service_role = _sb_service_role()
-    if not supabase_url or not service_role:
-        raise HTTPException(status_code=503, detail="Supabase service role not configured.")
-    try:
-        resp = requests.get(
-            supabase_url.rstrip("/") + "/rest/v1/user_profiles",
-            params={"username": "eq." + username, "select": "id,email"},
-            headers={
-                "apikey":        service_role,
-                "Authorization": "Bearer " + service_role,
-            },
-            timeout=10,
-        )
-    except Exception as e:
-        raise HTTPException(status_code=502, detail="Lookup failed: " + str(e))
-    if resp.status_code >= 400:
-        raise HTTPException(status_code=resp.status_code, detail=resp.text or "Lookup error")
-    rows = resp.json() or []
-    if not rows:
-        raise HTTPException(status_code=404, detail="Username not found.")
-    result = {"id": rows[0].get("id"), "email": rows[0].get("email")}
-
-    # Cache the positive hit only; evict oldest if we've filled the slot.
-    if len(_USERNAME_LOOKUP_CACHE) >= _USERNAME_CACHE_MAX:
-        try:
-            _USERNAME_LOOKUP_CACHE.pop(next(iter(_USERNAME_LOOKUP_CACHE)))
-        except Exception:
-            _USERNAME_LOOKUP_CACHE.clear()
-    _USERNAME_LOOKUP_CACHE[username] = (now, result)
-    return result
-
-
-@app.post("/api/me/profile")
-def api_me_profile(payload: dict, authorization: Optional[str] = None):
-    """Upsert the current user's `username` into public.user_profiles.
-
-    Caller must send a valid Supabase JWT as `Authorization: Bearer …`.
-    """
-    username = ""
-    if isinstance(payload, dict):
-        username = (payload.get("username") or "").strip()
-    if not re.fullmatch(r"[a-zA-Z0-9_]{3,20}", username):
-        raise HTTPException(status_code=400, detail="Username must be 3–20 chars (a-z, 0-9, _).")
-    supabase_url = _sb_url()
-    service_role = _sb_service_role()
-    if not supabase_url or not service_role:
-        raise HTTPException(status_code=503, detail="Supabase service role not configured.")
-    if not authorization or not authorization.lower().startswith("bearer "):
-        raise HTTPException(status_code=401, detail="Missing Authorization Bearer.")
-    token = authorization.split(" ", 1)[1].strip()
-    try:
-        u_resp = requests.get(
-            supabase_url.rstrip("/") + "/auth/v1/user",
-            headers={
-                "Authorization": "Bearer " + token,
-                "apikey":        service_role,
-            },
-            timeout=10,
-        )
-    except Exception as e:
-        raise HTTPException(status_code=502, detail="Auth roundtrip failed: " + str(e))
-    if u_resp.status_code != 200:
-        raise HTTPException(status_code=401, detail="Invalid or expired Supabase session.")
-    user = u_resp.json() or {}
-    user_id = user.get("id")
-    if not user_id:
-        raise HTTPException(status_code=401, detail="No user id resolved.")
-    try:
-        body = [{"id": user_id, "username": username, "email": user.get("email")}]
-        resp = requests.post(
-            supabase_url.rstrip("/") + "/rest/v1/user_profiles",
-            headers={
-                "apikey":         service_role,
-                "Authorization":  "Bearer " + service_role,
-                "Content-Type":   "application/json",
-                "Prefer":         "resolution=merge-duplicates",
-            },
-            json=body,
-            timeout=10,
-        )
-    except Exception as e:
-        raise HTTPException(status_code=502, detail="Profile upsert failed: " + str(e))
-    if resp.status_code >= 400:
-        raise HTTPException(status_code=resp.status_code, detail=resp.text or "Profile upsert error")
-    return {"ok": True, "username": username, "id": user_id}
+# (Auth surface stripped — no /login, no /api/auth/*, no /api/me/profile.)
 
 
 if __name__ == "__main__":
@@ -982,51 +774,24 @@ if __name__ == "__main__":
 
 
 # =================================================================
-# Task Management dashboard (in-process store, per-user)
+# Task Management dashboard (in-process store, single global list)
 # =================================================================
 #   Models:
-#     Task   { id, user_id, title, description, due_date, priority,
+#     Task   { id, title, description, due_date, priority,
 #              status, created_at, updated_at,
 #              subtasks: [ { id, title, done, created_at } ] }
-#   Persistence: in-memory dict keyed by user_id.
-#   Caveats:  (1) Tasks are lost on workflow restart — in-process only.
-#             (2) Concurrent FastAPI workers don't share state; this
-#                 matches the existing screener cache style.
+#   Persistence: in-memory list shared across all clients on this
+#                worker. Tasks are lost on workflow restart; matches
+#                the existing screener cache style.
+#
+#   Auth has been stripped — no Supabase, no /login, no JWT.
 
 import threading
 import uuid
 from datetime import datetime
 
 _TASK_LOCK = threading.Lock()
-_TASKS_STORE: dict[str, list[dict]] = {}     # user_id -> [task, ...]
-
-
-def _resolve_user_from_auth_header(authorization: Optional[str]) -> dict:
-    """Verify the user's Supabase JWT against /auth/v1/user and return
-    the user record. Same roundtrip as /api/me, factored out so the
-    task endpoints don't duplicate the round-trip code.
-    """
-    supabase_url = _sb_url()
-    service_role = _sb_service_role()
-    if not supabase_url or not service_role:
-        raise HTTPException(status_code=503, detail="Supabase not configured.")
-    if not authorization or not authorization.lower().startswith("bearer "):
-        raise HTTPException(status_code=401, detail="Missing Authorization Bearer.")
-    token = authorization.split(" ", 1)[1].strip()
-    try:
-        resp = requests.get(
-            supabase_url.rstrip("/") + "/auth/v1/user",
-            headers={"Authorization": "Bearer " + token, "apikey": service_role},
-            timeout=10,
-        )
-    except Exception as e:
-        raise HTTPException(status_code=502, detail="Auth roundtrip failed: " + str(e))
-    if resp.status_code != 200:
-        raise HTTPException(status_code=401, detail="Invalid or expired Supabase session.")
-    user = resp.json() or {}
-    if not user.get("id"):
-        raise HTTPException(status_code=401, detail="No user id resolved.")
-    return user
+_TASKS_STORE: list[dict] = []                    # global list
 
 
 _VALID_PRIORITIES = {"low", "medium", "high"}
@@ -1058,17 +823,15 @@ def _now_iso() -> str:
 
 
 @app.get("/api/tasks")
-def api_tasks_list(authorization: Optional[str] = None):
-    user = _resolve_user_from_auth_header(authorization)
+def api_tasks_list():
     with _TASK_LOCK:
-        rows = list(_TASKS_STORE.get(user["id"], []))
+        rows = list(_TASKS_STORE)
     rows.sort(key=lambda t: (t.get("created_at") or ""), reverse=True)
     return [_public_task(t) for t in rows]
 
 
 @app.post("/api/tasks")
-def api_tasks_create(payload: dict, authorization: Optional[str] = None):
-    user = _resolve_user_from_auth_header(authorization)
+def api_tasks_create(payload: dict):
     title       = (payload.get("title") or "").strip()
     description = (payload.get("description") or "").strip()
     due_date    = (payload.get("due_date") or "").strip() or None
@@ -1090,7 +853,6 @@ def api_tasks_create(payload: dict, authorization: Optional[str] = None):
     now = _now_iso()
     task = {
         "id":          "tsk_" + uuid.uuid4().hex[:12],
-        "user_id":     user["id"],
         "title":       title,
         "description": description,
         "due_date":    due_date,
@@ -1101,16 +863,14 @@ def api_tasks_create(payload: dict, authorization: Optional[str] = None):
         "subtasks":    [],
     }
     with _TASK_LOCK:
-        _TASKS_STORE.setdefault(user["id"], []).append(task)
+        _TASKS_STORE.append(task)
     return _public_task(task)
 
 
 @app.patch("/api/tasks/{task_id}")
-def api_tasks_update(task_id: str, payload: dict, authorization: Optional[str] = None):
-    user = _resolve_user_from_auth_header(authorization)
+def api_tasks_update(task_id: str, payload: dict):
     with _TASK_LOCK:
-        rows = _TASKS_STORE.get(user["id"], [])
-        for i, t in enumerate(rows):
+        for i, t in enumerate(_TASKS_STORE):
             if t.get("id") == task_id:
                 if "title"       in payload: t["title"]       = (payload["title"] or "").strip() or t["title"]
                 if "description" in payload: t["description"] = (payload["description"] or "").strip()
@@ -1131,32 +891,28 @@ def api_tasks_update(task_id: str, payload: dict, authorization: Optional[str] =
                         raise HTTPException(status_code=400, detail="bad status")
                     t["status"] = s
                 t["updated_at"] = _now_iso()
-                rows[i] = t
+                _TASKS_STORE[i] = t
                 return _public_task(t)
     raise HTTPException(status_code=404, detail="Task not found.")
 
 
 @app.delete("/api/tasks/{task_id}")
-def api_tasks_delete(task_id: str, authorization: Optional[str] = None):
-    user = _resolve_user_from_auth_header(authorization)
+def api_tasks_delete(task_id: str):
     with _TASK_LOCK:
-        rows = _TASKS_STORE.get(user["id"], [])
-        for i, t in enumerate(rows):
+        for i, t in enumerate(_TASKS_STORE):
             if t.get("id") == task_id:
-                rows.pop(i)
+                _TASKS_STORE.pop(i)
                 return {"ok": True, "id": task_id}
     raise HTTPException(status_code=404, detail="Task not found.")
 
 
 @app.post("/api/tasks/{task_id}/subtasks")
-def api_subtask_create(task_id: str, payload: dict, authorization: Optional[str] = None):
-    user = _resolve_user_from_auth_header(authorization)
+def api_subtask_create(task_id: str, payload: dict):
     title = (payload.get("title") or "").strip()
     if not title or len(title) > 200:
         raise HTTPException(status_code=400, detail="subtask title required (1–200 chars)")
     with _TASK_LOCK:
-        rows = _TASKS_STORE.get(user["id"], [])
-        for t in rows:
+        for t in _TASKS_STORE:
             if t.get("id") == task_id:
                 sub = {"id": "sub_" + uuid.uuid4().hex[:10], "title": title, "done": False, "created_at": _now_iso()}
                 t.setdefault("subtasks", []).append(sub)
@@ -1166,11 +922,9 @@ def api_subtask_create(task_id: str, payload: dict, authorization: Optional[str]
 
 
 @app.patch("/api/tasks/{task_id}/subtasks/{sub_id}")
-def api_subtask_update(task_id: str, sub_id: str, payload: dict, authorization: Optional[str] = None):
-    user = _resolve_user_from_auth_header(authorization)
+def api_subtask_update(task_id: str, sub_id: str, payload: dict):
     with _TASK_LOCK:
-        rows = _TASKS_STORE.get(user["id"], [])
-        for t in rows:
+        for t in _TASKS_STORE:
             if t.get("id") == task_id:
                 for s in t.get("subtasks", []):
                     if s.get("id") == sub_id:
@@ -1185,11 +939,9 @@ def api_subtask_update(task_id: str, sub_id: str, payload: dict, authorization: 
 
 
 @app.delete("/api/tasks/{task_id}/subtasks/{sub_id}")
-def api_subtask_delete(task_id: str, sub_id: str, authorization: Optional[str] = None):
-    user = _resolve_user_from_auth_header(authorization)
+def api_subtask_delete(task_id: str, sub_id: str):
     with _TASK_LOCK:
-        rows = _TASKS_STORE.get(user["id"], [])
-        for t in rows:
+        for t in _TASKS_STORE:
             if t.get("id") == task_id:
                 subs = t.get("subtasks", [])
                 for i, s in enumerate(subs):
