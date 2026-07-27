@@ -46,6 +46,17 @@ const PARTS_DEFAULT  = 4;
 // =====================================================================
 const AUTO_BUY_MIN_MOVE_ABOVE_915_PCT = 0.15;
 const AUTO_BUY_MAX_MOVE_ABOVE_915_PCT = 0.50;
+// ===================================================================
+// AUTO BUY PRICE-vs-EMA GATE (200-period EMA)
+// ===================================================================
+// User policy: an auto-buy order is only placed when the row's
+// current price sits ABOVE the row's 200-period EMA. The EMA is
+// computed server-side per row from yfinance 5-min candles (see
+// compute_200_ema_batch in advance_orb/app.py). If the EMA fetch
+// failed for a row (rate-limited, 401, delisted, etc.) we treat
+// it as "skip" — never submit on a candle we couldn't validate.
+// ===================================================================
+const AUTO_BUY_REQUIRE_PRICE_ABOVE_EMA = true;
 
 let _stepperRefreshTimer = null;
 
@@ -583,19 +594,63 @@ async function autoBuyAllStocks() {
     // Sort band-matching rows by CHG% descending. Use the numeric
     // `change_pct` column added by the 200-EMA filter on the backend
     // (falls back to parsing the formatted "change" string for safety).
-    bandFiltered.sort((a, b) => {
+    // ---------------------------------------------------------------
+    // 200-EMA PRICE GATE (above-the-trend filter)
+    // ---------------------------------------------------------------
+    // User policy: only place an auto-buy order when the row's
+    // CURRENT price is ABOVE the 200-period EMA. This filters
+    // out falling-knife rows where yfinance still produced an EMA
+    // from recent candles but the price has been below the trend
+    // all session. A missing EMA (server couldn't fetch) is treated
+    // as "skip"; we never commit on unvalidated data.
+    // ---------------------------------------------------------------
+    const aboveEma = bandFiltered.filter(row => {
+        if (!AUTO_BUY_REQUIRE_PRICE_ABOVE_EMA) return true;
+        const ema = parseFloat(row.ema);
+        const price = parseFloat(row.price);
+        if (!Number.isFinite(ema)) return false;          // yfinance missed
+        if (!Number.isFinite(price) || price <= 0) return false;
+        return price > ema;
+    });
+
+    if (aboveEma.length === 0) {
+        const expectedBand = `+${AUTO_BUY_MIN_MOVE_ABOVE_915_PCT}–+${AUTO_BUY_MAX_MOVE_ABOVE_915_PCT}%`;
+        const emaProbes = bandFiltered.slice(0, 6).map(row => {
+            const ema   = parseFloat(row.ema);
+            const price = parseFloat(row.price);
+            const hi    = parseFloat(row.high915);
+            const band  = Number.isFinite(hi) && hi > 0 ? ((price - hi) / hi * 100) : null;
+            const above = Number.isFinite(ema) ? price > ema : null;
+            const bandStr = band != null ? `${band >= 0 ? '+' : ''}${band.toFixed(2)}%` : 'n/a';
+            const emaStr  = Number.isFinite(ema) ? ema.toFixed(2) : 'n/a';
+            const dir     = above === true ? '↑above' : above === false ? '↓below' : '—n/a';
+            return `${row.Symbol || '?'}: p=${price} ema=${emaStr} band=${bandStr} ${dir}`;
+        });
+        showToast(
+            '⚠️ No Band\u2003+\u2003EMA Match',
+            `0/${eligible.length} in 9:15 ${expectedBand} AND price > 200-EMA — ${emaProbes.join(' | ')}`
+        );
+        console.warn('[auto-buy] EMA-gate rejected all', bandFiltered.length, 'band-passed rows. PREVIEW:', {
+            AUTO_BUY_REQUIRE_PRICE_ABOVE_EMA,
+            probes: emaProbes,
+        });
+        return;
+    }
+
+    // Sort survivors by CHG% desc — strongest momentum first.
+    aboveEma.sort((a, b) => {
         const ap = (a.change_pct != null && Number.isFinite(parseFloat(a.change_pct)))
             ? parseFloat(a.change_pct) : _parsePctStr(a.change);
         const bp = (b.change_pct != null && Number.isFinite(parseFloat(b.change_pct)))
             ? parseFloat(b.change_pct) : _parsePctStr(b.change);
         return bp - ap;
     });
-    const topN = bandFiltered.slice(0, AUTO_BUY_CAP);
+    const topN = aboveEma.slice(0, AUTO_BUY_CAP);
 
     if (topN.length < eligible.length) {
         console.warn(
-            `[auto-buy] band-filter + cap selected ${topN.length}/${eligible.length} eligible rows:`,
-            topN.map(r => r.Symbol)
+            `[auto-buy] band+EMA filter + cap selected ${topN.length}/${eligible.length} eligible rows:`,
+            topN.map(r => `${r.Symbol} (chg=${r['CHG%']} p=${r.price} ema=${r.ema ?? 'n/a'})`)
         );
     }
 
@@ -610,7 +665,7 @@ async function autoBuyAllStocks() {
 
     showToast(
         '🚀 Auto-Buy Started',
-        `Submitting ${orders.length} stock(s)${amoEnabled ? ' as AMO' : ''} in parallel — 9:15 +${AUTO_BUY_MIN_MOVE_ABOVE_915_PCT}–+${AUTO_BUY_MAX_MOVE_ABOVE_915_PCT}% band`
+        `Submitting ${orders.length} stock(s)${amoEnabled ? ' as AMO' : ''} in parallel — 9:15 +${AUTO_BUY_MIN_MOVE_ABOVE_915_PCT}–+${AUTO_BUY_MAX_MOVE_ABOVE_915_PCT}% band AND price > 200-EMA`
     );
 
     try {

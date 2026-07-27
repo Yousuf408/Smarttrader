@@ -37,8 +37,6 @@ PRICE_MAX = 3000
 GAP_THRESHOLD = 2.0
 MARKET_CAP_MIN = 41_000_000_000  # 41 Billion INR
 SMALL_CANDLE_THRESHOLD = 1.5
-# ── 200-period EMA filter ──
-# We use Yahoo Finance 5-minute candles for the past
 IST = ZoneInfo("Asia/Kolkata")
 MAX_TV_STOCKS = 200
 YFINANCE_WORKERS = 8
@@ -51,6 +49,7 @@ ADVANCE_ORB_COLUMNS = [
     "RELVOL",
     "Sector",
     "Small Candle",
+    "200 EMA",
     "MaxQty",
 ]
 
@@ -328,6 +327,13 @@ def get_advance_orb(budget: int = 100000, parts: int = 4):
         df['high915'] = df['name'].map(
             lambda s: opening_candle_map.get(s, (False, None, None))[1]
         )
+        # Compute 200-period EMA per candidate in parallel; surface
+        # in df['ema']. NOT a screener filter — the auto-buy frontend
+        # has the additional `price > ema` gate. Missing EMA simply
+        # yields None in the row; auto-buy treats None as 'skip the
+        # candidate' (never commit on unvalidated data).
+        ema_map = compute_200_ema_batch(candidate_symbols)
+        df['ema'] = df['name'].map(ema_map)
 
         # Calculate Max Quantities via Dhan (see broker/quantity_calculator.py).
         # quantity_calculator expects Symbol/Price cols; df has name/close.
@@ -370,6 +376,11 @@ def get_advance_orb(budget: int = 100000, parts: int = 4):
                 "RELVOL": relvol_str,
                 "Sector": row.get('sector', 'Unknown'),
                 "Small Candle": "✓",
+                "ema": (
+                    round(float(row["ema"]), 2)
+                    if pd.notna(row.get("ema"))
+                    else None
+                ),
                 # Pull high915 from df column (float|None). Read by the
                 # auto-buy band-filter on the frontend (AUTO_BUY_MIN/MAX).
                 "high915": (
