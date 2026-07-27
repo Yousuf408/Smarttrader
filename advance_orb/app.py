@@ -1,6 +1,7 @@
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+import asyncio
 import os
 import re
 import time
@@ -17,6 +18,7 @@ from tradingview_screener.query import HEADERS as TV_HEADERS
 import pandas as pd
 import yfinance as yf
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from contextlib import asynccontextmanager
 from broker.quantity_calculator import (
     calculate_max_quantity_column,
     set_dhan_credentials,
@@ -24,6 +26,9 @@ from broker.quantity_calculator import (
     clear_dhan_credentials,
     _cred as _broker_cred,
     DHAN_PROXIES,
+    renew_dhan_access_token as _dhan_renew,
+    DHAN_TOKEN_TTL_SECONDS,
+    DHAN_AUTO_RENEW_LEAD_SECONDS,
 )
 from broker.dhan_orders import place_dhan_order
 
@@ -36,10 +41,75 @@ from broker.dhan_orders import place_dhan_order
 # =================================================================
 
 
+# =================================================================
+# DAILY-AUTO-RENEW BACKGROUND TASK
+# =================================================================
+# /api/broker/connect mints a fresh JWT once via TOTP; Dhan's own
+# /RenewToken endpoint lets the backend swap a fresh JWT into the
+# in-memory store without bothering the user. This loop fires
+# ~1 h before the 24 h TTL expires and does exactly that, so
+# screener MaxQty stays live across the daily rollover.
+# The renew call goes through asyncio.to_thread because requests
+# is blocking, and we don't want the event loop to stall on the
+# round-trip while /api/strategies/* traffic is incoming.
+# =================================================================
+async def _dhan_auto_renew_loop():
+    while True:
+        sleep_for = 60.0  # default poll cadence when not connected
+        try:
+            issued = _broker_cred("token_issued_at")
+            tok    = _broker_cred("access_token")
+            if issued and tok:
+                age = time.time() - float(issued)
+                # Renew when age crosses (TTL - lead) ≈ 23 h elapsed.
+                renew_at_age = (
+                    DHAN_TOKEN_TTL_SECONDS - DHAN_AUTO_RENEW_LEAD_SECONDS
+                )
+                if age >= renew_at_age:
+                    print(
+                        f"[broker] auto-renewing access token "
+                        f"(age={age/3600:.2f}h)"
+                    )
+                    res = await asyncio.to_thread(_dhan_renew)
+                    print(
+                        f"[broker] auto-renew result: "
+                        f"ok={res.get('ok')} "
+                        f"status={res.get('status_code')} "
+                        f"detail={(res.get('detail') or '')[:120]}"
+                    )
+                # Re-read after the renew (token_issued_at is preserved
+                # on renewals, so age is the same; but count_renews_at
+                # is now bumped — future ticks know we did one shot).
+                age = time.time() - float(issued)
+                remaining = max(0.0, renew_at_age - age)
+                sleep_for = min(
+                    max(30.0, remaining + 5.0),
+                    15 * 60.0,  # never sleep more than 15 min
+                )
+        except Exception as e:
+            print(f"[broker] auto-renew loop tick error: {e!r}")
+        await asyncio.sleep(sleep_for)
+
+
+@asynccontextmanager
+async def lifespan(_app):
+    task = asyncio.create_task(_dhan_auto_renew_loop())
+    print("[broker] daily auto-renew loop started")
+    try:
+        yield
+    finally:
+        task.cancel()
+        try:
+            await task
+        except (asyncio.CancelledError, Exception):
+            pass
+
+
 app = FastAPI(
     title="TradeAlgo Pro - Advance ORB",
     description="Fetches NSE stocks with price 200-3000, gap < 2%, market cap > 41B",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan,
 )
 
 # CORS - Allow frontend to call this API
@@ -901,17 +971,41 @@ def broker_disconnect():
     return {"ok": True, "connected": False}
 
 
+@app.post("/api/broker/refresh-token")
+def broker_refresh_token():
+    """Manually trigger /RenewToken right now. Mostly used as a
+    'kick the auto-renew loop' button if the daily renewal ever
+    fails — the auto-loop calls the same helper on schedule."""
+    return _dhan_renew()
+
+
 @app.get("/api/broker/status")
 def broker_status():
     cid = _broker_cred("client_id")
+    tok = _broker_cred("access_token")
+    issued_at = _broker_cred("token_issued_at")
+    last_renewed_at = _broker_cred("token_last_renewed_at")
+    expires_at = (
+        float(issued_at) + DHAN_TOKEN_TTL_SECONDS if issued_at else None
+    )
+    seconds_until_expiry = (
+        max(0, int(expires_at - time.time()))
+        if expires_at else None
+    )
     return {
-        "connected":
-            bool(_broker_cred("access_token")) and bool(cid),
+        "connected": bool(tok) and bool(cid),
         "broker": _broker_cred("broker_name") or None,
         "client_id_masked":
             ("*" * (len(cid) - 4) + cid[-4:])
             if cid and len(cid) > 4 else None,
         "connected_at": _broker_cred("connected_at"),
+        "token_issued_at": issued_at,
+        "token_last_renewed_at": last_renewed_at,
+        "expires_at": expires_at,
+        "seconds_until_expiry": seconds_until_expiry,
+        "auto_renew_in_seconds":
+            max(0, int((expires_at - DHAN_AUTO_RENEW_LEAD_SECONDS) - time.time()))
+            if expires_at else None,
     }
 
 

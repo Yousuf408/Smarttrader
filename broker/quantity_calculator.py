@@ -75,8 +75,21 @@ def set_dhan_credentials(client_id, pin, totp_secret, broker_name="dhan"):
 
 
 def set_dhan_access_token(token):
-    """Cache the freshly-minted access token. Empty string clears it."""
-    _DHAN_CREDS["access_token"] = str(token or "").strip()
+    """Cache the freshly-minted access token. Empty string clears it.
+    Also stamps token_issued_at so the auto-renew loop knows when to
+    re-mint before Dhan's daily expiry."""
+    tok = str(token or "").strip()
+    _DHAN_CREDS["access_token"] = tok
+    now = time.time()
+    if tok:
+        # First setup = both stamps land at "issued"; subsequent calls
+        # land at "renewed".
+        if not _DHAN_CREDS.get("token_issued_at"):
+            _DHAN_CREDS["token_issued_at"] = now
+        _DHAN_CREDS["token_last_renewed_at"] = now
+    else:
+        _DHAN_CREDS["token_issued_at"] = None
+        _DHAN_CREDS["token_last_renewed_at"] = None
 
 
 def clear_dhan_credentials():
@@ -88,6 +101,63 @@ def clear_dhan_credentials():
     _DHAN_CREDS["access_token"] = ""
     _DHAN_CREDS["broker_name"] = None
     _DHAN_CREDS["connected_at"] = None
+    _DHAN_CREDS["token_issued_at"] = None
+    _DHAN_CREDS["token_last_renewed_at"] = None
+
+
+# ================================================================
+# DAILY-AUTO-RENEW CONSTANTS
+# ================================================================
+# Dhan's access token expires roughly 24 h after issue. We renew
+# ~AUTO_RENEW_LEAD_SECONDS before that wall so neither the user
+# nor the screener ever see a stale-token window.
+DHAN_TOKEN_TTL_SECONDS = 24 * 3600
+DHAN_AUTO_RENEW_LEAD_SECONDS = 60 * 60  # renew 1 h before expiry
+
+
+def renew_dhan_access_token():
+    """Mint a fresh Dhan access token via /RenewToken (server-to-server,
+    no PIN or TOTP needed because we're already authenticated by the
+    existing JWT + client_id pair). Works against just-expired tokens
+    too — Dhan honours the renew path for the whole rolling window.
+    Returns dict (ok / connected / detail / status_code). Updates
+    _DHAN_CREDS["access_token"] on success."""
+    cid = _DHAN_CREDS.get("client_id") or ""
+    cur = _DHAN_CREDS.get("access_token") or ""
+    if not cid:
+        return {"ok": False, "connected": False, "detail":
+                "not connected (no client_id)", "status_code": 0}
+    if not cur:
+        return {"ok": False, "connected": False, "detail":
+                "not connected (no access_token to renew from)", "status_code": 0}
+    try:
+        # Mirror what the official DhanHQ-py SDK does:
+        #   GET https://api.dhan.co/RenewToken
+        #   headers: {"access-token": <current>, "dhanClientId": <cid>}
+        # Proxies are reused so /RenewToken respects the same
+        # IP-whitelist contract as /v2/margincalculator.
+        r = requests.get(
+            "https://api.dhan.co/RenewToken",
+            headers={"access-token": cur, "dhanClientId": cid},
+            proxies=DHAN_PROXIES,
+            timeout=10,
+        )
+    except Exception as e:
+        return {"ok": False, "connected": False, "detail":
+                f"network error: {e}", "status_code": 0}
+    if r.status_code == 200 and r.text:
+        try:
+            data = r.json()
+        except Exception:
+            data = {}
+        new_token = (data.get("accessToken") or data.get("access_token")
+                     or data.get("token") or "").strip()
+        if new_token:
+            set_dhan_access_token(new_token)
+            return {"ok": True, "connected": True, "detail": "renewed",
+                    "status_code": 200}
+    return {"ok": False, "connected": bool(cur), "detail":
+            (r.text or "")[:200], "status_code": r.status_code}
 
 # ================================================================
 # PROXY CONFIGURATION
