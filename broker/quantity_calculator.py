@@ -108,9 +108,17 @@ DHAN_TOKEN_GENERATE_URL = "https://auth.dhan.co/app/generateAccessToken"
 DHAN_FUND_LIMIT_URL = "https://api.dhan.co/v2/fundlimit"
 
 # ================================================================
-# ACCESS TOKEN (Hardcoded for now, will be dynamic via popup later)
+# ACCESS TOKEN — see lines 20-50 above for the runtime store. The
+# module-level DHAN_ACCESS_TOKEN name is the `_Cred("access_token")`
+# proxy reassigned at line 58; do NOT introduce any further
+# `DHAN_ACCESS_TOKEN = ...` here — that would overwrite the proxy
+# with a static string at import time and silently short-circuit
+# every /v2/margincalculator call to "0" (which is exactly what
+# tripped the screener when the popup-based flow first went live).
+# `get_margin_per_share` reads the proxy directly; refresh works
+# by mutating `_DHAN_CREDS["access_token"]` and the proxy resolves
+# the new value on every str() call.
 # ================================================================
-DHAN_ACCESS_TOKEN = DHAN_MANUAL_ACCESS_TOKEN or "your_dhan_access_token_here"
 
 # Per-symbol margin cache. Survives across screener refreshes so that
 # when stocks shuffle positions in top-N, only newly-arrived symbols
