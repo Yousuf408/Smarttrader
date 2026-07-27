@@ -396,6 +396,9 @@ def get_advance_orb(budget: int = 100000, parts: int = 4):
         df['open915'] = df['name'].map(
             lambda s: opening_candle_map.get(s, (False, None, None))[2]
         )
+        df['high915'] = df['name'].map(
+            lambda s: opening_candle_map.get(s, (False, None, None))[1]
+        )
 
         # ── Step 3a: 200-period EMA distance filter ──
         # Compute EMA per candidate in parallel via yfinance 5-min candles.
@@ -458,16 +461,18 @@ def get_advance_orb(budget: int = 100000, parts: int = 4):
                 "Sector": row.get('sector', 'Unknown'),
                 "Small Candle": "✓",
                 "ema": round(float(row["ema"]), 2),
+                # Pull high915/open915 straight from df columns (float|None).
+                # Doing tuple[0/1/2] indexing on opening_candle_map per row
+                # was a latent IndexError source; the upstream `df['high915']`
+                # and `df['open915']` map lambdas already do that safely.
                 "high915": (
-                    round(float(opening_candle_map[symbol][1]), 2)
-                    if opening_candle_map.get(symbol)
-                    and opening_candle_map[symbol][1] is not None
+                    round(float(row["high915"]), 2)
+                    if pd.notna(row.get("high915"))
                     else None
                 ),
                 "open915": (
-                    round(float(opening_candle_map[symbol][2]), 2)
-                    if opening_candle_map.get(symbol)
-                    and opening_candle_map[symbol][2] is not None
+                    round(float(row["open915"]), 2)
+                    if pd.notna(row.get("open915"))
                     else None
                 ),
                 "MaxQty": int(row.get("MaxQty", 0)),
