@@ -5,6 +5,7 @@ import os
 import re
 import time
 import requests
+import pyotp
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -16,7 +17,13 @@ from tradingview_screener.query import HEADERS as TV_HEADERS
 import pandas as pd
 import yfinance as yf
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from broker.quantity_calculator import calculate_max_quantity_column
+from broker.quantity_calculator import (
+    calculate_max_quantity_column,
+    set_dhan_credentials,
+    set_dhan_access_token,
+    clear_dhan_credentials,
+    _cred as _broker_cred,
+)
 from broker.dhan_orders import place_dhan_order
 
 # =================================================================
@@ -427,8 +434,12 @@ def get_advance_orb(budget: int = 100000, parts: int = 4):
 
         # Calculate Max Quantities via Dhan (see broker/quantity_calculator.py).
         # quantity_calculator expects Symbol/Price cols; df has name/close.
-        # Token from DHAN_ACCESS_TOKEN env var (Replit Secrets).
-        dhan_access_token = os.environ.get('DHAN_ACCESS_TOKEN', '').strip() or None
+        # Token from broker runtime store (populated via the broker
+        # popup / /api/broker/connect). Empty string falls through
+        # so quantity_calculator.requests call hits the missing-token
+        # code path and the screener surfaces a clear "no broker"
+        # error to the UI instead of a silent bare 500.
+        dhan_access_token = _broker_cred("access_token") or None
         df_qty = df.rename(columns={'name': 'Symbol', 'close': 'Price'})
         df_qty = calculate_max_quantity_column(
             df_qty,
@@ -542,7 +553,7 @@ def recompute_advanceorb_qty(payload: dict):
         pd.DataFrame(rows),
         total_capital=budget,
         num_parts=parts,
-        access_token=os.environ.get("DHAN_ACCESS_TOKEN", "").strip() or None,
+        access_token=_broker_cred("access_token") or None,
     )
     out = []
     for sym, q in zip(df_qty["Symbol"], df_qty["MaxQty"]):
@@ -774,6 +785,133 @@ app.mount("/js", StaticFiles(directory=PROJECT_ROOT / "js"), name="frontend-js")
 #                        bad/expired. Future endpoints (e.g. /api/me/
 #                        settings) will piggyback on this lookup.
 # (Auth surface stripped — no /login, no /api/auth/*, no /api/me/profile.)
+
+
+# =================================================================
+# BROKER CONNECTION (Dhan) — user-supplied creds via popup
+# =================================================================
+# The screener Settings tab has a "Select Broker" dropdown. Picking
+# Dhan opens a popup (brokerModalOverlay in index.html) where the
+# user enters `client_id` and `totp_secret`. submitBrokerCreds()
+# POSTs them here. We then:
+#   1. validate input
+#   2. mint a TOTP code via `pyotp.TOTP(totp_secret).now()`
+#   3. POST to https://auth.dhan.co/app/generateAccessToken with
+#      userId/pin/totp to mint today's access_token
+#   4. Stash everything in broker.quantity_calculator._DHAN_CREDS
+#      via set_dhan_credentials + set_dhan_access_token
+#
+# From that moment, every refresh that hits /v2/margincalculator
+# (heavy screener refresh + lightweight budget stepper) and
+# /v2/orders (place_dhan_order from /api/orders/place) reads the
+# active token through DHAN_ACCESS_TOKEN (which now resolves
+# through the `_Cred` proxy in broker/quantity_calculator.py).
+#
+# Why this is a server endpoint, not pure client-side:
+#   - The TOTP secret MUST be sent over the wire — even on a
+#     trusted local connection this is a footgun, so /api/broker/
+#     connect logs nothing that could be recovered from logs.
+#   - Dhan's generateAccessToken rejects browser CORS preflights
+#     even with allow_origins (they only allow server probes).
+#     Going server-side is the only viable path.
+#
+# /api/broker/status is called by js/settings.js on page load to
+# refresh the green/red status badge next to the dropdown.
+# /api/broker/disconnect is wired to the "Disconnect" button.
+
+@app.post("/api/broker/connect")
+def broker_connect(payload: dict):
+    broker = (payload.get("broker") or "").strip().lower()
+    if broker != "dhan":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Broker {broker!r} not supported in this build. Pick Dhan.",
+        )
+
+    client_id   = (payload.get("client_id")   or "").strip()
+    totp_secret = (payload.get("totp_secret") or "").strip()
+    pin         = (payload.get("pin")         or "").strip()
+
+    if not client_id or not totp_secret:
+        raise HTTPException(
+            status_code=400,
+            detail="client_id and totp_secret are required.",
+        )
+
+    try:
+        totp_code = pyotp.TOTP(totp_secret).now()
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid TOTP secret (pyotp rejected it): {e}",
+        )
+
+    set_dhan_credentials(client_id, pin, totp_secret, broker_name="dhan")
+
+    try:
+        r = requests.post(
+            "https://auth.dhan.co/app/generateAccessToken",
+            data={"userId": client_id, "pin": pin, "totp": totp_code},
+            timeout=10,
+        )
+    except Exception as e:
+        return {"ok": False, "connected": False, "broker": "dhan",
+                "detail": f"network error: {e}"}
+
+    if r.status_code == 200 and r.text:
+        try:
+            data = r.json()
+        except Exception:
+            data = {}
+        token = (data.get("accessToken") or data.get("access_token")
+                 or "").strip()
+        if token:
+            set_dhan_access_token(token)
+            return {"ok": True, "connected": True, "broker": "dhan"}
+
+    return {
+        "ok": False,
+        "connected": False,
+        "broker": "dhan",
+        "status_code": r.status_code,
+        "detail": (r.text or "")[:200],
+    }
+
+
+@app.post("/api/broker/disconnect")
+def broker_disconnect():
+    clear_dhan_credentials()
+    return {"ok": True, "connected": False}
+
+
+@app.get("/api/broker/status")
+def broker_status():
+    cid = _broker_cred("client_id")
+    return {
+        "connected":
+            bool(_broker_cred("access_token")) and bool(cid),
+        "broker": _broker_cred("broker_name") or None,
+        "client_id_masked":
+            ("*" * (len(cid) - 4) + cid[-4:])
+            if cid and len(cid) > 4 else None,
+        "connected_at": _broker_cred("connected_at"),
+    }
+
+
+# =================================================================
+# SPA FALLBACK — any GET that doesn't match an explicit route or
+# a static-asset mount, and isn't under /api/ /js/ /style.css,
+# returns index.html. Lets the user paste a deep link like
+# /settings, refresh inside the settings tab, or land on any tab
+# via the in-app router — and get the SPA, not a 404.
+# =================================================================
+@app.get("/{full_path:path}", include_in_schema=False)
+def spa_fallback(full_path: str):
+    # 404 the things that genuinely should 404 (so static typos
+    # surface clearly instead of getting the dashboard).
+    if full_path.startswith(("api/", "js/", "style.css")):
+        raise HTTPException(status_code=404, detail="Not Found")
+    return FileResponse(PROJECT_ROOT / "index.html", media_type="text/html")
 
 
 if __name__ == "__main__":

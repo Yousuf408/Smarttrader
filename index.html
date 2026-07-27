@@ -239,11 +239,15 @@
                             <option value="upstox">Upstox</option>
                         </select>
                     </div>
-                    <div id="dhanFields" class="broker-fields">
-                        <div class="field-group field-full"><label>Client ID</label><input type="text" placeholder="Your Dhan Client ID" value="" /></div>
-                        <div class="field-group"><label>TOTP</label><input type="text" placeholder="TOTP secret" value="" /></div>
-                        <div class="field-group"><label>PIN</label><input type="password" placeholder="Trading PIN" value="" /></div>
-                        <div class="field-group field-full"><label>Secret Key</label><input type="password" placeholder="API Secret Key" value="" /></div>
+                    <div id="dhanFields" class="broker-fields" style="display:block;">
+                        <div class="field-group field-full" style="display:flex; gap:8px; align-items:center;">
+                            <button type="button" class="btn btn-primary" onclick="openBrokerModal()">🔐 Connect Dhan</button>
+                            <button type="button" class="btn btn-outline" onclick="disconnectBroker()">Disconnect</button>
+                            <span id="brokerStatusBadge" class="badge" style="margin-left:auto;">⚪ Not connected</span>
+                        </div>
+                        <p class="broker-help-text" style="margin:8px 0 0 0; font-size:12px; opacity:0.7;">
+                            Enter your Dhan client ID + TOTP secret. Access token is minted live and held in-memory only — no broker creds are written to disk or pushed to GitHub.
+                        </p>
                     </div>
                     <div id="otherBrokerFields"><p>🔑 Enter credentials for your selected broker.</p></div>
                 </div>
@@ -293,6 +297,31 @@
             <div class="modal-actions">
                 <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
                 <button class="btn btn-primary" onclick="saveStrategy()">💾 Save Strategy</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================================================================ -->
+    <!-- BROKER MODAL — Connect / Dhan popup for runtime creds -->
+    <!-- ================================================================ -->
+    <div id="brokerModalOverlay" class="modal-overlay" onclick="if(event.target===this) closeBrokerModal()">
+        <div class="modal" onclick="event.stopPropagation()">
+            <h2 id="brokerModalTitle">🔐 Connect to <span id="brokerModalName">Dhan</span></h2>
+            <div class="form-group">
+                <label>Client ID</label>
+                <input type="text" id="brokerClientId" placeholder="e.g. 1102302753" autocomplete="off" />
+            </div>
+            <div class="form-group">
+                <label>TOTP Secret</label>
+                <input type="text" id="brokerTotpSecret" placeholder="Base-32 string from Dhan TOTP setup" autocomplete="off" />
+            </div>
+            <div class="form-group">
+                <label>PIN <span style="opacity:0.5; font-weight:normal;">(optional but recommended for daily reset)</span></label>
+                <input type="password" id="brokerPin" placeholder="Your trading PIN" autocomplete="off" />
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-outline" onclick="closeBrokerModal()">Cancel</button>
+                <button class="btn btn-primary" id="brokerConnectBtn" onclick="submitBrokerCreds()">🔑 Connect</button>
             </div>
         </div>
     </div>

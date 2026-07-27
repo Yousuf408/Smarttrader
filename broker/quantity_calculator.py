@@ -11,12 +11,83 @@ import io
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # ================================================================
-# DHAN CREDENTIALS
+# DHAN CREDENTIALS — runtime store (populated by app.py via
+# /api/broker/connect after the user enters them in the popup).
+# Other modules downstream (broker/dhan_orders, advance_orb/app.py)
+# still import the legacy module-level names (DHAN_CLIENT_ID,
+# DHAN_TOTP_SECRET, DHAN_MANUAL_ACCESS_TOKEN, DHAN_ACCESS_TOKEN,
+# DHAN_PIN). To keep those imports working without code edits in
+# the downstream files, each of those names is now a `_Cred` proxy
+# object whose str(...) returns the current value from the store.
 # ================================================================
-DHAN_CLIENT_ID = "1102302753"
-DHAN_PIN = "786786"
-DHAN_TOTP_SECRET = "THWBRO5KI5N7ACJUNY7W3JUDKL4M2LML"
-DHAN_MANUAL_ACCESS_TOKEN = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJwX2lwIjoiMTUxLjI0Mi4xNzguMTQ5Iiwic19pcCI6IiIsImlzcyI6ImRoYW4iLCJwYXJ0bmVySWQiOiIiLCJleHAiOjE3ODUxODM1OTMsImlhdCI6MTc4NTA5NzE5MywidG9rZW5Db25zdW1lclR5cGUiOiJTRUxGIiwid2ViaG9va1VybCI6Imh0dHBzOi8vcmVwbGl0LmNvbS9Ac21hcnR0cmFkZXJhbGdvL1NtYXJ0dHJhZGVyIiwiZGhhbkNsaWVudElkIjoiMTEwMjMwMjc1MyJ9.c1HiS6pTlISu2RhiB5P54wiie3JTpZa9ic742rT95lLyHIlmQ3LfqgkmbtR9dQqt72dsNW441RM1isfdfpdBNw'
+_DHAN_CREDS = {
+    "client_id": "",
+    "pin": "",
+    "totp_secret": "",
+    "access_token": "",
+    "broker_name": None,   # "dhan" once connected
+    "connected_at": None,  # time.time() once connected
+}
+
+
+class _Cred:
+    """Module-level proxy that resolves to the current value of a key in
+    the runtime `_DHAN_CREDS` dict. Re-evaluated on every str() / bool()
+    access so a /api/broker/connect done mid-session shows up on the
+    next request without re-importing anything.
+    """
+    __slots__ = ("_key",)
+
+    def __init__(self, key):
+        self._key = key
+
+    def __str__(self):
+        return _DHAN_CREDS.get(self._key) or ""
+
+    def __bool__(self):
+        return bool(_DHAN_CREDS.get(self._key))
+
+    def __repr__(self):
+        return f"_Cred({self._key!r}={str(self)!r})"
+
+
+DHAN_CLIENT_ID = _Cred("client_id")
+DHAN_PIN = _Cred("pin")
+DHAN_TOTP_SECRET = _Cred("totp_secret")
+DHAN_MANUAL_ACCESS_TOKEN = _Cred("access_token")
+DHAN_ACCESS_TOKEN = _Cred("access_token")
+
+
+def _cred(key):
+    """Public reader for app.py endpoints. Returns "" if unset."""
+    return _DHAN_CREDS.get(key) or ""
+
+
+def set_dhan_credentials(client_id, pin, totp_secret, broker_name="dhan"):
+    """Store user-supplied Dhan credentials. Access-token mint happens
+    in app.py (which holds the requests/timeout logic) and lands via
+    set_dhan_access_token below."""
+    _DHAN_CREDS["client_id"] = str(client_id or "").strip()
+    _DHAN_CREDS["pin"] = str(pin or "").strip()
+    _DHAN_CREDS["totp_secret"] = str(totp_secret or "").strip()
+    _DHAN_CREDS["broker_name"] = broker_name
+    _DHAN_CREDS["connected_at"] = time.time()
+
+
+def set_dhan_access_token(token):
+    """Cache the freshly-minted access token. Empty string clears it."""
+    _DHAN_CREDS["access_token"] = str(token or "").strip()
+
+
+def clear_dhan_credentials():
+    """Drop the runtime credentials so subsequent /margincalculator
+    calls fail closed. Used by /api/broker/disconnect."""
+    _DHAN_CREDS["client_id"] = ""
+    _DHAN_CREDS["pin"] = ""
+    _DHAN_CREDS["totp_secret"] = ""
+    _DHAN_CREDS["access_token"] = ""
+    _DHAN_CREDS["broker_name"] = None
+    _DHAN_CREDS["connected_at"] = None
 
 # ================================================================
 # PROXY CONFIGURATION
