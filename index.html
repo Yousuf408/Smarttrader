@@ -268,8 +268,8 @@
     <!-- ================================================================ -->
     <!-- TOAST -->
     <!-- ================================================================ -->
-    <div id="toast" class="toast">
-        <button class="toast-close" onclick="hideToast()">×</button>
+    <div id="toast" class="toast" role="status" aria-live="polite">
+        <button class="toast-close" type="button" aria-label="Dismiss notification" onclick="hideToast()">×</button>
         <div class="toast-title" id="toastTitle">✅ Success</div>
         <div id="toastMessage">Action completed</div>
     </div>

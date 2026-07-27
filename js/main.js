@@ -93,21 +93,44 @@ document.querySelectorAll('.nav-links a').forEach(link => {
 
 // ================================================================
 // TOAST NOTIFICATION
+//   - 4-second auto-hide timer
+//   - × button calls hideToast()
+//   - Store the timer ID on the element itself so concurrent callers
+//     and repeated clicks can't leave a stale timer running.
+//   - CSS pins `.toast` to `display: none` until `.show` is added,
+//     so a dropped class genuinely removes the toast — not just
+//     fades-out-without-removing pointer events (the prior bug).
 // ================================================================
-let toastTimeout = null;
+const TOAST_TTL_MS = 4000;
 
 function showToast(title, message) {
-    DOM.toastTitle.textContent = title || '✅ Success';
+    if (!DOM.toast) return;
+    DOM.toastTitle.textContent   = title   || '✅ Success';
     DOM.toastMessage.textContent = message || 'Action completed';
     DOM.toast.classList.add('show');
-    clearTimeout(toastTimeout);
-    toastTimeout = setTimeout(() => DOM.toast.classList.remove('show'), 4000);
+    if (DOM.toast._hideTimer) {
+        clearTimeout(DOM.toast._hideTimer);
+    }
+    DOM.toast._hideTimer = setTimeout(hideToast, TOAST_TTL_MS);
 }
 
 function hideToast() {
+    if (!DOM.toast) return;
     DOM.toast.classList.remove('show');
-    clearTimeout(toastTimeout);
+    if (DOM.toast._hideTimer) {
+        clearTimeout(DOM.toast._hideTimer);
+        DOM.toast._hideTimer = null;
+    }
 }
+
+// Belt + braces — bind the close button in JS as well as the
+// inline onclick. If main.js loads late (or `hideToast` is shadowed
+// for any reason) the close button still works.
+DOM.toast?.addEventListener?.('click', (e) => {
+    if (e.target && e.target.classList && e.target.classList.contains('toast-close')) {
+        hideToast();
+    }
+});
 
 // ================================================================
 // MODAL FUNCTIONALITY
