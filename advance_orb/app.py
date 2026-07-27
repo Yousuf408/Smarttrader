@@ -3,6 +3,7 @@ from zoneinfo import ZoneInfo
 
 import os
 import re
+import time
 import requests
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -55,6 +56,13 @@ def _sb_service_role() -> str:
         or os.environ.get("SUPABASE_SERVICE_KEY")
         or HARDCODED_SUPABASE_SERVICE_ROLE_KEY
     ).strip()
+
+
+# Tiny in-process TTL cache for username → (id, email) lookups.
+# Keeps repeat sign-in attempts off the Supabase REST hot path.
+_USERNAME_LOOKUP_CACHE: dict[str, tuple[float, dict]] = {}
+_USERNAME_CACHE_TTL  = 60      # seconds
+_USERNAME_CACHE_MAX  = 256     # FIFO cap
 
 
 app = FastAPI(
@@ -858,12 +866,23 @@ def lookup_username(u: str = ""):
 
     Reads the `public.user_profiles` table via service-role so RLS
     doesn't gate this. Returns 404 if not found.
+
+    Tiny in-process TTL cache (60s, FIFO 256) so repeat login
+    attempts for a recently-typed username do not re-hit Supabase
+    REST. Negative cache (404) is intentionally NOT cached to keep
+    await-time precise after a signup.
     """
     username = (u or "").strip()
     if not username:
         raise HTTPException(status_code=400, detail="Missing ?u=...")
     if not re.fullmatch(r"[a-zA-Z0-9_]{3,20}", username):
         raise HTTPException(status_code=400, detail="Bad username format.")
+
+    now = time.time()
+    hit = _USERNAME_LOOKUP_CACHE.get(username)
+    if hit is not None and (now - hit[0]) < _USERNAME_CACHE_TTL:
+        return hit[1]
+
     supabase_url = _sb_url()
     service_role = _sb_service_role()
     if not supabase_url or not service_role:
@@ -885,7 +904,16 @@ def lookup_username(u: str = ""):
     rows = resp.json() or []
     if not rows:
         raise HTTPException(status_code=404, detail="Username not found.")
-    return {"id": rows[0].get("id"), "email": rows[0].get("email")}
+    result = {"id": rows[0].get("id"), "email": rows[0].get("email")}
+
+    # Cache the positive hit only; evict oldest if we've filled the slot.
+    if len(_USERNAME_LOOKUP_CACHE) >= _USERNAME_CACHE_MAX:
+        try:
+            _USERNAME_LOOKUP_CACHE.pop(next(iter(_USERNAME_LOOKUP_CACHE)))
+        except Exception:
+            _USERNAME_LOOKUP_CACHE.clear()
+    _USERNAME_LOOKUP_CACHE[username] = (now, result)
+    return result
 
 
 @app.post("/api/me/profile")
