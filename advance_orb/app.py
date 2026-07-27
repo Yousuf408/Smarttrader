@@ -799,6 +799,11 @@ def login_page():
     return FileResponse(PROJECT_ROOT / "login.html", media_type="text/html")
 
 
+@app.get("/tasks", include_in_schema=False)
+def tasks_page():
+    return FileResponse(PROJECT_ROOT / "tasks.html", media_type="text/html")
+
+
 @app.get("/api/auth/config")
 def auth_config():
     """Public anon key for Supabase. Hardcoded fallback so end users
@@ -974,3 +979,223 @@ def api_me_profile(payload: dict, authorization: Optional[str] = None):
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
+
+# =================================================================
+# Task Management dashboard (in-process store, per-user)
+# =================================================================
+#   Models:
+#     Task   { id, user_id, title, description, due_date, priority,
+#              status, created_at, updated_at,
+#              subtasks: [ { id, title, done, created_at } ] }
+#   Persistence: in-memory dict keyed by user_id.
+#   Caveats:  (1) Tasks are lost on workflow restart — in-process only.
+#             (2) Concurrent FastAPI workers don't share state; this
+#                 matches the existing screener cache style.
+
+import threading
+import uuid
+from datetime import datetime
+
+_TASK_LOCK = threading.Lock()
+_TASKS_STORE: dict[str, list[dict]] = {}     # user_id -> [task, ...]
+
+
+def _resolve_user_from_auth_header(authorization: Optional[str]) -> dict:
+    """Verify the user's Supabase JWT against /auth/v1/user and return
+    the user record. Same roundtrip as /api/me, factored out so the
+    task endpoints don't duplicate the round-trip code.
+    """
+    supabase_url = _sb_url()
+    service_role = _sb_service_role()
+    if not supabase_url or not service_role:
+        raise HTTPException(status_code=503, detail="Supabase not configured.")
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(status_code=401, detail="Missing Authorization Bearer.")
+    token = authorization.split(" ", 1)[1].strip()
+    try:
+        resp = requests.get(
+            supabase_url.rstrip("/") + "/auth/v1/user",
+            headers={"Authorization": "Bearer " + token, "apikey": service_role},
+            timeout=10,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=502, detail="Auth roundtrip failed: " + str(e))
+    if resp.status_code != 200:
+        raise HTTPException(status_code=401, detail="Invalid or expired Supabase session.")
+    user = resp.json() or {}
+    if not user.get("id"):
+        raise HTTPException(status_code=401, detail="No user id resolved.")
+    return user
+
+
+_VALID_PRIORITIES = {"low", "medium", "high"}
+_VALID_STATUSES   = {"todo", "inprogress", "done"}
+
+
+def _public_task(t: dict) -> dict:
+    """Stable shape returned to the browser. Subtask `done` flags are
+    normalized so progress calc stays simple on the client."""
+    subs = t.get("subtasks") or []
+    return {
+        "id":           t.get("id"),
+        "title":        t.get("title", ""),
+        "description":  t.get("description", ""),
+        "due_date":     t.get("due_date"),
+        "priority":     t.get("priority", "medium"),
+        "status":       t.get("status", "todo"),
+        "created_at":   t.get("created_at"),
+        "updated_at":   t.get("updated_at"),
+        "subtasks": [
+            {"id": s.get("id"), "title": s.get("title", ""), "done": bool(s.get("done")), "created_at": s.get("created_at")}
+            for s in subs
+        ],
+    }
+
+
+def _now_iso() -> str:
+    return datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+
+
+@app.get("/api/tasks")
+def api_tasks_list(authorization: Optional[str] = None):
+    user = _resolve_user_from_auth_header(authorization)
+    with _TASK_LOCK:
+        rows = list(_TASKS_STORE.get(user["id"], []))
+    rows.sort(key=lambda t: (t.get("created_at") or ""), reverse=True)
+    return [_public_task(t) for t in rows]
+
+
+@app.post("/api/tasks")
+def api_tasks_create(payload: dict, authorization: Optional[str] = None):
+    user = _resolve_user_from_auth_header(authorization)
+    title       = (payload.get("title") or "").strip()
+    description = (payload.get("description") or "").strip()
+    due_date    = (payload.get("due_date") or "").strip() or None
+    priority    = (payload.get("priority") or "medium").lower()
+    status      = (payload.get("status")   or "todo").lower()
+
+    if not title or len(title) > 200:
+        raise HTTPException(status_code=400, detail="title required (1–200 chars).")
+    if priority not in _VALID_PRIORITIES:
+        raise HTTPException(status_code=400, detail="priority must be low|medium|high.")
+    if status not in _VALID_STATUSES:
+        raise HTTPException(status_code=400, detail="status must be todo|inprogress|done.")
+    if due_date:
+        try:
+            datetime.fromisoformat(due_date.replace("Z", ""))
+        except Exception:
+            raise HTTPException(status_code=400, detail="due_date must be YYYY-MM-DD.")
+
+    now = _now_iso()
+    task = {
+        "id":          "tsk_" + uuid.uuid4().hex[:12],
+        "user_id":     user["id"],
+        "title":       title,
+        "description": description,
+        "due_date":    due_date,
+        "priority":    priority,
+        "status":      status,
+        "created_at":  now,
+        "updated_at":  now,
+        "subtasks":    [],
+    }
+    with _TASK_LOCK:
+        _TASKS_STORE.setdefault(user["id"], []).append(task)
+    return _public_task(task)
+
+
+@app.patch("/api/tasks/{task_id}")
+def api_tasks_update(task_id: str, payload: dict, authorization: Optional[str] = None):
+    user = _resolve_user_from_auth_header(authorization)
+    with _TASK_LOCK:
+        rows = _TASKS_STORE.get(user["id"], [])
+        for i, t in enumerate(rows):
+            if t.get("id") == task_id:
+                if "title"       in payload: t["title"]       = (payload["title"] or "").strip() or t["title"]
+                if "description" in payload: t["description"] = (payload["description"] or "").strip()
+                if "due_date"    in payload:
+                    dd = (payload["due_date"] or "").strip() or None
+                    if dd:
+                        try: datetime.fromisoformat(dd.replace("Z", ""))
+                        except: raise HTTPException(status_code=400, detail="bad due_date")
+                    t["due_date"] = dd
+                if "priority" in payload:
+                    p = (payload["priority"] or "").lower()
+                    if p not in _VALID_PRIORITIES:
+                        raise HTTPException(status_code=400, detail="bad priority")
+                    t["priority"] = p
+                if "status" in payload:
+                    s = (payload["status"] or "").lower()
+                    if s not in _VALID_STATUSES:
+                        raise HTTPException(status_code=400, detail="bad status")
+                    t["status"] = s
+                t["updated_at"] = _now_iso()
+                rows[i] = t
+                return _public_task(t)
+    raise HTTPException(status_code=404, detail="Task not found.")
+
+
+@app.delete("/api/tasks/{task_id}")
+def api_tasks_delete(task_id: str, authorization: Optional[str] = None):
+    user = _resolve_user_from_auth_header(authorization)
+    with _TASK_LOCK:
+        rows = _TASKS_STORE.get(user["id"], [])
+        for i, t in enumerate(rows):
+            if t.get("id") == task_id:
+                rows.pop(i)
+                return {"ok": True, "id": task_id}
+    raise HTTPException(status_code=404, detail="Task not found.")
+
+
+@app.post("/api/tasks/{task_id}/subtasks")
+def api_subtask_create(task_id: str, payload: dict, authorization: Optional[str] = None):
+    user = _resolve_user_from_auth_header(authorization)
+    title = (payload.get("title") or "").strip()
+    if not title or len(title) > 200:
+        raise HTTPException(status_code=400, detail="subtask title required (1–200 chars)")
+    with _TASK_LOCK:
+        rows = _TASKS_STORE.get(user["id"], [])
+        for t in rows:
+            if t.get("id") == task_id:
+                sub = {"id": "sub_" + uuid.uuid4().hex[:10], "title": title, "done": False, "created_at": _now_iso()}
+                t.setdefault("subtasks", []).append(sub)
+                t["updated_at"] = _now_iso()
+                return _public_task(t)
+    raise HTTPException(status_code=404, detail="Task not found.")
+
+
+@app.patch("/api/tasks/{task_id}/subtasks/{sub_id}")
+def api_subtask_update(task_id: str, sub_id: str, payload: dict, authorization: Optional[str] = None):
+    user = _resolve_user_from_auth_header(authorization)
+    with _TASK_LOCK:
+        rows = _TASKS_STORE.get(user["id"], [])
+        for t in rows:
+            if t.get("id") == task_id:
+                for s in t.get("subtasks", []):
+                    if s.get("id") == sub_id:
+                        if "title" in payload:
+                            s["title"] = (payload["title"] or "").strip() or s["title"]
+                        if "done"  in payload:
+                            s["done"]  = bool(payload["done"])
+                        t["updated_at"] = _now_iso()
+                        return _public_task(t)
+                raise HTTPException(status_code=404, detail="Subtask not found.")
+    raise HTTPException(status_code=404, detail="Task not found.")
+
+
+@app.delete("/api/tasks/{task_id}/subtasks/{sub_id}")
+def api_subtask_delete(task_id: str, sub_id: str, authorization: Optional[str] = None):
+    user = _resolve_user_from_auth_header(authorization)
+    with _TASK_LOCK:
+        rows = _TASKS_STORE.get(user["id"], [])
+        for t in rows:
+            if t.get("id") == task_id:
+                subs = t.get("subtasks", [])
+                for i, s in enumerate(subs):
+                    if s.get("id") == sub_id:
+                        subs.pop(i)
+                        t["updated_at"] = _now_iso()
+                        return {"ok": True, "id": sub_id}
+                raise HTTPException(status_code=404, detail="Subtask not found.")
+    raise HTTPException(status_code=404, detail="Task not found.")
