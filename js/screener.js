@@ -508,14 +508,17 @@ async function autoBuyAllStocks() {
         showToast('⚠️ No Stocks', 'Screener has no rows to auto-buy');
         return;
     }
-    // User policy: maximum 5 stocks. The screener's default order is
-    // CHG% desc, so slicing [0:5] is the natural "top movers" pick.
+    // User policy: at most AUTO_BUY_CAP stocks/day.
+    // We do NOT pre-slice the table to the first 5 by CHG% — a setup
+    // that matches the 9:15 high breakout band might not appear in the
+    // first 5 movers. Instead, scan the entire screener table, let the
+    // band filter pick what matches, then sort those by CHG% desc and
+    // cap at AUTO_BUY_CAP.
     const AUTO_BUY_CAP = 5;
-    const topN = lastAdvanceOrbData.data
-        .filter(r => r && r.Symbol && Number(r.MaxQty) > 0)
-        .slice(0, AUTO_BUY_CAP);
+    const eligible = lastAdvanceOrbData.data
+        .filter(r => r && r.Symbol && Number(r.MaxQty) > 0);
 
-    if (topN.length === 0) {
+    if (eligible.length === 0) {
         showToast('⚠️ No Margin', 'No rows have MaxQty > 0 — adjust budget/parts');
         return;
     }
@@ -577,11 +580,26 @@ async function autoBuyAllStocks() {
         return;
     }
 
-    if (bandFiltered.length < topN.length) {
-        console.warn(`[auto-buy] band filter selected ${bandFiltered.length}/${topN.length}:`, bandFiltered.map(r => r.Symbol));
+    // Sort band-matching rows by CHG% descending. Use the numeric
+    // `change_pct` column added by the 200-EMA filter on the backend
+    // (falls back to parsing the formatted "change" string for safety).
+    bandFiltered.sort((a, b) => {
+        const ap = (a.change_pct != null && Number.isFinite(parseFloat(a.change_pct)))
+            ? parseFloat(a.change_pct) : _parsePctStr(a.change);
+        const bp = (b.change_pct != null && Number.isFinite(parseFloat(b.change_pct)))
+            ? parseFloat(b.change_pct) : _parsePctStr(b.change);
+        return bp - ap;
+    });
+    const topN = bandFiltered.slice(0, AUTO_BUY_CAP);
+
+    if (topN.length < eligible.length) {
+        console.warn(
+            `[auto-buy] band-filter + cap selected ${topN.length}/${eligible.length} eligible rows:`,
+            topN.map(r => r.Symbol)
+        );
     }
 
-    const orders = bandFiltered.map(r => ({
+    const orders = topN.map(r => ({
         symbol: r.Symbol,
         quantity: parseInt(r.MaxQty, 10) || 0,
         transactionType: 'BUY',
@@ -765,6 +783,15 @@ function placeOrder(symbol) {
         afterMarketOrder: amoEnabled,
         source: 'manual',
     });
+}
+
+// Parse "+12.34%" / "-1.20%" / "0.45%" → 12.34 / -1.20 / 0.45.
+// Used by auto-buy's CHG%-desc sort fallback when `change_pct`
+// (numeric) is not present in the row.
+function _parsePctStr(s) {
+    if (s == null) return 0;
+    const m = String(s).match(/-?\d+(\.\d+)?/);
+    return m ? parseFloat(m[0]) : 0;
 }
 
 // Locate the row's Price cell (DOM lookup — works for both live data

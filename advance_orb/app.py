@@ -37,6 +37,16 @@ PRICE_MAX = 3000
 GAP_THRESHOLD = 2.0
 MARKET_CAP_MIN = 41_000_000_000  # 41 Billion INR
 SMALL_CANDLE_THRESHOLD = 1.5
+# ── 200-period EMA filter ──
+# We use Yahoo Finance 5-minute candles for the past
+# `EMA_LOOKBACK_DAYS` trading days to derive a 200-period EMA per
+# symbol. The screener keeps only rows whose
+#       |price − EMA| / EMA × 100 ≤ EMA_DISTANCE_PCT (%)
+# Default 3 % keeps price close enough to the trend to be a "real"
+# breakout and drops far-stretched / far-broken-down names.
+EMA_SPAN = 200
+EMA_LOOKBACK_DAYS = 4
+EMA_DISTANCE_PCT = 3.0
 IST = ZoneInfo("Asia/Kolkata")
 MAX_TV_STOCKS = 200
 YFINANCE_WORKERS = 8
@@ -49,6 +59,7 @@ ADVANCE_ORB_COLUMNS = [
     "RELVOL",
     "Sector",
     "Small Candle",
+    "200 EMA",
     "MaxQty",
 ]
 
@@ -107,6 +118,66 @@ def has_small_opening_candle(symbol: str) -> bool:
 
     candle_range = (high - low) / low * 100
     return candle_range <= SMALL_CANDLE_THRESHOLD
+
+
+def compute_200_ema(symbol: str) -> float | None:
+    """Compute the 200-period EMA for `symbol` using Yahoo Finance's
+    5-min closing prices over the past `EMA_LOOKBACK_DAYS` trading
+    days. Returns the EMA value (float) or None if too little data
+    is available (<200 candles) or the symbol is missing on yfinance.
+    """
+    if not symbol:
+        return None
+    try:
+        ticker = f"{symbol}.NS"
+        df = yf.download(
+            ticker,
+            period=f"{EMA_LOOKBACK_DAYS}d",
+            interval="5m",
+            progress=False,
+            auto_adjust=True,
+        )
+        if df is None or df.empty:
+            return None
+        if isinstance(df.columns, pd.MultiIndex):
+            try:
+                df = df.xs(ticker, axis=1, level=-1)
+            except Exception:
+                try:
+                    df = df.xs(ticker, axis=1, level=0)
+                except Exception:
+                    return None
+        if "Close" not in df.columns:
+            return None
+        closes = pd.to_numeric(df["Close"], errors="coerce").dropna()
+        if closes.empty or len(closes) < EMA_SPAN:
+            return None
+        ema = closes.ewm(span=EMA_SPAN, adjust=False).mean().iloc[-1]
+        return float(ema) if pd.notna(ema) else None
+    except Exception:
+        return None
+
+
+def compute_200_ema_batch(symbols: list[str]) -> dict[str, float | None]:
+    """Run compute_200_ema across many symbols in parallel (reusing the
+    same `YFINANCE_WORKERS` thread pool).
+
+    Returns: {symbol: ema_value_or_None}.
+    """
+    results: dict = {}
+    unique = [s for s in {s for s in symbols if s}]
+    if not unique:
+        return results
+    with ThreadPoolExecutor(max_workers=YFINANCE_WORKERS) as pool:
+        futures = {pool.submit(compute_200_ema, sym): sym for sym in unique}
+        for fut in as_completed(futures):
+            sym = futures[fut]
+            try:
+                ema = fut.result(timeout=20)
+                results[sym] = ema
+            except Exception:
+                results[sym] = None
+    return results
 
 
 def filter_small_opening_candles(symbols: list[str]) -> set[str]:
@@ -232,6 +303,21 @@ def get_advance_orb(budget: int = 100000, parts: int = 4):
         # Run the Yahoo Finance candle check across every candidate in parallel,
         # then keep only rows whose ticker is in the matching set.
         candidate_symbols = df['name'].dropna().astype(str).tolist()
+
+        # ── Step 3a: 200-period EMA distance filter ──
+        # Compute EMA per candidate in parallel using a Yahoo Finance
+        # 5-min candle pull (`compute_200_ema_batch`). Drop rows where
+        # the 200-EMA is missing OR |price − EMA| / EMA > EMA_DISTANCE_PCT.
+        # Also surface `ema` and `change_pct` as numeric columns so the
+        # frontend can render the 200 EMA cell and sort numerically.
+        ema_map = compute_200_ema_batch(candidate_symbols)
+        df = df.copy()
+        df['ema'] = df['name'].map(ema_map)
+        df['change_pct'] = pd.to_numeric(df['change'], errors='coerce')
+        df = df[df['ema'].notna()]
+        ema_pct = (df['close'] - df['ema']).abs() / df['ema'] * 100.0
+        df = df[ema_pct <= EMA_DISTANCE_PCT]
+
         small_candle_symbols = filter_small_opening_candles(candidate_symbols)
 
         # Calculate Max Quantities via Dhan (see broker/quantity_calculator.py).
@@ -275,6 +361,7 @@ def get_advance_orb(budget: int = 100000, parts: int = 4):
                 "RELVOL": relvol_str,
                 "Sector": row.get('sector', 'Unknown'),
                 "Small Candle": "✓",
+                "ema": round(float(row["ema"]), 2),
                 "MaxQty": int(row.get("MaxQty", 0)),
             })
 
