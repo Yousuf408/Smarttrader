@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TradeAlgo Pro · Sign In</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="style.css" />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22><text y=%22.9em%22 font-size=%2256%22>📊</text></svg>" />
+</head>
+<body class="auth-body">
+
+    <div class="auth-shell">
+        <div class="auth-brandbar" aria-hidden="true">
+            <div class="auth-brandbar-row">
+                <div class="auth-pill">● 9:15 IST</div>
+                <div class="auth-pill">● Live order support</div>
+            </div>
+            <div class="auth-brandbar-row">
+                <div class="auth-pill">● AMO &amp; INTRADAY</div>
+                <div class="auth-pill">● Multi-user ready</div>
+            </div>
+        </div>
+
+        <div class="auth-card" role="dialog" aria-labelledby="authTitle" aria-describedby="authSub">
+            <div class="auth-card-head">
+                <div class="auth-logo">📊 <span>TradeAlgo</span>Pro</div>
+                <div class="auth-tagline" id="authSub">Algorithmic trading · built for speed</div>
+            </div>
+
+            <div class="auth-card-body">
+                <h1 id="authTitle" class="auth-heading">Welcome back</h1>
+                <div class="auth-subheading" id="authModeHint">Sign in to continue to your screener &amp; auto-buy desk.</div>
+
+                <!-- ============================================================
+                     SIGN IN / SIGN UP TAB
+                     ============================================================ -->
+                <div class="auth-tabs" role="tablist">
+                    <button class="auth-tab active" data-mode="signin" role="tab" aria-selected="true">Sign In</button>
+                    <button class="auth-tab"        data-mode="signup" role="tab" aria-selected="false">Sign Up</button>
+                </div>
+
+                <form id="authForm" class="auth-form" novalidate autocomplete="on">
+                    <label class="auth-field">
+                        <span class="auth-field-label">Email</span>
+                        <input class="auth-input" type="email" id="authEmail" inputmode="email"
+                               autocomplete="email" placeholder="you@brokerage.com" required />
+                    </label>
+                    <label class="auth-field">
+                        <span class="auth-field-label">Password</span>
+                        <span class="auth-input-wrap">
+                            <input class="auth-input" type="password" id="authPassword"
+                                   autocomplete="current-password"
+                                   minlength="6" placeholder="At least 6 characters" required />
+                            <button type="button" class="auth-eye" id="authEye" aria-label="Show password">👁️</button>
+                        </span>
+                    </label>
+
+                    <div class="auth-row">
+                        <label class="auth-check">
+                            <input type="checkbox" id="authRemember" checked />
+                            <span>Keep me signed in for 8 hours</span>
+                        </label>
+                        <a class="auth-link" href="#" id="authForgot">Forgot?</a>
+                    </div>
+
+                    <button type="submit" class="auth-submit" id="authSubmit">
+                        <span class="auth-submit-text">Sign In</span>
+                        <span class="auth-spinner" aria-hidden="true"></span>
+                    </button>
+
+                    <div class="auth-footline" id="authFootline">
+                        New here? <button type="button" class="auth-link-inline" id="authSwitchMode">Create an account</button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="auth-card-foot">
+                <span class="auth-foot-muted">Secured by Supabase · 8-hour session</span>
+                <span class="auth-foot-dot">·</span>
+                <span class="auth-foot-muted">By continuing you agree to local-only data handling</span>
+            </div>
+        </div>
+
+        <div class="auth-sidepanel" aria-hidden="true">
+            <div class="auth-quote">
+                <div class="auth-quote-text">"Detect opening-range breakouts on the first 5-minute candle, scale with the trend, and lock the trade before lunch."</div>
+                <div class="auth-quote-by">— Advance ORB playbook</div>
+            </div>
+            <div class="auth-stats">
+                <div class="auth-stat">
+                    <div class="auth-stat-value">3</div>
+                    <div class="auth-stat-label">Strategies shipped</div>
+                </div>
+                <div class="auth-stat">
+                    <div class="auth-stat-value">0.15–0.50<span>%</span></div>
+                    <div class="auth-stat-label">9:15 band live</div>
+                </div>
+                <div class="auth-stat">
+                    <div class="auth-stat-value">5</div>
+                    <div class="auth-stat-label">Auto-buy cap</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast host for auth feedback (matches existing showToast UI inside main shell) -->
+    <div class="toast-container" id="authToastHost" aria-live="polite"></div>
+
+    <!-- ============================================================
+         SUPABASE JS SDK (CDN)
+         ============================================================ -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/auth.js" defer></script>
+</body>
+</html>

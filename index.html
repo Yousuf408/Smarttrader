@@ -297,6 +297,46 @@
         </div>
     </div>
 
+    <!-- ================================================================
+         AUTH GATE — runs before any app script. If no Supabase session
+         is present, redirect to /login. Supabase JS sets the session
+         in localStorage under `traderalgopro.auth` (JSON shape).
+         ================================================================ -->
+    <script>
+    (async function () {
+        try {
+            var k = 'traderalgopro.auth';
+            var raw = localStorage.getItem(k);
+            var access = null;
+            if (raw) {
+                try { access = JSON.parse(raw).access_token || null; } catch (_) {}
+            }
+            if (!access) {
+                if (location.pathname !== '/login') {
+                    if (location.pathname !== '/' || !location.search.includes('notconfigured=1')) {
+                        location.assign('/login?next=' + encodeURIComponent(location.pathname + location.search));
+                    }
+                }
+                return;
+            }
+            var ctrl = new AbortController();
+            var t = setTimeout(function () { ctrl.abort(); }, 4000);
+            var r = await fetch('/api/me', {
+                headers: { 'Authorization': 'Bearer ' + access },
+                signal: ctrl.signal,
+            }).catch(function () { return null; });
+            clearTimeout(t);
+            if (r && r.status === 401) {
+                localStorage.removeItem('traderalgopro.auth.sessionDeadline');
+                localStorage.removeItem('traderalgopro.auth.user');
+                if (location.pathname !== '/login') {
+                    location.assign('/login?next=' + encodeURIComponent(location.pathname + location.search));
+                }
+            }
+        } catch (_) { /* never block the shell on auth code path */ }
+    })();
+    </script>
+
     <!-- ================================================================ -->
     <!-- JAVASCRIPT - LOAD IN ORDER -->
     <!-- ================================================================ -->

@@ -734,6 +734,81 @@ def stylesheet():
 app.mount("/js", StaticFiles(directory=PROJECT_ROOT / "js"), name="frontend-js")
 
 
+# =================================================================
+# AUTH (Supabase) — public config + JWT verification for the app shell
+# =================================================================
+# - /login             — serves the standalone /login page.
+# - /api/auth/config   — anon key + URL. Safe to expose (anon key is
+#                        meant to be public; Supabase RLS guards data).
+# - /api/me            — verifies the Supabase bearer token by doing a
+#                        GET on `${SUPABASE_URL}/auth/v1/user` with the
+#                        service-role key as apikey. 503 if server-side
+#                        role key is missing; 401 if the user JWT is
+#                        bad/expired. Future endpoints (e.g. /api/me/
+#                        settings) will piggyback on this lookup.
+@app.get("/login", include_in_schema=False)
+def login_page():
+    return FileResponse(PROJECT_ROOT / "login.html", media_type="text/html")
+
+
+@app.get("/api/auth/config")
+def auth_config():
+    """Public anon key for Supabase. Returns ok=False until envs set.
+
+    Reads:
+      SUPABASE_URL         — e.g. https://abcdef.supabase.co
+      SUPABASE_ANON_KEY    — public client key (safe to expose)
+    """
+    url  = os.environ.get("SUPABASE_URL", "").strip() or None
+    anon = os.environ.get("SUPABASE_ANON_KEY", "").strip() or None
+    if not url or not anon:
+        return {
+            "ok":      False,
+            "url":     None,
+            "anonKey": None,
+            "message": "Supabase env vars missing in Replit Secrets (SUPABASE_URL, SUPABASE_ANON_KEY).",
+        }
+    return {"ok": True, "url": url, "anonKey": anon}
+
+
+@app.get("/api/me")
+def api_me(authorization: Optional[str] = None):
+    """Verify the user's Supabase JWT and return their id + email.
+
+    Reads:
+      SUPABASE_URL
+      SUPABASE_SERVICE_ROLE_KEY  — server-only; used to call /auth/v1/user
+    """
+    supabase_url = os.environ.get("SUPABASE_URL", "").strip()
+    service_role = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+    if not supabase_url or not service_role:
+        raise HTTPException(
+            status_code=503,
+            detail="Supabase service role not configured (SUPABASE_SERVICE_ROLE_KEY missing).",
+        )
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(status_code=401, detail="Missing Authorization Bearer.")
+    token = authorization.split(" ", 1)[1].strip()
+    try:
+        resp = requests.get(
+            supabase_url.rstrip("/") + "/auth/v1/user",
+            headers={
+                "Authorization": "Bearer " + token,
+                "apikey":        service_role,
+            },
+            timeout=10,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=502, detail="Auth roundtrip failed: " + str(e))
+    if resp.status_code != 200:
+        raise HTTPException(status_code=401, detail="Invalid or expired Supabase session.")
+    user = resp.json() or {}
+    return {
+        "id":    user.get("id"),
+        "email": user.get("email"),
+    }
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
