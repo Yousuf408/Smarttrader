@@ -17,6 +17,45 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from broker.quantity_calculator import calculate_max_quantity_column
 from broker.dhan_orders import place_dhan_order
 
+# =================================================================
+# Supabase auth — credentials are hardcoded so end users don't have to
+# supply them. Replit Secrets (SUPABASE_URL / SUPABASE_ANON_KEY /
+# SUPABASE_SERVICE_ROLE_KEY) override these when present.
+#
+# Why hardcoded: users of the deployed app log in via Supabase Auth
+# emails, not via these keys; the user-facing layer (email + password)
+# surfaces only the public anon key. The service_role key stays
+# server-side only and is never sent to the browser.
+# =================================================================
+HARDCODED_SUPABASE_URL                  = "https://atyqkbrmrosnoczktsmm.supabase.co"
+HARDCODED_SUPABASE_ANON_KEY             = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0eXFrYnJtcm9zbm9jemt0c21tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1NjI4ODcsImV4cCI6MjA5NjEzODg4N30.f-vn85HGFfPMUNeyJLccZSIVTKvZGXp1Ty5Hw08pFsU"
+HARDCODED_SUPABASE_SERVICE_ROLE_KEY     = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0eXFrYnJtcm9zbm9jemt0c21tIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MDU2Mjg4NywiZXhwIjoyMDk2MTM4ODg3fQ.w3PiYb4G09QAam7hZ1rkZPjrHy934ywc8BUfDR77syo"
+
+
+def _sb_url() -> str:
+    return (
+        os.environ.get("SUPABASE_URL")
+        or os.environ.get("SUPABASE_PROJECT_URL")
+        or HARDCODED_SUPABASE_URL
+    ).strip()
+
+
+def _sb_anon() -> str:
+    return (
+        os.environ.get("SUPABASE_ANON_KEY")
+        or os.environ.get("SUPABASE_KEY")
+        or HARDCODED_SUPABASE_ANON_KEY
+    ).strip()
+
+
+def _sb_service_role() -> str:
+    return (
+        os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+        or os.environ.get("SUPABASE_SERVICE_KEY")
+        or HARDCODED_SUPABASE_SERVICE_ROLE_KEY
+    ).strip()
+
+
 app = FastAPI(
     title="TradeAlgo Pro - Advance ORB",
     description="Fetches NSE stocks with price 200-3000, gap < 2%, market cap > 41B",
@@ -753,20 +792,22 @@ def login_page():
 
 @app.get("/api/auth/config")
 def auth_config():
-    """Public anon key for Supabase. Returns ok=False until envs set.
+    """Public anon key for Supabase. Hardcoded fallback so end users
+    don't have to set anything in Replit Secrets.
 
-    Reads:
-      SUPABASE_URL         — e.g. https://abcdef.supabase.co
-      SUPABASE_ANON_KEY    — public client key (safe to expose)
+    Reads (in priority order):
+      SUPABASE_URL / SUPABASE_PROJECT_URL         (override)
+      SUPABASE_ANON_KEY / SUPABASE_KEY            (override)
+      HARDCODED_* (built-in fallback)
     """
-    url  = os.environ.get("SUPABASE_URL", "").strip() or None
-    anon = os.environ.get("SUPABASE_ANON_KEY", "").strip() or None
+    url  = _sb_url()      or None
+    anon = _sb_anon()     or None
     if not url or not anon:
         return {
             "ok":      False,
             "url":     None,
             "anonKey": None,
-            "message": "Supabase env vars missing in Replit Secrets (SUPABASE_URL, SUPABASE_ANON_KEY).",
+            "message": "Supabase creds missing — set Replit Secrets or verify hardcoded fallback in advance_orb/app.py.",
         }
     return {"ok": True, "url": url, "anonKey": anon}
 
@@ -775,16 +816,17 @@ def auth_config():
 def api_me(authorization: Optional[str] = None):
     """Verify the user's Supabase JWT and return their id + email.
 
-    Reads:
-      SUPABASE_URL
-      SUPABASE_SERVICE_ROLE_KEY  — server-only; used to call /auth/v1/user
+    Reads (in priority order):
+      SUPABASE_URL / SUPABASE_PROJECT_URL              (override)
+      SUPABASE_SERVICE_ROLE_KEY / SUPABASE_SERVICE_KEY (override)
+      HARDCODED_SUPABASE_SERVICE_ROLE_KEY              (fallback)
     """
-    supabase_url = os.environ.get("SUPABASE_URL", "").strip()
-    service_role = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+    supabase_url = _sb_url()
+    service_role = _sb_service_role()
     if not supabase_url or not service_role:
         raise HTTPException(
             status_code=503,
-            detail="Supabase service role not configured (SUPABASE_SERVICE_ROLE_KEY missing).",
+            detail="Supabase service role not configured (set Replit Secret or verify hardcoded fallback).",
         )
     if not authorization or not authorization.lower().startswith("bearer "):
         raise HTTPException(status_code=401, detail="Missing Authorization Bearer.")
