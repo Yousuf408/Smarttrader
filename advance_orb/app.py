@@ -180,6 +180,77 @@ def compute_200_ema_batch(symbols: list[str]) -> dict[str, float | None]:
     return results
 
 
+def batch_opening_candle(symbols: list[str]) -> dict:
+    """For each symbol, fetch yfinance 5-min candles ONLY ONCE and
+    return both pieces of information the screener needs from the
+    9:15 IST opening 5-min candle:
+        * is the candle "small" (range ≤ SMALL_CANDLE_THRESHOLD %)
+        * the candle's HIGH price (used as `high915` for the auto-buy
+          9:15 high-price-band filter on the frontend)
+    Returns: {symbol: (is_small: bool, high915: float | None)}.
+    """
+    results: dict = {}
+    unique = [s for s in {s for s in symbols if s}]
+    if not unique:
+        return results
+
+    def _lookup(symbol: str):
+        try:
+            ticker = f"{str(symbol).strip().upper()}.NS"
+            candles = yf.download(
+                tickers=ticker,
+                period="4d",
+                interval="5m",
+                progress=False,
+                auto_adjust=False,
+                prepost=False,
+                threads=False,
+            )
+            if candles is None or candles.empty:
+                return (False, None)
+            if isinstance(candles.columns, pd.MultiIndex):
+                try:
+                    candles = candles.xs(ticker, axis=1, level=-1)
+                except (KeyError, IndexError):
+                    try:
+                        candles = candles.xs(ticker, axis=1, level=0)
+                    except (KeyError, IndexError):
+                        return (False, None)
+            if "High" not in candles or "Low" not in candles:
+                return (False, None)
+            local_index = pd.DatetimeIndex(candles.index)
+            if local_index.tz is None:
+                local_index = local_index.tz_localize(IST)
+            else:
+                local_index = local_index.tz_convert(IST)
+            candles = candles.copy()
+            candles.index = local_index
+            opening = candles[
+                (candles.index.hour == 9) & (candles.index.minute == 15)
+            ]
+            if opening.empty:
+                return (False, None)
+            candle = opening.iloc[-1]
+            high = pd.to_numeric(candle["High"], errors="coerce")
+            low = pd.to_numeric(candle["Low"], errors="coerce")
+            if pd.isna(high) or pd.isna(low) or low <= 0:
+                return (False, None)
+            is_small = bool(((high - low) / low * 100) <= SMALL_CANDLE_THRESHOLD)
+            return (is_small, float(high))
+        except Exception:
+            return (False, None)
+
+    with ThreadPoolExecutor(max_workers=YFINANCE_WORKERS) as pool:
+        futures = {pool.submit(_lookup, sym): sym for sym in unique}
+        for fut in as_completed(futures):
+            sym = futures[fut]
+            try:
+                results[sym] = fut.result(timeout=20)
+            except Exception:
+                results[sym] = (False, None)
+    return results
+
+
 def filter_small_opening_candles(symbols: list[str]) -> set[str]:
     """Yahoo Finance 9:15 IST candle check, executed across many symbols in parallel.
 
@@ -318,7 +389,13 @@ def get_advance_orb(budget: int = 100000, parts: int = 4):
         ema_pct = (df['close'] - df['ema']).abs() / df['ema'] * 100.0
         df = df[ema_pct <= EMA_DISTANCE_PCT]
 
-        small_candle_symbols = filter_small_opening_candles(candidate_symbols)
+        # Single yfinance pull per symbol. Returns both pieces of
+        # info we need from the 9:15 IST candle (small-flag + high915).
+        opening_candle_map = batch_opening_candle(candidate_symbols)
+        small_candle_symbols = {
+            s for s, info in opening_candle_map.items()
+            if isinstance(info, tuple) and info and info[0]
+        }
 
         # Calculate Max Quantities via Dhan (see broker/quantity_calculator.py).
         # quantity_calculator expects Symbol/Price cols; df has name/close.
@@ -362,6 +439,12 @@ def get_advance_orb(budget: int = 100000, parts: int = 4):
                 "Sector": row.get('sector', 'Unknown'),
                 "Small Candle": "✓",
                 "ema": round(float(row["ema"]), 2),
+                "high915": (
+                    round(float(opening_candle_map[symbol][1]), 2)
+                    if opening_candle_map.get(symbol)
+                    and opening_candle_map[symbol][1] is not None
+                    else None
+                ),
                 "MaxQty": int(row.get("MaxQty", 0)),
             })
 

@@ -526,7 +526,7 @@ async function autoBuyAllStocks() {
     // -----------------------------------------------------------------
     // 9:15 HIGH PRICE-BAND FILTER
     // -----------------------------------------------------------------
-    // For every candidate in topN, compute the gap of `price` above
+    // For every candidate in eligible, compute the gap of `price` above
     // its 9:15 IST opening-candle high. Keep only those whose
     //   move_pct = (price - high915) / high915 * 100
     // sits inside
@@ -538,7 +538,7 @@ async function autoBuyAllStocks() {
     //            risk. Skip — do NOT place an order.
     // Constants at the top of this file: AUTO_BUY_MIN/MAX_MOVE...
     // -----------------------------------------------------------------
-    const bandFiltered = topN.filter(row => {
+    const bandFiltered = eligible.filter(row => {
         const high915 = parseFloat(row.high915);
         const price = parseFloat(row.price);
         // Skip rows missing either anchor (zero / NaN) — can't decide.
@@ -557,7 +557,7 @@ async function autoBuyAllStocks() {
         // user can see whether the band is too tight, too loose, or
         // whether price is actually below 9:15 high entirely.
         const expectedBand = `+${AUTO_BUY_MIN_MOVE_ABOVE_915_PCT}–+${AUTO_BUY_MAX_MOVE_ABOVE_915_PCT}%`;
-        const probes = topN.map(row => {
+        const probes = eligible.map(row => {
             const high915 = parseFloat(row.high915);
             const price = parseFloat(row.price);
             if (!Number.isFinite(high915) || high915 <= 0 ||
@@ -570,9 +570,9 @@ async function autoBuyAllStocks() {
         const previewProbes = probes.slice(0, 3).join(' · ') + (probes.length > 3 ? '…' : '');
         showToast(
             '⚠️ No Setup',
-            `0/${topN.length} in 9:15 ${expectedBand} band — ${previewProbes}`
+            `0/${eligible.length} in 9:15 ${expectedBand} band — ${previewProbes}`
         );
-        console.warn('[auto-buy] band filter rejected all', topN.length, 'rows:', {
+        console.warn('[auto-buy] band filter rejected all', eligible.length, 'rows:', {
             MIN: AUTO_BUY_MIN_MOVE_ABOVE_915_PCT,
             MAX: AUTO_BUY_MAX_MOVE_ABOVE_915_PCT,
             probes,
