@@ -264,6 +264,11 @@ function setAuthMode(next, refs) {
         t.classList.toggle('active', active);
         t.setAttribute('aria-selected', String(active));
     });
+    // Toggle the User Name field's CSS visibility via [data-mode]
+    // selector. Without this, the field stays hidden even when the
+    // tab is "Sign Up".
+    const authForm = document.getElementById('authForm');
+    if (authForm) authForm.dataset.mode = next;
     if (refs.submitText) refs.submitText.textContent = next === 'signup' ? 'Create Account' : 'Sign In';
     const heading = document.querySelector('.auth-heading');
     const sub     = document.getElementById('authModeHint');
