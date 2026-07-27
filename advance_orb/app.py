@@ -45,6 +45,22 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+# No-cache for HTML responses. After the auth-strip, the user's
+# browser may still hold a stale copy of the deleted /login page or
+# an index.html whose inline auth-gate redirected to /login. Forcing
+# the browser to revalidate every time means a hard-refresh picks up
+# the current dashboard immediately, no more cached-login flicker.
+@app.middleware("http")
+async def _no_cache_html(request, call_next):
+    response = await call_next(request)
+    ctype = (response.headers.get("content-type") or "").lower()
+    if "text/html" in ctype:
+        response.headers["Cache-Control"]   = "no-store, no-cache, must-revalidate, max-age=0"
+        response.headers["Pragma"]          = "no-cache"
+        response.headers["Expires"]         = "0"
+    return response
+
 # ─── HARDCODED CONDITIONS ───
 PRICE_MIN = 200
 PRICE_MAX = 3000
