@@ -40,10 +40,18 @@
                     <button class="auth-tab"        data-mode="signup" role="tab" aria-selected="false">Sign Up</button>
                 </div>
 
-                <form id="authForm" class="auth-form" novalidate autocomplete="on">
+                <form id="authForm" class="auth-form" data-mode="signin" novalidate autocomplete="on">
+                    <label class="auth-field auth-field-username" id="authUsernameField">
+                        <span class="auth-field-label">User Name</span>
+                        <input class="auth-input" type="text" id="authUsername"
+                               autocomplete="username"
+                               minlength="3" maxlength="20"
+                               pattern="[a-zA-Z0-9_]{3,20}"
+                               placeholder="3–20 chars · letters, digits, _" />
+                    </label>
                     <label class="auth-field">
-                        <span class="auth-field-label">Email</span>
-                        <input class="auth-input" type="email" id="authEmail" inputmode="email"
+                        <span class="auth-field-label" id="authEmailLabel">Email</span>
+                        <input class="auth-input" type="text" id="authEmail" inputmode="email"
                                autocomplete="email" placeholder="you@brokerage.com" required />
                     </label>
                     <label class="auth-field">

@@ -1105,3 +1105,9 @@ body {
         padding: 6px 12px; font-size: 11px; font-weight: 600;
     }
 }
+
+/* Sign Up vs Sign In field visibility.
+ * The User Name field is hidden while in signin mode. JS sets
+ * form.dataset.mode on tab toggle. */
+.auth-form[data-mode="signin"]  .auth-field-username { display: none; }
+.auth-form[data-mode="signup"]  .auth-field-username { display: flex; }

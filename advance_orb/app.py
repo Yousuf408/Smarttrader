@@ -2,6 +2,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import os
+import re
 import requests
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -849,6 +850,97 @@ def api_me(authorization: Optional[str] = None):
         "id":    user.get("id"),
         "email": user.get("email"),
     }
+
+
+@app.get("/api/auth/lookup-username")
+def lookup_username(u: str = ""):
+    """Resolve username → (id, email) for sign-in by username.
+
+    Reads the `public.user_profiles` table via service-role so RLS
+    doesn't gate this. Returns 404 if not found.
+    """
+    username = (u or "").strip()
+    if not username:
+        raise HTTPException(status_code=400, detail="Missing ?u=...")
+    if not re.fullmatch(r"[a-zA-Z0-9_]{3,20}", username):
+        raise HTTPException(status_code=400, detail="Bad username format.")
+    supabase_url = _sb_url()
+    service_role = _sb_service_role()
+    if not supabase_url or not service_role:
+        raise HTTPException(status_code=503, detail="Supabase service role not configured.")
+    try:
+        resp = requests.get(
+            supabase_url.rstrip("/") + "/rest/v1/user_profiles",
+            params={"username": "eq." + username, "select": "id,email"},
+            headers={
+                "apikey":        service_role,
+                "Authorization": "Bearer " + service_role,
+            },
+            timeout=10,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=502, detail="Lookup failed: " + str(e))
+    if resp.status_code >= 400:
+        raise HTTPException(status_code=resp.status_code, detail=resp.text or "Lookup error")
+    rows = resp.json() or []
+    if not rows:
+        raise HTTPException(status_code=404, detail="Username not found.")
+    return {"id": rows[0].get("id"), "email": rows[0].get("email")}
+
+
+@app.post("/api/me/profile")
+def api_me_profile(payload: dict, authorization: Optional[str] = None):
+    """Upsert the current user's `username` into public.user_profiles.
+
+    Caller must send a valid Supabase JWT as `Authorization: Bearer …`.
+    """
+    username = ""
+    if isinstance(payload, dict):
+        username = (payload.get("username") or "").strip()
+    if not re.fullmatch(r"[a-zA-Z0-9_]{3,20}", username):
+        raise HTTPException(status_code=400, detail="Username must be 3–20 chars (a-z, 0-9, _).")
+    supabase_url = _sb_url()
+    service_role = _sb_service_role()
+    if not supabase_url or not service_role:
+        raise HTTPException(status_code=503, detail="Supabase service role not configured.")
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(status_code=401, detail="Missing Authorization Bearer.")
+    token = authorization.split(" ", 1)[1].strip()
+    try:
+        u_resp = requests.get(
+            supabase_url.rstrip("/") + "/auth/v1/user",
+            headers={
+                "Authorization": "Bearer " + token,
+                "apikey":        service_role,
+            },
+            timeout=10,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=502, detail="Auth roundtrip failed: " + str(e))
+    if u_resp.status_code != 200:
+        raise HTTPException(status_code=401, detail="Invalid or expired Supabase session.")
+    user = u_resp.json() or {}
+    user_id = user.get("id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="No user id resolved.")
+    try:
+        body = [{"id": user_id, "username": username, "email": user.get("email")}]
+        resp = requests.post(
+            supabase_url.rstrip("/") + "/rest/v1/user_profiles",
+            headers={
+                "apikey":         service_role,
+                "Authorization":  "Bearer " + service_role,
+                "Content-Type":   "application/json",
+                "Prefer":         "resolution=merge-duplicates",
+            },
+            json=body,
+            timeout=10,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=502, detail="Profile upsert failed: " + str(e))
+    if resp.status_code >= 400:
+        raise HTTPException(status_code=resp.status_code, detail=resp.text or "Profile upsert error")
+    return {"ok": True, "username": username, "id": user_id}
 
 
 if __name__ == "__main__":

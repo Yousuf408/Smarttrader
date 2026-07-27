@@ -162,16 +162,29 @@ function attachAuthListeners() {
 
     form?.addEventListener('submit', async e => {
         e.preventDefault();
-        if (!supabase) return;
+        if (!supabaseClient) return;
 
-        const email = (document.getElementById('authEmail')?.value || '').trim();
-        const pass  = (document.getElementById('authPassword')?.value || '');
+        const emailEl    = document.getElementById('authEmail');
+        const passEl     = document.getElementById('authPassword');
+        const userEl     = document.getElementById('authUsername');
+        const emailRaw   = (emailEl?.value || '').trim();
+        const pass       = (passEl?.value || '');
+        const username   = authMode === 'signup' ? (userEl?.value || '').trim() : '';
 
-        // Soft client validation BEFORE talking to Supabase (server's
-        // already pruning at length>=6 in the form constraint).
-        if (!email || !email.includes('@')) {
-            showAuthToast('📧 Email looks wrong', 'Add a valid email above.', 'warn');
-            return;
+        // ── client-side validation ──────────────────────────────────────
+        if (authMode === 'signup') {
+            if (!/^[a-zA-Z0-9_]{3,20}$/.test(username)) {
+                showAuthToast('👤 Pick a username',
+                    'Username must be 3–20 characters (letters, digits, underscore).',
+                    'warn');
+                if (userEl) userEl.focus();
+                return;
+            }
+            if (!emailRaw.includes('@')) {
+                showAuthToast('📧 Email looks wrong', 'Add a valid email above.', 'warn');
+                if (emailEl) emailEl.focus();
+                return;
+            }
         }
         if (!pass || pass.length < 6) {
             showAuthToast('🔑 Password too short', 'Use at least 6 characters.', 'warn');
@@ -181,21 +194,32 @@ function attachAuthListeners() {
         submit.classList.add('loading');
         submit.disabled = true;
         try {
+            // Sign In: first field can be email OR username.
+            let loginEmail = emailRaw;
+            if (authMode === 'signin' && !emailRaw.includes('@')) {
+                const lr = await fetch(
+                    '/api/auth/lookup-username?u=' + encodeURIComponent(emailRaw),
+                    { cache: 'no-store' }
+                );
+                const lrJson = await lr.json().catch(() => ({}));
+                if (!lr.ok) throw new Error(lrJson.detail || 'Username not found.');
+                if (!lrJson.email) throw new Error('Email not provisioned for that username.');
+                loginEmail = lrJson.email;
+            }
+
             let result;
             if (authMode === 'signup') {
-                result = await supabaseClient.auth.signUp({ email, password: pass });
+                result = await supabaseClient.auth.signUp({ email: emailRaw, password: pass });
             } else {
-                result = await supabaseClient.auth.signInWithPassword({ email, password: pass });
+                result = await supabaseClient.auth.signInWithPassword({ email: loginEmail, password: pass });
             }
             if (result.error) throw result.error;
-
-            // If signup returned a user but no session -> email
-            // confirmation is enabled on the Supabase project; we
-            // can't auto-login yet, so tell the user.
             const session = result.data?.session;
             const user    = result.data?.user;
             if (!session && user) {
-                showAuthToast('📬 Confirm your email', 'Check ' + user.email + ' for the confirmation link. After clicking it, refresh this page.', 'success', 9000);
+                showAuthToast('📬 Confirm your email',
+                    'Check ' + user.email + ' for the confirmation link.',
+                    'success', 9000);
                 return;
             }
             if (!session) {
@@ -203,11 +227,25 @@ function attachAuthListeners() {
                 return;
             }
 
-            // Business-clock anchor: refresh-on-token / tab-switch will
-            // still re-validate against this deadline.
+            // Persist the username on first signup. (Refresh / token
+            // roll-over does not re-fire this — only at signup.)
+            if (authMode === 'signup' && user?.id) {
+                try {
+                    await fetch('/api/me/profile', {
+                        method:  'POST',
+                        headers: {
+                            'Content-Type':  'application/json',
+                            'Authorization': 'Bearer ' + session.access_token,
+                        },
+                        body: JSON.stringify({ username }),
+                    });
+                } catch (e) {
+                    console.warn('[auth] profile upsert after signup failed:', e);
+                }
+            }
+
             setBusinessDeadline();
             if (user?.email) localStorage.setItem(META_KEY, user.email);
-
             showAuthToast('✅ Signed in', 'Opening your dashboard…', 'success', 1500);
             setTimeout(goToDashboard, 350);
         } catch (err) {
