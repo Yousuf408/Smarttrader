@@ -233,12 +233,14 @@ def batch_opening_candle(symbols: list[str]) -> dict:
             candle = opening.iloc[-1]
             high = pd.to_numeric(candle["High"], errors="coerce")
             low = pd.to_numeric(candle["Low"], errors="coerce")
+            open915 = pd.to_numeric(candle["Open"], errors="coerce")
             if pd.isna(high) or pd.isna(low) or low <= 0:
-                return (False, None)
+                return (False, None, None)
             is_small = bool(((high - low) / low * 100) <= SMALL_CANDLE_THRESHOLD)
-            return (is_small, float(high))
+            open_val = float(open915) if pd.notna(open915) else None
+            return (is_small, float(high), open_val)
         except Exception:
-            return (False, None)
+            return (False, None, None)
 
     with ThreadPoolExecutor(max_workers=YFINANCE_WORKERS) as pool:
         futures = {pool.submit(_lookup, sym): sym for sym in unique}
@@ -247,7 +249,7 @@ def batch_opening_candle(symbols: list[str]) -> dict:
             try:
                 results[sym] = fut.result(timeout=20)
             except Exception:
-                results[sym] = (False, None)
+                results[sym] = (False, None, None)
     return results
 
 
@@ -386,16 +388,28 @@ def get_advance_orb(budget: int = 100000, parts: int = 4):
         df['ema'] = df['name'].map(ema_map)
         df['change_pct'] = pd.to_numeric(df['change'], errors='coerce')
         df = df[df['ema'].notna()]
-        ema_pct = (df['close'] - df['ema']).abs() / df['ema'] * 100.0
+        # IMPORTANT: distance check uses TODAY'S OPEN (9:15 candle Open),
+        # not the live `close`. A stock that opened within ±3% of the
+        # 200-EMA keeps its place in the table even when intraday price
+        # later drifts further away from EMA.
+        df = df[df['open915'].notna()]
+        ema_pct = (df['open915'] - df['ema']).abs() / df['ema'] * 100.0
         df = df[ema_pct <= EMA_DISTANCE_PCT]
 
         # Single yfinance pull per symbol. Returns both pieces of
         # info we need from the 9:15 IST candle (small-flag + high915).
         opening_candle_map = batch_opening_candle(candidate_symbols)
         small_candle_symbols = {
-            s for s, info in opening_candle_map.items()
-            if isinstance(info, tuple) and info and info[0]
+            s for s, t in opening_candle_map.items()
+            if isinstance(t, tuple) and t and t[0]
         }
+        # "open915" = today's OPEN price (= the first 5-min candle's Open).
+        # Used for the 200-EMA distance check instead of the live close,
+        # so a stock that opens within the band keeps its row even when
+        # the live price subsequently moves beyond 3% of EMA.
+        df['open915'] = df['name'].map(
+            lambda s: opening_candle_map.get(s, (False, None, None))[2]
+        )
 
         # Calculate Max Quantities via Dhan (see broker/quantity_calculator.py).
         # quantity_calculator expects Symbol/Price cols; df has name/close.
@@ -443,6 +457,12 @@ def get_advance_orb(budget: int = 100000, parts: int = 4):
                     round(float(opening_candle_map[symbol][1]), 2)
                     if opening_candle_map.get(symbol)
                     and opening_candle_map[symbol][1] is not None
+                    else None
+                ),
+                "open915": (
+                    round(float(opening_candle_map[symbol][2]), 2)
+                    if opening_candle_map.get(symbol)
+                    and opening_candle_map[symbol][2] is not None
                     else None
                 ),
                 "MaxQty": int(row.get("MaxQty", 0)),
