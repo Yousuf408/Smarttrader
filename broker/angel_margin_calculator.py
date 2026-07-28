@@ -36,6 +36,12 @@ _CREDS = {
     "feed_token": "",  # ← ADDED FOR WEBSOCKET
 }
 
+# Persistent SmartConnect SDK instance (created once on auth, reused for
+# margin/order calls so the SDK's custom headers — X-UserType, X-SourceID,
+# X-ClientPublicIP, X-MACAddress etc. — are sent on every request and
+# the WAF doesn't block them).
+_SMART_API = None
+
 # ================================================================
 # API CONSTANTS
 # ================================================================
@@ -83,11 +89,25 @@ def get_feed_token():
     """Get feed token for WebSocket."""
     return _CREDS.get("feed_token", "")
 
+def _make_smart_connect():
+    """Create a SmartConnect instance with the stored credentials and proxy."""
+    from SmartApi import SmartConnect
+    sc = SmartConnect(api_key=_CREDS.get("api_key"))
+    # Attach proxy at the instance level (same pattern as the working code)
+    sc.proxies = ANGEL_PROXIES
+    return sc
+
 def authenticate():
-    """Authenticate with Angel One and get access token."""
-    api_key = _CREDS.get("api_key")
-    client_id = _CREDS.get("client_id")
-    password = _CREDS.get("password")
+    """Authenticate with Angel One using the SmartConnect SDK.
+
+    Uses the official SmartApi SDK (SmartConnect.generateSession) which
+    sends the correct TLS fingerprint and headers that Angel One's WAF
+    expects — raw requests.post() triggers a WAF block even when the IP
+    is properly whitelisted.
+    """
+    api_key    = _CREDS.get("api_key")
+    client_id  = _CREDS.get("client_id")
+    password   = _CREDS.get("password")
     totp_secret = _CREDS.get("totp_secret")
 
     if not api_key or not client_id or not password:
@@ -96,113 +116,89 @@ def authenticate():
     print(f"🔐 Authenticating Angel One for: {client_id}")
 
     try:
-        headers = {
-            "X-API-Key": api_key,
-            "X-Client-ID": client_id,
-            "Content-Type": "application/json"
-        }
+        smart_api = _make_smart_connect()
 
-        payload = {"clientid": client_id, "password": password}
-
-        # Add TOTP if available
+        # Generate TOTP
+        totp_code = None
         if totp_secret:
             try:
                 import pyotp
-                totp = pyotp.TOTP(totp_secret)
-                payload["totp"] = totp.now()
+                totp_code = pyotp.TOTP(totp_secret).now()
                 print("✅ TOTP generated")
-            except ImportError:
-                print("⚠️ pyotp not installed - install with: pip install pyotp")
             except Exception as e:
-                print(f"⚠️ TOTP error: {e}")
+                print(f"⚠️ TOTP error (proceeding without TOTP): {e}")
 
-        # Try direct first, fall back to proxy if direct fails.
-        # The proxy is primarily for Dhan IP whitelisting; Angel One
-        # may or may not need it depending on whether the server IP
-        # is whitelisted with Angel One's support team.
+        # Authenticate via the official SDK
+        data = smart_api.generateSession(client_id, password, totp_code or "")
+
+        if data is None:
+            return {"ok": False, "error": "SmartConnect returned None — likely a network or proxy error."}
+
+        if data.get("status") == False:
+            error_msg = data.get("message") or data.get("error") or "Authentication failed"
+            return {"ok": False, "error": error_msg}
+
+        jwt_token_raw = data["data"].get("jwtToken", "")
+        refresh_token = data["data"].get("refreshToken", "")
+
+        if not jwt_token_raw:
+            return {"ok": False, "error": "No jwtToken in SDK response"}
+
+        # The API response sometimes includes "Bearer " as a prefix on the
+        # jwtToken. The SDK's _request method does `"Bearer {}".format(token)`
+        # when building the Authorization header, so we must strip any
+        # existing prefix to avoid a double "Bearer Bearer eyJ..." header.
+        jwt_token = jwt_token_raw
+        if jwt_token.startswith("Bearer "):
+            jwt_token = jwt_token[7:]
+
+        # Get feed token from the SDK object
         try:
-            response = requests.post(
-                ANGEL_LOGIN_URL,
-                json=payload,
-                headers=headers,
-                timeout=15,
-            )
-            if "Request Rejected" in response.text:
-                # WAF block — retry through the proxy (if it helps)
-                response = requests.post(
-                    ANGEL_LOGIN_URL,
-                    json=payload,
-                    headers=headers,
-                    proxies=ANGEL_PROXIES,
-                    timeout=15,
-                )
-        except requests.ConnectionError:
-            # Direct connection failed — try through proxy
-            response = requests.post(
-                ANGEL_LOGIN_URL,
-                json=payload,
-                headers=headers,
-                proxies=ANGEL_PROXIES,
-                timeout=15,
-            )
+            feed_token = smart_api.getfeedToken()
+        except Exception:
+            feed_token = data["data"].get("feedToken") or data["data"].get("feed_token", "")
 
-        if response.status_code == 200:
-            try:
-                data = response.json()
-            except json.JSONDecodeError:
-                body_preview = (response.text or "")[:200]
-                print(f"❌ Angel One returned 200 with empty/non-JSON body: {body_preview}")
-                if "Request Rejected" in body_preview:
-                    return {
-                        "ok": False,
-                        "error": (
-                            "Angel One WAF blocked the request. This server's IP "
-                            "needs to be whitelisted with Angel One support. "
-                            "Provide them with the proxy IP 151.242.178.149."
-                        ),
-                    }
-                return {
-                    "ok": False,
-                    "error": (
-                        "Angel One auth returned empty response. "
-                        "Check your credentials or try again."
-                    ),
-                }
+        # Store credentials
+        _CREDS["access_token"]  = jwt_token
+        _CREDS["refresh_token"] = refresh_token
+        if feed_token:
+            _CREDS["feed_token"] = str(feed_token)
+            print(f"✅ Feed token received and stored")
 
-            if data.get("status") and data.get("data"):
-                access_token = data["data"].get("access_token")
-                refresh_token = data["data"].get("refresh_token")
-                feed_token = data["data"].get("feedToken") or data["data"].get("feed_token")
+        # Store the SDK instance for margin/order calls
+        global _SMART_API
+        smart_api.setAccessToken(jwt_token)
+        smart_api.setUserId(client_id)
+        _SMART_API = smart_api
 
-                if access_token:
-                    _CREDS["access_token"] = access_token
-                    _CREDS["refresh_token"] = refresh_token or ""
-
-                    # Store feed token if available
-                    if feed_token:
-                        _CREDS["feed_token"] = str(feed_token)
-                        print(f"✅ Feed token received and stored")
-
-                    print("✅ Authentication successful!")
-                    return {
-                        "ok": True, 
-                        "access_token": access_token,
-                        "refresh_token": refresh_token,
-                        "feed_token": feed_token
-                    }
-
-            error = data.get("message", "Authentication failed")
-            return {"ok": False, "error": error}
-        else:
-            return {"ok": False, "error": f"HTTP {response.status_code}: {response.text[:100]}"}
+        print("✅ Authentication successful!")
+        return {
+            "ok": True,
+            "access_token":  jwt_token,
+            "refresh_token": refresh_token,
+            "feed_token":    feed_token or "",
+        }
 
     except Exception as e:
-        return {"ok": False, "error": str(e)}
+        err_msg = str(e)
+        # Catch known error patterns
+        if "Request Rejected" in err_msg:
+            return {
+                "ok": False,
+                "error": (
+                    "Angel One WAF blocked the request even through the SDK. "
+                    "Verify that your API Key is active and the proxy IP "
+                    "151.242.178.149 is whitelisted in your Angel One portal."
+                ),
+            }
+        return {"ok": False, "error": err_msg}
 
 def disconnect():
     """Clear all credentials."""
+    global _SMART_API
     for key in _CREDS:
         _CREDS[key] = ""
+    _SMART_API = None
     print("🔌 Disconnected from Angel One")
     return {"ok": True}
 
@@ -214,16 +210,22 @@ def load_master():
     """Load Angel One scrip master."""
     global MASTER_CACHE, MASTER_CACHE_TIME
 
-    if MASTER_CACHE and (time.time() - MASTER_CACHE_TIME) < MASTER_TTL:
+    if MASTER_CACHE is not None and (time.time() - MASTER_CACHE_TIME) < MASTER_TTL:
         return MASTER_CACHE
 
     try:
-        # Use proxy for scrip master (IP whitelisting)
-        response = requests.get(
-            ANGEL_SCRIP_MASTER_URL, 
-            proxies=ANGEL_PROXIES,  # ← Proxy for IP whitelisting
-            timeout=30
-        )
+        # Try direct first (scrip master is a CDN file, not behind the WAF).
+        # Fall back to proxy if direct fails (e.g. regional block).
+        try:
+            response = requests.get(ANGEL_SCRIP_MASTER_URL, timeout=30)
+            if response.status_code != 200 or "Request Rejected" in (response.text or ""):
+                raise ConnectionError("Direct failed")
+        except Exception:
+            response = requests.get(
+                ANGEL_SCRIP_MASTER_URL,
+                proxies=ANGEL_PROXIES,
+                timeout=30,
+            )
 
         if response.status_code == 200:
             data = response.json()
@@ -258,27 +260,35 @@ def get_token(symbol, exchange="NSE"):
     # Find columns
     symbol_col = next((c for c in df.columns if 'symbol' in c.lower()), None)
     token_col = next((c for c in df.columns if 'token' in c.lower()), None)
-    exch_col = next((c for c in df.columns if 'exchange' in c.lower()), None)
+    exch_col  = next((c for c in df.columns if 'exch' in c.lower()), None)
 
     if not symbol_col or not token_col:
         print("❌ Required columns not found in master")
         return None
 
-    # Filter
-    if exch_col:
-        filtered = df[(df[exch_col].astype(str).str.upper() == exchange.upper()) & 
-                     (df[symbol_col].astype(str).str.upper() == symbol.upper())]
-    else:
-        filtered = df[df[symbol_col].astype(str).str.upper() == symbol.upper()]
+    # Try exact symbol match first, then symbol-EQ (Angel One's internal
+    # equity format — e.g. RELIANCE-EQ with token 2885).
+    candidates = [symbol.upper(), f"{symbol.upper()}-EQ"]
+    found = None
 
-    if filtered.empty:
+    for sym in candidates:
+        if exch_col:
+            filtered = df[(df[exch_col].astype(str).str.upper() == exchange.upper()) &
+                         (df[symbol_col].astype(str).str.upper() == sym)]
+        else:
+            filtered = df[df[symbol_col].astype(str).str.upper() == sym]
+
+        if not filtered.empty:
+            found = str(filtered[token_col].values[0])
+            break
+
+    if found is None:
         print(f"⚠️ Symbol {symbol} not found in master")
         return None
 
-    token = str(filtered[token_col].values[0])
-    SECURITY_CACHE[cache_key] = token
-    print(f"✅ Token for {symbol}: {token}")
-    return token
+    SECURITY_CACHE[cache_key] = found
+    print(f"✅ Token for {symbol}: {found}")
+    return found
 
 # ================================================================
 # MARGIN CALCULATION
@@ -304,64 +314,47 @@ def get_margin(symbol, price, quantity=1, exchange="NSE", product_type="INTRADAY
         return 0
 
     try:
-        headers = {
-            "X-API-Key": _CREDS["api_key"],
-            "Authorization": f"Bearer {_CREDS['access_token']}",
-            "Content-Type": "application/json"
-        }
+        global _SMART_API
+        if _SMART_API is None:
+            print("⚠️ SDK instance not available, re-authenticating...")
+            auth_result = authenticate()
+            if not auth_result.get("ok"):
+                return 0
 
+        # Angel One's margin API expects camelCase field names:
+        #   product_type → productType,  transaction_type → tradeType,
+        #   ordertype    → orderType,    quantity         → qty
         payload = {
             "positions": [{
                 "symbol": symbol,
                 "token": token,
                 "exchange": exchange,
-                "product_type": product_type,
-                "transaction_type": "BUY",
+                "productType": product_type,
+                "tradeType": "BUY",
+                "orderType": "MARKET",
                 "price": float(price),
-                "quantity": quantity
+                "qty": quantity
             }]
         }
 
-        # Try direct first, fall back to proxy if WAF blocks
-        try:
-            response = requests.post(
-                ANGEL_MARGIN_URL,
-                json=payload,
-                headers=headers,
-                timeout=10,
-            )
-            if "Request Rejected" in (response.text or ""):
-                response = requests.post(
-                    ANGEL_MARGIN_URL,
-                    json=payload,
-                    headers=headers,
-                    proxies=ANGEL_PROXIES,
-                    timeout=10,
-                )
-        except requests.ConnectionError:
-            response = requests.post(
-                ANGEL_MARGIN_URL,
-                json=payload,
-                headers=headers,
-                proxies=ANGEL_PROXIES,
-                timeout=10,
-            )
+        result = _SMART_API.getMarginApi(payload)
 
-        if response.status_code == 200:
-            data = response.json()
-            if data.get("status") and data.get("data"):
-                positions = data["data"].get("positions", [])
-                if positions:
-                    margin = positions[0].get("total_margin", 0)
-                    if margin > 0:
-                        MARGIN_CACHE[cache_key] = (margin, time.time())
-                    return margin
-        elif response.status_code == 401:
-            # Token expired - reconnect
-            print("⚠️ Token expired, reconnecting...")
-            auth_result = authenticate()
-            if auth_result.get("ok"):
-                return get_margin(symbol, price, quantity, exchange, product_type)
+        if result and result.get("status") and result.get("data"):
+            margin = result["data"].get("totalMarginRequired", 0)
+            if margin > 0:
+                MARGIN_CACHE[cache_key] = (margin, time.time())
+            return margin
+
+        # Token expired — re-auth and retry once
+        print("⚠️ Margin call failed, re-authenticating...")
+        auth_result = authenticate()
+        if auth_result.get("ok"):
+            result = _SMART_API.getMarginApi(payload)
+            if result and result.get("status") and result.get("data"):
+                margin = result["data"].get("totalMarginRequired", 0)
+                if margin > 0:
+                    MARGIN_CACHE[cache_key] = (margin, time.time())
+                return margin
 
         return 0
     except Exception as e:
