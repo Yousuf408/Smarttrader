@@ -32,6 +32,16 @@ from broker.quantity_calculator import (
 )
 from broker.dhan_orders import place_dhan_order
 from bigplayers.strategy import BigPlayersStrategy
+from broker.angel_margin_calculator import (
+    set_credentials as set_angel_credentials,
+    authenticate as angel_authenticate,
+    is_connected as angel_is_connected,
+    disconnect as angel_disconnect,
+    get_access_token as angel_get_access_token,
+    get_feed_token as angel_get_feed_token,
+    _CREDS as _angel_creds,
+    ANGEL_PROXIES,
+)
 
 # =================================================================
 # No login flow, no Supabase, no JWT — the auth surface has been
@@ -1216,81 +1226,108 @@ app.mount("/js", StaticFiles(directory=PROJECT_ROOT / "js"), name="frontend-js")
 @app.post("/api/broker/connect")
 def broker_connect(payload: dict):
     broker = (payload.get("broker") or "").strip().lower()
-    if broker != "dhan":
-        raise HTTPException(
-            status_code=400,
-            detail=f"Broker {broker!r} not supported in this build. Pick Dhan.",
-        )
 
-    client_id   = (payload.get("client_id")   or "").strip()
-    totp_secret = (payload.get("totp_secret") or "").strip()
-    pin         = (payload.get("pin")         or "").strip()
+    # ======================== DHAN ========================
+    if broker == "dhan":
+        client_id   = (payload.get("client_id")   or "").strip()
+        totp_secret = (payload.get("totp_secret") or "").strip()
+        pin         = (payload.get("pin")         or "").strip()
 
-    if not client_id or not totp_secret:
-        raise HTTPException(
-            status_code=400,
-            detail="client_id and totp_secret are required.",
-        )
+        if not client_id or not totp_secret:
+            raise HTTPException(
+                status_code=400,
+                detail="client_id and totp_secret are required.",
+            )
 
-    try:
-        totp_code = pyotp.TOTP(totp_secret).now()
-    except Exception as e:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid TOTP secret (pyotp rejected it): {e}",
-        )
-
-    set_dhan_credentials(client_id, pin, totp_secret, broker_name="dhan")
-
-    try:
-        # Dhan's /app/generateAccessToken takes the auth params as
-        # QUERY STRING on the POST, not as a JSON or form body.
-        # The official DhanHQ-py library does it this way:
-        #   POST 'https://auth.dhan.co/app/generateAccessToken
-        #          ?dhanClientId=...&pin=...&totp=...'
-        # Sending them as a body or with the wrong field name
-        # (e.g. userId instead of dhanClientId) gets a 400 from
-        # Dhan with no clear message — exactly what we hit when
-        # this endpoint was first wired up. The proxy must route
-        # this through the static-IP whitelist (Dhan requires
-        # whitelisted IPs for /generateAccessToken too).
-        r = requests.post(
-            "https://auth.dhan.co/app/generateAccessToken",
-            params={
-                "dhanClientId": client_id,
-                "pin":          pin,
-                "totp":         totp_code,
-            },
-            proxies=DHAN_PROXIES,
-            timeout=10,
-        )
-    except Exception as e:
-        return {"ok": False, "connected": False, "broker": "dhan",
-                "detail": f"network error: {e}"}
-
-    if r.status_code == 200 and r.text:
         try:
-            data = r.json()
-        except Exception:
-            data = {}
-        token = (data.get("accessToken") or data.get("access_token")
-                 or "").strip()
-        if token:
-            set_dhan_access_token(token)
-            return {"ok": True, "connected": True, "broker": "dhan"}
+            totp_code = pyotp.TOTP(totp_secret).now()
+        except Exception as e:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid TOTP secret (pyotp rejected it): {e}",
+            )
 
-    return {
-        "ok": False,
-        "connected": False,
-        "broker": "dhan",
-        "status_code": r.status_code,
-        "detail": (r.text or "")[:200],
-    }
+        set_dhan_credentials(client_id, pin, totp_secret, broker_name="dhan")
+
+        try:
+            r = requests.post(
+                "https://auth.dhan.co/app/generateAccessToken",
+                params={
+                    "dhanClientId": client_id,
+                    "pin":          pin,
+                    "totp":         totp_code,
+                },
+                proxies=DHAN_PROXIES,
+                timeout=10,
+            )
+        except Exception as e:
+            return {"ok": False, "connected": False, "broker": "dhan",
+                    "detail": f"network error: {e}"}
+
+        if r.status_code == 200 and r.text:
+            try:
+                data = r.json()
+            except Exception:
+                data = {}
+            token = (data.get("accessToken") or data.get("access_token")
+                     or "").strip()
+            if token:
+                set_dhan_access_token(token)
+                return {"ok": True, "connected": True, "broker": "dhan"}
+
+        return {
+            "ok": False,
+            "connected": False,
+            "broker": "dhan",
+            "status_code": r.status_code,
+            "detail": (r.text or "")[:200],
+        }
+
+    # ====================== ANGEL ONE ======================
+    if broker == "angel":
+        api_key    = (payload.get("api_key")    or "").strip()
+        client_id  = (payload.get("client_id")  or "").strip()
+        password   = (payload.get("password")   or "").strip()
+        totp_secret = (payload.get("totp_secret") or "").strip()
+
+        if not api_key or not client_id or not password:
+            raise HTTPException(
+                status_code=400,
+                detail="api_key, client_id, and password are required for Angel One.",
+            )
+
+        set_angel_credentials(api_key, client_id, password, totp_secret or None)
+        auth_result = angel_authenticate()
+
+        if auth_result.get("ok"):
+            return {
+                "ok": True,
+                "connected": True,
+                "broker": "angel",
+                "client_id_masked": (
+                    client_id[:2] + "***" + client_id[-2:]
+                    if len(client_id) > 4 else "****"
+                ),
+            }
+
+        return {
+            "ok": False,
+            "connected": False,
+            "broker": "angel",
+            "detail": auth_result.get("error", "Angel One authentication failed"),
+        }
+
+    # ===================== UNSUPPORTED =====================
+    raise HTTPException(
+        status_code=400,
+        detail=f"Broker {broker!r} not supported in this build. Pick Dhan or angel.",
+    )
 
 
 @app.post("/api/broker/disconnect")
 def broker_disconnect():
     clear_dhan_credentials()
+    angel_disconnect()
     return {"ok": True, "connected": False}
 
 
@@ -1304,32 +1341,36 @@ def broker_refresh_token():
 
 @app.get("/api/broker/status")
 def broker_status():
-    cid = _broker_cred("client_id")
-    tok = _broker_cred("access_token")
-    issued_at = _broker_cred("token_issued_at")
-    last_renewed_at = _broker_cred("token_last_renewed_at")
-    expires_at = (
-        float(issued_at) + DHAN_TOKEN_TTL_SECONDS if issued_at else None
-    )
-    seconds_until_expiry = (
-        max(0, int(expires_at - time.time()))
-        if expires_at else None
-    )
-    return {
-        "connected": bool(tok) and bool(cid),
-        "broker": _broker_cred("broker_name") or None,
-        "client_id_masked":
-            ("*" * (len(cid) - 4) + cid[-4:])
-            if cid and len(cid) > 4 else None,
-        "connected_at": _broker_cred("connected_at"),
-        "token_issued_at": issued_at,
-        "token_last_renewed_at": last_renewed_at,
-        "expires_at": expires_at,
-        "seconds_until_expiry": seconds_until_expiry,
-        "auto_renew_in_seconds":
-            max(0, int((expires_at - DHAN_AUTO_RENEW_LEAD_SECONDS) - time.time()))
-            if expires_at else None,
-    }
+    # Dhan status
+    dhan_cid = _broker_cred("client_id")
+    dhan_tok = _broker_cred("access_token")
+    dhan_connected = bool(dhan_tok) and bool(dhan_cid)
+
+    # Angel One status
+    angel_connected = angel_is_connected()
+    angel_cid = _angel_creds.get("client_id", "") if angel_connected else ""
+
+    # Return the active broker first; if both are connected,
+    # Dhan takes priority (legacy contract).
+    if dhan_connected:
+        cid = dhan_cid
+        return {
+            "connected": True,
+            "broker": "dhan",
+            "client_id_masked":
+                ("*" * (len(cid) - 4) + cid[-4:])
+                if cid and len(cid) > 4 else None,
+        }
+    if angel_connected:
+        cid = angel_cid
+        return {
+            "connected": True,
+            "broker": "angel",
+            "client_id_masked":
+                (cid[:2] + "***" + cid[-2:])
+                if cid and len(cid) > 4 else "****",
+        }
+    return {"connected": False}
 
 
 # =================================================================

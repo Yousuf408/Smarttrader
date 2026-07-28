@@ -5,10 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>TradeAlgo Pro · Premium</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-        <!-- STYLESHEETS -->
+    <!-- STYLESHEETS -->
     <link rel="stylesheet" href="style.css" />
-
-        
 </head>
 <body>
 
@@ -31,7 +29,8 @@
             <div class="avatar">JD</div>
         </div>
     </nav>
-        <!-- ================================================================ -->
+
+    <!-- ================================================================ -->
     <!-- MAIN CONTENT -->
     <!-- ================================================================ -->
     <div class="container">
@@ -106,37 +105,37 @@
                             <option value="bigplayers">🏢 Big Players</option>
                         </select>
                         <!-- ===== BUDGET (Indian-formatted text input, no ± steppers) ===== -->
-                                <div class="budget-control">
-                                    <label for="budgetInput" class="field-label">Budget:</label>
-                                    <span class="prefix-rupee">₹</span>
-                                    <input type="text" id="budgetInput" inputmode="numeric" autocomplete="off" value="1,00,000" />
-                                </div>
-                                <!-- ===== PARTS STEPPER (compact, ~50% input width) ===== -->
-                                <div class="stepper stepper-narrow">
-                                    <label for="partsInput" class="field-label">Parts:</label>
-                                    <button type="button" onclick="stepParts(-1)" aria-label="Decrease parts">−</button>
-                                    <input type="number" id="partsInput" value="4" min="1" max="20" step="1" />
-                                    <button type="button" onclick="stepParts(1)" aria-label="Increase parts">+</button>
-                                </div>
-                                <button class="btn btn-primary" onclick="refreshScreener()">🔄 Refresh</button>
-                                <!-- ===== AMO MODE (global switch — Market vs After-Market Order) ===== -->
-                                <div class="amo-inline">
-                                    <span class="amo-label">Order Mode</span>
-                                    <label class="toggle-switch">
-                                        <input type="checkbox" id="amoToggle" onchange="toggleAmoMode()" />
-                                        <span class="toggle-slider"></span>
-                                    </label>
-                                    <span class="amo-status" id="amoStatus">MKT</span>
-                                </div>
-                                <!-- ===== AUTO BUY (inline, same row) ===== -->
-                                <div class="auto-buy-inline">
-                                    <span class="auto-buy-label">Auto Buy</span>
-                                    <label class="toggle-switch">
-                                        <input type="checkbox" id="autoBuyToggle" onchange="toggleAutoBuyMode()" />
-                                        <span class="toggle-slider"></span>
-                                    </label>
-                                    <span class="toggle-status" id="toggleStatus">OFF</span>
-                                </div>
+                        <div class="budget-control">
+                            <label for="budgetInput" class="field-label">Budget:</label>
+                            <span class="prefix-rupee">₹</span>
+                            <input type="text" id="budgetInput" inputmode="numeric" autocomplete="off" value="1,00,000" />
+                        </div>
+                        <!-- ===== PARTS STEPPER (compact, ~50% input width) ===== -->
+                        <div class="stepper stepper-narrow">
+                            <label for="partsInput" class="field-label">Parts:</label>
+                            <button type="button" onclick="stepParts(-1)" aria-label="Decrease parts">−</button>
+                            <input type="number" id="partsInput" value="4" min="1" max="20" step="1" />
+                            <button type="button" onclick="stepParts(1)" aria-label="Increase parts">+</button>
+                        </div>
+                        <button class="btn btn-primary" onclick="refreshScreener()">🔄 Refresh</button>
+                        <!-- ===== AMO MODE (global switch — Market vs After-Market Order) ===== -->
+                        <div class="amo-inline">
+                            <span class="amo-label">Order Mode</span>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="amoToggle" onchange="toggleAmoMode()" />
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <span class="amo-status" id="amoStatus">MKT</span>
+                        </div>
+                        <!-- ===== AUTO BUY (inline, same row) ===== -->
+                        <div class="auto-buy-inline">
+                            <span class="auto-buy-label">Auto Buy</span>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="autoBuyToggle" onchange="toggleAutoBuyMode()" />
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <span class="toggle-status" id="toggleStatus">OFF</span>
+                        </div>
                     </div>
                 </div>
                 <div class="table-wrap">
@@ -234,11 +233,14 @@
                         <select id="brokerSelect" onchange="onBrokerSelectChange()">
                             <option value="">— Choose —</option>
                             <option value="dhan">Dhan</option>
+                            <option value="angel">Angel One</option>
                             <option value="zerodha">Zerodha</option>
                             <option value="fyers">Fyers</option>
                             <option value="upstox">Upstox</option>
                         </select>
                     </div>
+
+                    <!-- DHAN FIELDS -->
                     <div id="dhanFields" class="broker-fields" style="display:block;">
                         <div class="field-group field-full" style="display:flex; gap:8px; align-items:center;">
                             <button type="button" class="btn btn-primary" onclick="openBrokerModal()">🔐 Connect Dhan</button>
@@ -249,6 +251,19 @@
                             Enter your Dhan client ID + TOTP secret. Access token is minted live and held in-memory only — no broker creds are written to disk or pushed to GitHub.
                         </p>
                     </div>
+
+                    <!-- ANGEL ONE FIELDS -->
+                    <div id="angelFields" class="broker-fields" style="display:none;">
+                        <div class="field-group field-full" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                            <button type="button" class="btn btn-primary" onclick="openBrokerModal()">🔐 Connect Angel One</button>
+                            <button type="button" class="btn btn-outline" onclick="disconnectBroker()">Disconnect</button>
+                            <span id="brokerStatusBadgeAngel" class="badge" style="margin-left:auto;">⚪ Not connected</span>
+                        </div>
+                        <p class="broker-help-text" style="margin:8px 0 0 0; font-size:12px; opacity:0.7;">
+                            Enter your Angel One API Key, Client ID, and Password. TOTP secret is optional if not required for your account.
+                        </p>
+                    </div>
+
                     <div id="otherBrokerFields"><p>🔑 Enter credentials for your selected broker.</p></div>
                 </div>
             </div>
@@ -302,31 +317,54 @@
     </div>
 
     <!-- ================================================================ -->
-    <!-- BROKER MODAL — Connect / Dhan popup for runtime creds -->
+    <!-- BROKER MODAL — Connect / Dhan & Angel One popup for runtime creds -->
     <!-- ================================================================ -->
     <div id="brokerModalOverlay" class="modal-overlay" onclick="if(event.target===this) closeBrokerModal()">
         <div class="modal" onclick="event.stopPropagation()">
             <h2 id="brokerModalTitle">🔐 Connect to <span id="brokerModalName">Dhan</span></h2>
-            <div class="form-group">
-                <label>Client ID</label>
-                <input type="text" id="brokerClientId" placeholder="e.g. 1102302753" autocomplete="off" />
+
+            <!-- DHAN FIELDS IN MODAL -->
+            <div id="modalDhanFields">
+                <div class="form-group">
+                    <label>Client ID</label>
+                    <input type="text" id="brokerClientId" placeholder="e.g. 1102302753" autocomplete="off" />
+                </div>
+                <div class="form-group">
+                    <label>TOTP Secret</label>
+                    <input type="text" id="brokerTotpSecret" placeholder="Base-32 string from Dhan TOTP setup" autocomplete="off" />
+                </div>
+                <div class="form-group">
+                    <label>PIN <span style="opacity:0.5; font-weight:normal;">(optional but recommended for daily reset)</span></label>
+                    <input type="password" id="brokerPin" placeholder="Your trading PIN" autocomplete="off" />
+                </div>
             </div>
-            <div class="form-group">
-                <label>TOTP Secret</label>
-                <input type="text" id="brokerTotpSecret" placeholder="Base-32 string from Dhan TOTP setup" autocomplete="off" />
+
+            <!-- ANGEL ONE FIELDS IN MODAL -->
+            <div id="modalAngelFields" style="display:none;">
+                <div class="form-group">
+                    <label>API Key</label>
+                    <input type="text" id="brokerApiKey" placeholder="Enter Angel One API Key" autocomplete="off" />
+                </div>
+                <div class="form-group">
+                    <label>Client ID</label>
+                    <input type="text" id="brokerAngelClientId" placeholder="Enter Angel One Client ID" autocomplete="off" />
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="brokerPassword" placeholder="Enter Angel One Password" autocomplete="off" />
+                </div>
+                <div class="form-group">
+                    <label>TOTP Secret <span style="opacity:0.5; font-weight:normal;">(optional)</span></label>
+                    <input type="text" id="brokerAngelTotp" placeholder="Enter TOTP Secret if required" autocomplete="off" />
+                </div>
             </div>
-            <div class="form-group">
-                <label>PIN <span style="opacity:0.5; font-weight:normal;">(optional but recommended for daily reset)</span></label>
-                <input type="password" id="brokerPin" placeholder="Your trading PIN" autocomplete="off" />
-            </div>
+
             <div class="modal-actions">
                 <button class="btn btn-outline" onclick="closeBrokerModal()">Cancel</button>
                 <button class="btn btn-primary" id="brokerConnectBtn" onclick="submitBrokerCreds()">🔑 Connect</button>
             </div>
         </div>
     </div>
-
-    <!-- (Auth gate removed — no /login, no Supabase session check.) -->
 
     <!-- ================================================================ -->
     <!-- JAVASCRIPT - LOAD IN ORDER -->
@@ -347,23 +385,23 @@
         console.log('🚀 TradeAlgo Pro · Strategies: Advance ORB (full columns), SmartMoney, Big Players (reduced)');
     </script>
 
-<!-- ================================================================
-     CONFIRM ORDER MODAL — used by manual Place Order + Auto Buy
-     ================================================================ -->
-<div id="confirmModalOverlay" class="confirm-modal-overlay">
-    <div class="confirm-modal">
-        <h3 id="confirmModalTitle">⚡ Confirm Buy</h3>
-        <div class="confirm-modal-body">
-            <div class="cm-row cm-symbol" id="confirmModalLine1">—</div>
-            <div class="cm-row cm-math"   id="confirmModalLine2">—</div>
-            <div class="cm-row cm-mode"   id="confirmModalLine3">—</div>
-        </div>
-        <div class="confirm-modal-actions">
-            <button type="button" class="btn btn-secondary" onclick="_closeConfirmModal()">Cancel</button>
-            <button type="button" class="btn btn-primary"   id="confirmModalConfirmBtn">Confirm</button>
+    <!-- ================================================================ -->
+    <!-- CONFIRM ORDER MODAL — used by manual Place Order + Auto Buy -->
+    <!-- ================================================================ -->
+    <div id="confirmModalOverlay" class="confirm-modal-overlay">
+        <div class="confirm-modal">
+            <h3 id="confirmModalTitle">⚡ Confirm Buy</h3>
+            <div class="confirm-modal-body">
+                <div class="cm-row cm-symbol" id="confirmModalLine1">—</div>
+                <div class="cm-row cm-math"   id="confirmModalLine2">—</div>
+                <div class="cm-row cm-mode"   id="confirmModalLine3">—</div>
+            </div>
+            <div class="confirm-modal-actions">
+                <button type="button" class="btn btn-secondary" onclick="_closeConfirmModal()">Cancel</button>
+                <button type="button" class="btn btn-primary"   id="confirmModalConfirmBtn">Confirm</button>
+            </div>
         </div>
     </div>
-</div>
 
 </body>
 </html>
