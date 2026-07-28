@@ -215,12 +215,7 @@ def has_small_opening_candle(symbol: str) -> bool:
     if opening_candles.empty:
         return False
 
-    # Use the latest trading day's 09:15 candle only. Looking for the
-    # latest row with hour=9/minute=15 across a multi-day download can
-    # accidentally select a stale/partial candle when Yahoo's timestamps
-    # are delayed around the market open.
-    latest_day = opening_candles.index[-1].date()
-    candle = opening_candles[opening_candles.index.date == latest_day].iloc[-1]
+    candle = opening_candles.iloc[-1]
     high = pd.to_numeric(candle["High"], errors="coerce")
     low = pd.to_numeric(candle["Low"], errors="coerce")
     if pd.isna(high) or pd.isna(low) or low <= 0:
@@ -338,8 +333,7 @@ def batch_opening_candle(symbols: list[str]) -> dict:
             ]
             if opening.empty:
                 return (False, None, None, None, None, None)
-            latest_day = opening.index[-1].date()
-            candle = opening[opening.index.date == latest_day].iloc[-1]
+            candle = opening.iloc[-1]
             high = pd.to_numeric(candle["High"], errors="coerce")
             low = pd.to_numeric(candle["Low"], errors="coerce")
             open915 = pd.to_numeric(candle["Open"], errors="coerce")
