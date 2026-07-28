@@ -762,14 +762,26 @@ def health():
 def refresh_advance_orb(tickers: str = ""):
     """Lightweight refresh of price/volume/change for a fixed list of tickers.
 
-    Skips the Yahoo candle check so it stays around ~0.5–1.5 s even for
-    ~150 symbols. Returns refreshed values per symbol; symbols TradingView
-    cannot resolve are simply omitted from the response.
+    Re-checks the opening-candle eligibility as well as live
+    price/volume/change. The first 5-minute candle may still be forming when
+    the initial screener request runs, so a row that initially passes can
+    later exceed the 1.5% range. Such rows must be removed before auto-buy
+    evaluates the refreshed dataset.
     """
     try:
         symbols = [s.strip().upper() for s in tickers.split(",") if s.strip()]
         if not symbols:
             return {"refreshed": []}
+
+        # Keep the live refresh subject to the same <=1.5% opening-candle
+        # rule as the full screener request. Return only symbols whose 9:15
+        # candle is still valid; the frontend removes the others from its
+        # in-memory snapshot.
+        opening_candle_map = batch_opening_candle(symbols)
+        valid_symbols = {
+            symbol for symbol, candle in opening_candle_map.items()
+            if isinstance(candle, tuple) and candle and candle[0]
+        }
 
         tv_query = (Query()
             .select('name', 'close', 'change', 'volume', 'relative_volume')
@@ -795,7 +807,7 @@ def refresh_advance_orb(tickers: str = ""):
             if len(values) < 5:
                 continue
             name = values[0]
-            if not name:
+            if not name or name not in valid_symbols:
                 continue
             close = pd.to_numeric(values[1], errors='coerce')
             change = pd.to_numeric(values[2], errors='coerce')

@@ -798,6 +798,14 @@ async function fetchAdvanceORBRefresh(silent = true) {
         for (const r of (result.refreshed || [])) {
             bySymbol[r.Symbol] = r;
         }
+        // The refresh endpoint re-checks the first 5-minute candle. If a
+        // candle has moved above the 1.5% maximum since the full scan, its
+        // symbol is intentionally absent from `refreshed`; remove it from
+        // the local dataset before rendering or auto-buy evaluates it.
+        const validSymbols = new Set(Object.keys(bySymbol));
+        lastAdvanceOrbData.data = lastAdvanceOrbData.data.filter(
+            row => validSymbols.has(row.Symbol)
+        );
         let touched = 0;
         for (const row of lastAdvanceOrbData.data) {
             const updated = bySymbol[row.Symbol];
