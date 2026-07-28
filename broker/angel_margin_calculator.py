@@ -126,7 +126,19 @@ def authenticate():
         )
 
         if response.status_code == 200:
-            data = response.json()
+            try:
+                data = response.json()
+            except json.JSONDecodeError:
+                body_preview = (response.text or "")[:200]
+                print(f"❌ Angel One returned 200 with empty/non-JSON body: {body_preview}")
+                return {
+                    "ok": False,
+                    "error": (
+                        "Angel One auth returned empty response. "
+                        "Check your credentials or proxy connectivity."
+                    ),
+                }
+
             if data.get("status") and data.get("data"):
                 access_token = data["data"].get("access_token")
                 refresh_token = data["data"].get("refresh_token")
