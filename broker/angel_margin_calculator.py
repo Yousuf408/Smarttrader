@@ -116,14 +116,35 @@ def authenticate():
             except Exception as e:
                 print(f"⚠️ TOTP error: {e}")
 
-        # Use proxy for authentication (IP whitelisting)
-        response = requests.post(
-            ANGEL_LOGIN_URL, 
-            json=payload, 
-            headers=headers, 
-            proxies=ANGEL_PROXIES,  # ← Proxy for IP whitelisting
-            timeout=15
-        )
+        # Try direct first, fall back to proxy if direct fails.
+        # The proxy is primarily for Dhan IP whitelisting; Angel One
+        # may or may not need it depending on whether the server IP
+        # is whitelisted with Angel One's support team.
+        try:
+            response = requests.post(
+                ANGEL_LOGIN_URL,
+                json=payload,
+                headers=headers,
+                timeout=15,
+            )
+            if "Request Rejected" in response.text:
+                # WAF block — retry through the proxy (if it helps)
+                response = requests.post(
+                    ANGEL_LOGIN_URL,
+                    json=payload,
+                    headers=headers,
+                    proxies=ANGEL_PROXIES,
+                    timeout=15,
+                )
+        except requests.ConnectionError:
+            # Direct connection failed — try through proxy
+            response = requests.post(
+                ANGEL_LOGIN_URL,
+                json=payload,
+                headers=headers,
+                proxies=ANGEL_PROXIES,
+                timeout=15,
+            )
 
         if response.status_code == 200:
             try:
@@ -131,11 +152,20 @@ def authenticate():
             except json.JSONDecodeError:
                 body_preview = (response.text or "")[:200]
                 print(f"❌ Angel One returned 200 with empty/non-JSON body: {body_preview}")
+                if "Request Rejected" in body_preview:
+                    return {
+                        "ok": False,
+                        "error": (
+                            "Angel One WAF blocked the request. This server's IP "
+                            "needs to be whitelisted with Angel One support. "
+                            "Provide them with the proxy IP 151.242.178.149."
+                        ),
+                    }
                 return {
                     "ok": False,
                     "error": (
                         "Angel One auth returned empty response. "
-                        "Check your credentials or proxy connectivity."
+                        "Check your credentials or try again."
                     ),
                 }
 
@@ -292,14 +322,30 @@ def get_margin(symbol, price, quantity=1, exchange="NSE", product_type="INTRADAY
             }]
         }
 
-        # Use proxy for margin calculation (IP whitelisting)
-        response = requests.post(
-            ANGEL_MARGIN_URL, 
-            json=payload, 
-            headers=headers, 
-            proxies=ANGEL_PROXIES,  # ← Proxy for IP whitelisting
-            timeout=10
-        )
+        # Try direct first, fall back to proxy if WAF blocks
+        try:
+            response = requests.post(
+                ANGEL_MARGIN_URL,
+                json=payload,
+                headers=headers,
+                timeout=10,
+            )
+            if "Request Rejected" in (response.text or ""):
+                response = requests.post(
+                    ANGEL_MARGIN_URL,
+                    json=payload,
+                    headers=headers,
+                    proxies=ANGEL_PROXIES,
+                    timeout=10,
+                )
+        except requests.ConnectionError:
+            response = requests.post(
+                ANGEL_MARGIN_URL,
+                json=payload,
+                headers=headers,
+                proxies=ANGEL_PROXIES,
+                timeout=10,
+            )
 
         if response.status_code == 200:
             data = response.json()

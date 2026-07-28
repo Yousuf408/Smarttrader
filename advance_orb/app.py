@@ -39,6 +39,7 @@ from broker.angel_margin_calculator import (
     disconnect as angel_disconnect,
     get_access_token as angel_get_access_token,
     get_feed_token as angel_get_feed_token,
+    calculate_quantities as angel_calculate_quantities,
     _CREDS as _angel_creds,
     ANGEL_PROXIES,
 )
@@ -425,6 +426,59 @@ def root():
         "strategies": ["advanceorb", "bigplayers"]
     }
 
+# ================================================================
+# BROKER-AWARE QUANTITY HELPER
+# ================================================================
+def _calc_qty_for_broker(df, budget, parts):
+    """Add a MaxQty column to *df* using whichever broker is
+    currently connected (Dhan or Angel One).
+
+    Accepts a DataFrame with **either** ``name``+``close`` columns
+    (the screener convention) **or** ``Symbol``+``Price`` columns.
+    Returns the same DataFrame with a ``MaxQty`` column added.
+    """
+    # Normalise column names
+    use_name_close = 'name' in df.columns and 'close' in df.columns
+    use_sym_price  = (
+        any(c.upper() == 'SYMBOL' for c in df.columns)
+        and any(c.upper() == 'PRICE' for c in df.columns)
+    )
+    if not (use_name_close or use_sym_price):
+        df["MaxQty"] = 0
+        return df
+
+    def _map_qty(symbols, prices):
+        """dispatch to the active broker's margin calculator."""
+        dhan_token = _broker_cred("access_token")
+        if dhan_token:
+            temp = pd.DataFrame({"Symbol": symbols, "Price": prices})
+            temp = calculate_max_quantity_column(
+                temp, total_capital=budget, num_parts=parts,
+                access_token=dhan_token,
+            )
+            return dict(zip(temp["Symbol"], temp["MaxQty"]))
+        if angel_is_connected():
+            result = angel_calculate_quantities(
+                symbols, prices, total_capital=budget, num_parts=parts,
+            )
+            return {s: result.get(s, 0) for s in symbols}
+        return {s: 0 for s in symbols}
+
+    if use_name_close:
+        syms = df['name'].astype(str).tolist()
+        prcs = pd.to_numeric(df['close'], errors='coerce').tolist()
+        qty_map = _map_qty(syms, prcs)
+        df['MaxQty'] = df['name'].map(qty_map).fillna(0).astype(int)
+    else:
+        sc = next(c for c in df.columns if c.upper() == 'SYMBOL')
+        pc = next(c for c in df.columns if c.upper() == 'PRICE')
+        syms = df[sc].astype(str).tolist()
+        prcs = pd.to_numeric(df[pc], errors='coerce').tolist()
+        qty_map = _map_qty(syms, prcs)
+        df['MaxQty'] = df[sc].map(qty_map).fillna(0).astype(int)
+    return df
+
+
 @app.get("/api/strategies/advanceorb")
 def get_advance_orb(budget: int = 100000, parts: int = 4):
     """
@@ -557,15 +611,7 @@ def get_advance_orb(budget: int = 100000, parts: int = 4):
         # so quantity_calculator.requests call hits the missing-token
         # code path and the screener surfaces a clear "no broker"
         # error to the UI instead of a silent bare 500.
-        dhan_access_token = _broker_cred("access_token") or None
-        df_qty = df.rename(columns={'name': 'Symbol', 'close': 'Price'})
-        df_qty = calculate_max_quantity_column(
-            df_qty,
-            total_capital=budget,
-            num_parts=parts,
-            access_token=dhan_access_token,
-        )
-        df['MaxQty'] = df_qty['MaxQty'].values
+        _calc_qty_for_broker(df, budget, parts)
 
         result = []
         for _, row in df.iterrows():
@@ -682,14 +728,10 @@ def recompute_advanceorb_qty(payload: dict):
         rows.append({"Symbol": sym, "Price": price})
     if not rows:
         return {"data": []}
-    df_qty = calculate_max_quantity_column(
-        pd.DataFrame(rows),
-        total_capital=budget,
-        num_parts=parts,
-        access_token=_broker_cred("access_token") or None,
-    )
+    df_in = pd.DataFrame(rows)
+    _calc_qty_for_broker(df_in, budget, parts)
     out = []
-    for sym, q in zip(df_qty["Symbol"], df_qty["MaxQty"]):
+    for sym, q in zip(df_in["Symbol"], df_in["MaxQty"]):
         out.append({
             "Symbol": sym,
             "MaxQty": int(q) if pd.notna(q) else 0,
@@ -791,13 +833,7 @@ def get_big_players(budget: int = 100000, parts: int = 4):
         )
 
         # MaxQty
-        dhan_access_token = _broker_cred("access_token") or None
-        df_qty = df.rename(columns={'name': 'Symbol', 'close': 'Price'})
-        df_qty = calculate_max_quantity_column(
-            df_qty, total_capital=budget, num_parts=parts,
-            access_token=dhan_access_token,
-        )
-        df['MaxQty'] = df_qty['MaxQty'].values
+        _calc_qty_for_broker(df, budget, parts)
 
         # Evaluate Big Players strategy per stock
         bp_strategy = BigPlayersStrategy()
@@ -937,14 +973,10 @@ def recompute_bigplayers_qty(payload: dict):
         rows.append({"Symbol": sym, "Price": price})
     if not rows:
         return {"data": []}
-    df_qty = calculate_max_quantity_column(
-        pd.DataFrame(rows),
-        total_capital=budget,
-        num_parts=parts,
-        access_token=_broker_cred("access_token") or None,
-    )
+    df_in = pd.DataFrame(rows)
+    _calc_qty_for_broker(df_in, budget, parts)
     out = []
-    for sym, q in zip(df_qty["Symbol"], df_qty["MaxQty"]):
+    for sym, q in zip(df_in["Symbol"], df_in["MaxQty"]):
         out.append({
             "Symbol": sym,
             "MaxQty": int(q) if pd.notna(q) else 0,
