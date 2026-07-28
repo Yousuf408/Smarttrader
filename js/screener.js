@@ -299,6 +299,15 @@ function renderStrategyData(result) {
                 if (col === '200 EMA') {
                     const ema = parseFloat(row.ema);
                     value = Number.isFinite(ema) ? ema : '';
+                } else if (col === '1st High') {
+                    const high = parseFloat(row.high915);
+                    value = Number.isFinite(high) ? high.toFixed(2) : '';
+                } else if (col === '1st Low') {
+                    const low = parseFloat(row.low915);
+                    value = Number.isFinite(low) ? low.toFixed(2) : '';
+                } else if (col === '1st Range%') {
+                    const range = parseFloat(row.candle_range_pct);
+                    value = Number.isFinite(range) ? `${range.toFixed(2)}%` : '';
                 } else if (col === '9:15 HIGH') {
                     const h = parseFloat(row.high915);
                     value = Number.isFinite(h) ? h : '';
