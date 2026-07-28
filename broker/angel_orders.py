@@ -14,15 +14,51 @@ import json
 from .angel_margin_calculator import (
     get_access_token,
     _CREDS,
-    get_token,
+    resolve_symbol_token,
     is_connected,
-    ANGEL_PROXIES  # Import proxy configuration
+    ANGEL_PROXIES,  # Import proxy configuration
+    _SMART_API,     # SmartConnect SDK instance for proper auth headers
 )
+
+# ==============================================================================
+# HEADERS HELPER
+# ==============================================================================
+
+def _make_sdk_headers(api_key, access_token):
+    """Build the same headers the SmartConnect SDK sends to the Angel One API.
+
+    The API at apiconnect.angelone.in expects X-PrivateKey (not X-API-Key),
+    plus X-UserType, X-SourceID and the X-Client-* headers that only the
+    SDK populates.  Also writes through the static-IP proxy.
+    """
+    hdrs = {
+        "X-PrivateKey": api_key,
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json",
+        "X-UserType": "USER",
+        "X-SourceID": "WEB",
+    }
+    # Copy SDK client-identification headers if the SDK instance is available.
+    # The API checks for the exact casing "X-MACaddress" (lowercase 'a').
+    if _SMART_API is not None:
+        try:
+            hdrs["X-ClientLocalIP"] = _SMART_API.clientLocalIP
+            hdrs["X-ClientPublicIP"] = _SMART_API.clientPublicIP
+            hdrs["X-MACaddress"] = _SMART_API.clientMacAddress
+        except AttributeError:
+            hdrs["X-MACaddress"] = "46:e8:da:66:2a:fa"
+    else:
+        hdrs["X-MACaddress"] = "46:e8:da:66:2a:fa"
+    return hdrs
+
 
 # ==============================================================================
 # ANGEL ONE API CONSTANTS
 # ==============================================================================
-ANGEL_BASE_URL = "https://apiconnect.angelbroking.com"
+# Use the same SDK root domain so the token (issued by apiconnect.angelone.in)
+# is valid. The old apiconnect.angelbroking.com domain gets WAF-blocked for
+# raw requests and uses a different auth endpoint.
+ANGEL_BASE_URL = "https://apiconnect.angelone.in"
 ANGEL_ORDER_URL = f"{ANGEL_BASE_URL}/rest/secure/angelbroking/order/v1/placeOrder"
 ANGEL_ORDER_STATUS_URL = f"{ANGEL_BASE_URL}/rest/secure/angelbroking/order/v1/getOrderBook"
 ANGEL_ORDER_CANCEL_URL = f"{ANGEL_BASE_URL}/rest/secure/angelbroking/order/v1/cancelOrder"
@@ -79,9 +115,12 @@ def place_angel_order(
             "symbol": symbol_upper
         }
 
-    # Step 2: Resolve symbol → token (uses cached scrip master)
+    # Step 2: Resolve symbol → (tradingsymbol, token) using Angel One's scrip
+    # master.  The returned symbol is the *exact* name from the master
+    # (e.g. "RELIANCE-EQ" not "RELIANCE") so Angel One's API doesn't
+    # reject the mismatch.
     try:
-        token = get_token(symbol_upper, exchange)
+        trading_symbol, token = resolve_symbol_token(symbol_upper, exchange)
     except Exception as exc:
         return {
             "success": False,
@@ -89,7 +128,7 @@ def place_angel_order(
             "symbol": symbol_upper,
         }
 
-    if not token:
+    if not token or not trading_symbol:
         return {
             "success": False,
             "error": f"Symbol '{symbol_upper}' not found in Angel One scrip master",
@@ -131,50 +170,63 @@ def place_angel_order(
 
     angel_order_type = order_type_map.get(order_type, "MARKET")
 
-    # Step 7: Compose order payload for Angel One
+    # Step 7: Compose order payload for Angel One (camelCase field names
+    # — the same convention as the margin API).
     payload = {
-        "symbol": symbol_upper,
-        "token": str(token),
+        "tradingsymbol": trading_symbol,
+        "symboltoken": str(token),
         "exchange": exchange,
-        "transaction_type": transaction_type,  # BUY or SELL
-        "product_type": product,               # INTRADAY, CNC, MARGIN
-        "order_type": angel_order_type,        # MARKET, LIMIT, STOP_LOSS
+        "transactiontype": transaction_type,  # BUY / SELL
+        "producttype": product,               # INTRADAY / CNC / MARGIN
+        "ordertype": angel_order_type,        # MARKET / LIMIT / STOP_LOSS
         "quantity": int(quantity),
-        "price": float(price),
-        "trigger_price": float(trigger_price),
-        "validity": validity,                   # DAY or IOC
-        "amo": "YES" if after_market_order else "NO",
+        "duration": "DAY",
     }
 
-    # Remove fields with 0 values to avoid API errors
-    if payload["price"] == 0:
-        del payload["price"]
-    if payload["trigger_price"] == 0:
-        del payload["trigger_price"]
+    if price > 0:
+        payload["price"] = float(price)
+    if trigger_price > 0:
+        payload["triggerprice"] = float(trigger_price)
 
-    headers = {
-        "X-API-Key": api_key,
-        "Authorization": f"Bearer {access_token}",
-        "Content-Type": "application/json"
-    }
+    # AMO: Angel One expects the variety field to indicate AMO
+    # Angel One requires the 'variety' field for all orders:
+    #   NORMAL  — regular intraday / delivery order
+    #   AMO     — after-market order
+    #   STOPLOSS — stop-loss order
+    payload["variety"] = "AMO" if after_market_order else "NORMAL"
 
-    # Step 8: Submit order through proxy (IP whitelisting required)
+    # Step 8: Submit order — prefer the SmartConnect SDK (which sends the
+    # correct headers and routes through the proxy automatically), falling
+    # back to raw requests if the SDK instance isn't available.
     try:
         print(f"📤 Placing Angel One order for {symbol_upper}")
         print(f"   Payload: {json.dumps(payload, indent=2)}")
-        print(f"   Using proxy: {ANGEL_PROXIES.get('http', 'No proxy')}")
 
+        if _SMART_API is not None:
+            # Use SDK — it handles headers, proxies and auth token
+            sdk_result = _SMART_API.placeOrder(payload)
+            if sdk_result is not None:
+                return {
+                    "success": True,
+                    "order_id": str(sdk_result),
+                    "symbol": symbol_upper,
+                }
+            else:
+                # SDK placeOrder returned None — the order failed but was
+                # already logged by the SDK.  Fall through to raw retry.
+                print("⚠️ SDK placeOrder returned None, trying raw request…")
+
+        # Raw-request fallback
+        headers = _make_sdk_headers(api_key, access_token)
         response = requests.post(
             ANGEL_ORDER_URL,
             json=payload,
             headers=headers,
-            proxies=ANGEL_PROXIES,  # ← IMPORTANT: Proxy for IP whitelisting
-            timeout=10
+            proxies=ANGEL_PROXIES,
+            timeout=10,
         )
 
         print(f"📥 Response status: {response.status_code}")
-
-        # Step 9: Handle response
         if response.status_code not in (200, 201, 202):
             return {
                 "success": False,
@@ -192,32 +244,29 @@ def place_angel_order(
                 "symbol": symbol_upper,
             }
 
-        # Step 10: Check for success
         if data.get("status") and data.get("data"):
             order_data = data["data"]
             order_id = order_data.get("orderid") or order_data.get("orderId")
-
             if order_id:
                 return {
-                    "success": True, 
-                    "order_id": str(order_id), 
+                    "success": True,
+                    "order_id": str(order_id),
                     "symbol": symbol_upper,
-                    "data": order_data
+                    "data": order_data,
                 }
-            else:
-                return {
-                    "success": False,
-                    "error": f"Angel One returned no orderId: {data}",
-                    "symbol": symbol_upper,
-                }
-        else:
-            error_msg = data.get("message", "Order placement failed")
             return {
                 "success": False,
-                "error": error_msg,
+                "error": f"Angel One returned no orderId: {data}",
                 "symbol": symbol_upper,
-                "data": data
             }
+
+        error_msg = data.get("message", "Order placement failed")
+        return {
+            "success": False,
+            "error": error_msg,
+            "symbol": symbol_upper,
+            "data": data,
+        }
 
     except requests.exceptions.Timeout:
         return {
@@ -264,11 +313,7 @@ def get_order_status():
             "error": "API Key or Access Token not set"
         }
 
-    headers = {
-        "X-API-Key": api_key,
-        "Authorization": f"Bearer {access_token}",
-        "Content-Type": "application/json"
-    }
+    headers = _make_sdk_headers(api_key, access_token)
 
     try:
         response = requests.get(
@@ -341,11 +386,7 @@ def cancel_angel_order(order_id):
         "orderid": str(order_id)
     }
 
-    headers = {
-        "X-API-Key": api_key,
-        "Authorization": f"Bearer {access_token}",
-        "Content-Type": "application/json"
-    }
+    headers = _make_sdk_headers(api_key, access_token)
 
     try:
         response = requests.post(

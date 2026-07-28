@@ -247,48 +247,55 @@ def load_master():
         print(f"❌ Error loading master: {e}")
         return None
 
-def get_token(symbol, exchange="NSE"):
-    """Get security token for symbol."""
+def resolve_symbol_token(symbol, exchange="NSE"):
+    """Look up the Angel One trading symbol and token for a symbol/exchange.
+
+    Returns (symbol, token) or (None, None) if not found.  The returned
+    symbol is the *exact* name from the scrip master — important because
+    the Angel One order API rejects a mismatch between tradingsymbol and
+    symboltoken (e.g. ``RELIANCE-EQ`` token ``2885`` ≠ ``RELIANCE``).
+    """
     cache_key = f"{exchange}:{symbol.upper()}"
-    if cache_key in SECURITY_CACHE:
-        return SECURITY_CACHE[cache_key]
+    cached = SECURITY_CACHE.get(cache_key)
+    if cached and isinstance(cached, tuple):
+        return cached
 
     df = load_master()
     if df is None:
-        return None
+        return None, None
 
-    # Find columns
     symbol_col = next((c for c in df.columns if 'symbol' in c.lower()), None)
-    token_col = next((c for c in df.columns if 'token' in c.lower()), None)
-    exch_col  = next((c for c in df.columns if 'exch' in c.lower()), None)
+    token_col  = next((c for c in df.columns if 'token'  in c.lower()), None)
+    exch_col   = next((c for c in df.columns if 'exch'   in c.lower()), None)
 
     if not symbol_col or not token_col:
         print("❌ Required columns not found in master")
-        return None
+        return None, None
 
-    # Try exact symbol match first, then symbol-EQ (Angel One's internal
+    # Try exact match first, then symbol-EQ (Angel One's internal
     # equity format — e.g. RELIANCE-EQ with token 2885).
     candidates = [symbol.upper(), f"{symbol.upper()}-EQ"]
-    found = None
-
     for sym in candidates:
+        mask = df[symbol_col].astype(str).str.upper() == sym
         if exch_col:
-            filtered = df[(df[exch_col].astype(str).str.upper() == exchange.upper()) &
-                         (df[symbol_col].astype(str).str.upper() == sym)]
-        else:
-            filtered = df[df[symbol_col].astype(str).str.upper() == sym]
+            mask &= df[exch_col].astype(str).str.upper() == exchange.upper()
+        matched = df[mask]
+        if not matched.empty:
+            row = matched.iloc[0]
+            found_sym = str(row[symbol_col])
+            found_token = str(row[token_col])
+            SECURITY_CACHE[cache_key] = (found_sym, found_token)
+            print(f"✅ Resolved {symbol} ({exchange}) -> symbol={found_sym}, token={found_token}")
+            return found_sym, found_token
 
-        if not filtered.empty:
-            found = str(filtered[token_col].values[0])
-            break
+    print(f"⚠️ Symbol {symbol} not found in master")
+    return None, None
 
-    if found is None:
-        print(f"⚠️ Symbol {symbol} not found in master")
-        return None
 
-    SECURITY_CACHE[cache_key] = found
-    print(f"✅ Token for {symbol}: {found}")
-    return found
+def get_token(symbol, exchange="NSE"):
+    """Get security token for symbol (kept for backward compatibility)."""
+    sym, token = resolve_symbol_token(symbol, exchange)
+    return token
 
 # ================================================================
 # MARGIN CALCULATION

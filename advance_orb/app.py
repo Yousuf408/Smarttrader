@@ -31,6 +31,8 @@ from broker.quantity_calculator import (
     DHAN_AUTO_RENEW_LEAD_SECONDS,
 )
 from broker.dhan_orders import place_dhan_order
+from broker.angel_orders import place_angel_order
+from broker.quantity_calculator import DHAN_ACCESS_TOKEN as dhan_token
 from bigplayers.strategy import BigPlayersStrategy
 from broker.angel_margin_calculator import (
     set_credentials as set_angel_credentials,
@@ -985,6 +987,34 @@ def recompute_bigplayers_qty(payload: dict):
 
 
 # ================================================================
+# ORDER ROUTING
+# ================================================================
+
+def _order_broker():
+    """Return the order-placement function for the currently-connected broker.
+
+    Returns:
+        (callable, str) — (order_fn, broker_name) where order_fn has the
+        same signature as place_dhan_order / place_angel_order.
+    Raises:
+        HTTPException(400) if no broker is connected.
+    """
+    if angel_is_connected():
+        # Angel One's place_angel_order doesn't accept amo_time (it has
+        # after_market_order as a bool).  Strip that keyword before calling.
+        def _angel_order(**kw):
+            kw.pop("amo_time", None)
+            return place_angel_order(**kw)
+        return _angel_order, "angel"
+    if dhan_token:
+        return place_dhan_order, "dhan"
+    raise HTTPException(
+        status_code=400,
+        detail="No broker connected. Connect to Angel One or configure Dhan first.",
+    )
+
+
+# ================================================================
 # ORDER ENDPOINTS
 # ================================================================
 
@@ -1019,7 +1049,8 @@ def place_order_endpoint(payload: dict):
     if amo_time not in ("OPEN", "OPEN_30", "OPEN_60"):
         raise HTTPException(status_code=400, detail="amoTime must be OPEN, OPEN_30 or OPEN_60")
 
-    result = place_dhan_order(
+    order_fn, broker = _order_broker()
+    result = order_fn(
         symbol=symbol,
         quantity=quantity,
         transaction_type=transaction_type,
@@ -1027,7 +1058,7 @@ def place_order_endpoint(payload: dict):
         after_market_order=after_market_order,
         amo_time=amo_time,
     )
-    # Mirror place_dhan_order.success to HTTP status — caller can read .error on 4xx/5xx.
+    # Mirror broker order-fn's .success to HTTP status — caller can read .error on 4xx/5xx.
     if isinstance(result, dict) and not result.get("success") and result.get("symbol") == symbol:
         # Common rejection paths (Symbol not found, Invalid quantity, HTTP non-200) — keep 200 and let client decide.
         # Only blow up to 502 if uvicorn couldn't reach Dhan at all.
@@ -1075,8 +1106,10 @@ def place_order_batch_endpoint(payload: dict):
             "amo_time": str(o.get("amoTime") or "OPEN").upper(),
         })
 
+    order_fn, broker = _order_broker()
+
     def submit_one(order):
-        return place_dhan_order(
+        return order_fn(
             symbol=order["symbol"],
             quantity=order["quantity"],
             transaction_type=order["transaction_type"],
