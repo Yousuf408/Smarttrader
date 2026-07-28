@@ -361,9 +361,10 @@ async function onStrategyChange() {
     document.getElementById('infoRule').textContent = strategy.entryRule;
     document.getElementById('infoRisk').textContent = strategy.risk;
 
-    // Check if this is Advance ORB (needs API call)
+    // ============================================================
+    // CASE 1: ADVANCE ORB (API call)
+    // ============================================================
     if (strategyId === 'advanceorb') {
-        // Show loading state
         const tbody = document.getElementById('screenerBody');
         const thead = document.querySelector('#screenerHead tr');
         const columns = [...strategy.columns];
@@ -372,12 +373,13 @@ async function onStrategyChange() {
         tbody.innerHTML = `<tr><td colspan="${columns.length}" style="text-align:center;padding:40px;">🔎 Filtering best-performing stocks…</td></tr>`;
         document.getElementById('screenerCount').textContent = 'Loading...';
 
-        // Fetch from backend
         const result = await fetchAdvanceORB();
         if (result) {
             lastAdvanceOrbData = result;
             renderStrategyData(result);
             startAdvanceOrbAutoRefresh();
+            // Stop Big Players refresh if running
+            if (typeof stopBigPlayersAutoRefresh === 'function') stopBigPlayersAutoRefresh();
         } else {
             tbody.innerHTML = `<tr><td colspan="${columns.length}" style="text-align:center;padding:40px;color:var(--color-danger);">❌ Failed to load data. Please try again.</td></tr>`;
             document.getElementById('screenerCount').textContent = '0 stocks';
@@ -385,7 +387,36 @@ async function onStrategyChange() {
         return;
     }
 
-    // For other strategies (SmartMoney, Big Players) - use hardcoded data
+    // ============================================================
+    // CASE 2: BIG PLAYERS (API call)
+    // ============================================================
+    if (strategyId === 'bigplayers') {
+        const tbody = document.getElementById('screenerBody');
+        const thead = document.querySelector('#screenerHead tr');
+        const columns = [...strategy.columns];
+        columns.push('Action');
+        thead.innerHTML = columns.map(col => `<th>${col}</th>`).join('');
+        tbody.innerHTML = `<tr><td colspan="${columns.length}" style="text-align:center;padding:40px;">🏢 Fetching Big Players data…</td></tr>`;
+        document.getElementById('screenerCount').textContent = 'Loading...';
+
+        // Call Big Players API
+        const result = await window.fetchBigPlayers();
+        if (result) {
+            window.lastBigPlayersData = result;
+            window.renderBigPlayersData(result);
+            window.startBigPlayersAutoRefresh();
+            // Stop Advance ORB refresh if running
+            if (typeof stopAdvanceOrbAutoRefresh === 'function') stopAdvanceOrbAutoRefresh();
+        } else {
+            tbody.innerHTML = `<tr><td colspan="${columns.length}" style="text-align:center;padding:40px;color:var(--color-danger);">❌ Failed to load Big Players data</td></tr>`;
+            document.getElementById('screenerCount').textContent = '0 stocks';
+        }
+        return;
+    }
+
+    // ============================================================
+    // CASE 3: SMARTMONEY (Hardcoded data)
+    // ============================================================
     // Update table headers
     const thead = document.querySelector('#screenerHead tr');
     const columns = [...strategy.columns];
@@ -399,7 +430,7 @@ async function onStrategyChange() {
     } else {
         tbody.innerHTML = strategy.data.map(row => {
             let displayRow = { ...row };
-            
+
             // For SmartMoney, combine columns for better display
             if (strategyId === 'smartmoney') {
                 displayRow.priceChange = `${row.price}<br><span style="color:${row.change.includes('+') ? 'var(--color-success)' : 'var(--color-danger)'}">${row.change}</span>`;
@@ -411,7 +442,7 @@ async function onStrategyChange() {
             const values = [];
             columns.forEach(col => {
                 if (col === 'Action') return;
-                
+
                 let value = '';
                 if (col === 'Symbol') value = displayRow.symbol || '';
                 else if (col === 'Max Qty') value = displayRow.maxQty || '';
@@ -436,7 +467,7 @@ async function onStrategyChange() {
                 else if (col === 'Sector') value = displayRow.sector || '';
                 else if (col === 'Support Price') value = displayRow.supportPrice || '';
                 else value = displayRow[col.toLowerCase()] || '';
-                
+
                 values.push(value);
             });
 

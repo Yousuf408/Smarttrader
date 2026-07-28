@@ -52,14 +52,7 @@ const STRATEGIES = {
         entryRule: 'Support & Resistance',
         risk: '1.8%',
         columns: ['Symbol', 'Price', 'CHG%', 'Breakout', 'Support Price', 'MaxQty'],
-        data: [
-            { symbol: 'RELIANCE', price: '2856.40', change: '+2.1%', breakout: 'Active', supportPrice: '2,800.00', maxQty: '100' },
-            { symbol: 'TCS', price: '3920.00', change: '+0.8%', breakout: 'Waiting', supportPrice: '3,850.00', maxQty: '50' },
-            { symbol: 'INFY', price: '1545.00', change: '+3.4%', breakout: 'Active', supportPrice: '1,500.00', maxQty: '75' },
-            { symbol: 'HDFC', price: '1680.00', change: '-1.2%', breakout: 'Waiting', supportPrice: '1,650.00', maxQty: '60' },
-            { symbol: 'SBIN', price: '785.00', change: '+1.8%', breakout: 'Active', supportPrice: '760.00', maxQty: '120' },
-            { symbol: 'BHARTI', price: '1234.00', change: '+0.3%', breakout: 'Waiting', supportPrice: '1,200.00', maxQty: '40' }
-        ]
+        
     }
 };
 

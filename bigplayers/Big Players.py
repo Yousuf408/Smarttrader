@@ -31,7 +31,11 @@ from broker.quantity_calculator import (
     DHAN_AUTO_RENEW_LEAD_SECONDS,
 )
 from broker.dhan_orders import place_dhan_order
-from bigplayers.strategy import BigPlayersStrategy
+
+# ================================================================
+# BIG PLAYERS STRATEGY IMPORT
+# ================================================================
+from bigplayers.strategy import BigPlayersStrategy, calculate_breakout_status, calculate_support_price
 
 # =================================================================
 # No login flow, no Supabase, no JWT — the auth surface has been
@@ -107,8 +111,8 @@ async def lifespan(_app):
 
 
 app = FastAPI(
-    title="TradeAlgo Pro - Advance ORB",
-    description="Fetches NSE stocks with price 200-3000, gap < 2%, market cap > 41B",
+    title="TradeAlgo Pro - Advance ORB + Big Players",
+    description="Fetches NSE stocks with Advance ORB and Big Players strategies",
     version="1.0.0",
     lifespan=lifespan,
 )
@@ -415,6 +419,10 @@ def root():
         "strategies": ["advanceorb", "bigplayers"]
     }
 
+# ================================================================
+# SECTION 1: ADVANCE ORB STRATEGY (UNCHANGED)
+# ================================================================
+
 @app.get("/api/strategies/advanceorb")
 def get_advance_orb(budget: int = 100000, parts: int = 4):
     """
@@ -687,8 +695,87 @@ def recompute_advanceorb_qty(payload: dict):
     return {"data": out}
 
 
+@app.get("/api/strategies/advanceorb/refresh")
+def refresh_advance_orb(tickers: str = ""):
+    """Lightweight refresh of price/volume/change for a fixed list of tickers.
+
+    Re-checks the opening-candle eligibility as well as live
+    price/volume/change. The first 5-minute candle may still be forming when
+    the initial screener request runs, so a row that initially passes can
+    later exceed the 1.5% range. Such rows must be removed before auto-buy
+    evaluates the refreshed dataset.
+    """
+    try:
+        symbols = [s.strip().upper() for s in tickers.split(",") if s.strip()]
+        if not symbols:
+            return {"refreshed": []}
+
+        # Keep the live refresh subject to the same <=1.5% opening-candle
+        # rule as the full screener request. Return only symbols whose 9:15
+        # candle is still valid; the frontend removes the others from its
+        # in-memory snapshot.
+        opening_candle_map = batch_opening_candle(symbols)
+        valid_symbols = {
+            symbol for symbol, candle in opening_candle_map.items()
+            if isinstance(candle, tuple) and candle and candle[0]
+        }
+
+        tv_query = (Query()
+            .select('name', 'close', 'change', 'volume', 'relative_volume')
+            .set_markets('india')
+            .where(col('exchange') == 'NSE')
+            .set_tickers(*[f'NSE:{sym}' for sym in symbols])
+        )
+
+        body = dict(tv_query.query)
+        body['range'] = [0, max(50, len(symbols) + 10)]
+        response = requests.post(
+            tv_query.url,
+            json=body,
+            headers=TV_HEADERS,
+            timeout=20,
+        )
+        response.raise_for_status()
+        payload = response.json()
+
+        refreshed: list[dict] = []
+        for symbol_row in (payload.get('data') or []):
+            values = symbol_row.get('d') or []
+            if len(values) < 5:
+                continue
+            name = values[0]
+            if not name or name not in valid_symbols:
+                continue
+            close = pd.to_numeric(values[1], errors='coerce')
+            change = pd.to_numeric(values[2], errors='coerce')
+            vol = pd.to_numeric(values[3], errors='coerce')
+            relvol = pd.to_numeric(values[4], errors='coerce')
+
+            if pd.notna(vol) and vol >= 1_000_000:
+                volume_str = f"{vol/1_000_000:.1f}M"
+            elif pd.notna(vol) and vol >= 1_000:
+                volume_str = f"{vol/1_000:.1f}K"
+            elif pd.notna(vol):
+                volume_str = str(int(vol))
+            else:
+                volume_str = "0"
+            relvol_str = f"{relvol:.2f}x" if pd.notna(relvol) else "0x"
+
+            refreshed.append({
+                "Symbol": name,
+                "Price": round(float(close), 2) if pd.notna(close) else None,
+                "CHG%": round(float(change), 2) if pd.notna(change) else None,
+                "Volume": volume_str,
+                "RELVOL": relvol_str,
+            })
+
+        return {"refreshed": refreshed}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ================================================================
-# BIG PLAYERS STRATEGY ENDPOINTS
+# SECTION 2: BIG PLAYERS STRATEGY (NEW)
 # ================================================================
 
 @app.get("/api/strategies/bigplayers")
@@ -704,7 +791,8 @@ def get_big_players(budget: int = 100000, parts: int = 4):
         raise HTTPException(status_code=400, detail="parts must be between 1 and 20")
 
     try:
-        # Same TV columns as Advance ORB
+        # ─── Step 1: Get same stocks as Advance ORB ───
+        # Reuse the existing ORB endpoint logic to get the base data
         tv_columns = [
             'name', 'close', 'change', 'gap', 'volume',
             'relative_volume', 'market_cap_basic', 'sector',
@@ -747,10 +835,10 @@ def get_big_players(budget: int = 100000, parts: int = 4):
                 "count": 0,
                 "data": [],
                 "columns": BIG_PLAYERS_COLUMNS,
-                "message": "No stocks found"
+                "message": "No stocks found matching the conditions"
             }
 
-        # Gap filter
+        # ─── Step 2: Apply Gap Filter (< 2%) ───
         df['gap'] = pd.to_numeric(df['gap'], errors='coerce')
         df = df[df['gap'].notna() & (abs(df['gap']) < GAP_THRESHOLD)]
 
@@ -764,15 +852,19 @@ def get_big_players(budget: int = 100000, parts: int = 4):
                 "message": f"No stocks with gap < {GAP_THRESHOLD}%"
             }
 
-        # Get candle + EMA data
+        # ─── Step 3: Get ORB data for calculations ───
         candidate_symbols = df['name'].dropna().astype(str).tolist()
         opening_candle_map = batch_opening_candle(candidate_symbols)
         small_candle_symbols = {
             s for s, t in opening_candle_map.items()
             if isinstance(t, tuple) and t and t[0]
         }
+
+        # Calculate EMA for support price
         ema_map = compute_200_ema_batch(candidate_symbols)
         df['ema'] = df['name'].map(ema_map)
+
+        # Add high915/low915 for breakout calculation
         df['high915'] = df['name'].map(
             lambda s: opening_candle_map.get(s, (False, None, None))[1]
         )
@@ -780,22 +872,30 @@ def get_big_players(budget: int = 100000, parts: int = 4):
             lambda s: opening_candle_map.get(s, (False, None, None, None))[3]
         )
 
-        # MaxQty
+        # ─── Step 4: Calculate MaxQty ───
         dhan_access_token = _broker_cred("access_token") or None
         df_qty = df.rename(columns={'name': 'Symbol', 'close': 'Price'})
         df_qty = calculate_max_quantity_column(
-            df_qty, total_capital=budget, num_parts=parts,
+            df_qty,
+            total_capital=budget,
+            num_parts=parts,
             access_token=dhan_access_token,
         )
         df['MaxQty'] = df_qty['MaxQty'].values
 
-        # Evaluate Big Players strategy per stock
+        # ─── Step 5: Initialize Big Players Strategy ───
         bp_strategy = BigPlayersStrategy()
+
+        # ─── Step 6: Transform for Big Players format ───
         result = []
         for _, row in df.iterrows():
             symbol = row['name']
+
+            # Only include small candle stocks
             if symbol not in small_candle_symbols:
                 continue
+
+            # Prepare row for breakout calculation
             row_dict = {
                 'Symbol': symbol,
                 'Price': row['close'],
@@ -804,8 +904,11 @@ def get_big_players(budget: int = 100000, parts: int = 4):
                 'low915': row.get('low915'),
                 'ema': row.get('ema'),
             }
+
+            # Calculate Breakout status and Support Price
             breakout_status = bp_strategy.calculate_breakout_status(row_dict)
             support_price = bp_strategy.calculate_support_price(row_dict)
+
             result.append({
                 "Symbol": symbol,
                 "Price": round(row['close'], 2),
@@ -829,32 +932,46 @@ def get_big_players(budget: int = 100000, parts: int = 4):
                 "small_candle": f"9:15 IST range <= {SMALL_CANDLE_THRESHOLD}%",
             }
         }
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/strategies/bigplayers/refresh")
 def refresh_big_players(tickers: str = ""):
-    """Lightweight refresh for Big Players strategy."""
+    """
+    Lightweight refresh for Big Players strategy.
+    Re-checks price, change, breakout status, and support price.
+    """
     try:
         symbols = [s.strip().upper() for s in tickers.split(",") if s.strip()]
         if not symbols:
             return {"refreshed": []}
 
+        # Get fresh price data from TradingView
         tv_query = (Query()
             .select('name', 'close', 'change', 'volume', 'relative_volume')
             .set_markets('india')
             .where(col('exchange') == 'NSE')
             .set_tickers(*[f'NSE:{sym}' for sym in symbols])
         )
+
         body = dict(tv_query.query)
         body['range'] = [0, max(50, len(symbols) + 10)]
-        response = requests.post(tv_query.url, json=body, headers=TV_HEADERS, timeout=20)
+        response = requests.post(
+            tv_query.url,
+            json=body,
+            headers=TV_HEADERS,
+            timeout=20,
+        )
         response.raise_for_status()
         payload = response.json()
 
+        # Get opening candle data for breakout calculation
         opening_candle_map = batch_opening_candle(symbols)
         ema_map = compute_200_ema_batch(symbols)
+
+        # Initialize Big Players strategy
         bp_strategy = BigPlayersStrategy()
 
         refreshed: list[dict] = []
@@ -865,13 +982,16 @@ def refresh_big_players(tickers: str = ""):
             name = values[0]
             if not name:
                 continue
+
             close = pd.to_numeric(values[1], errors='coerce')
             change = pd.to_numeric(values[2], errors='coerce')
+
             if pd.isna(close) or pd.isna(change):
                 continue
 
-            high915 = opening_candle_map.get(name, (False, None, None))[1]
-            low915 = opening_candle_map.get(name, (False, None, None, None))[3]
+            # Prepare row for breakout calculation
+            high915 = opening_candle_map.get(name, (False, None))[1]
+            low915 = opening_candle_map.get(name, (False, None, None))[3]
             ema = ema_map.get(name)
 
             row_dict = {
@@ -882,6 +1002,7 @@ def refresh_big_players(tickers: str = ""):
                 'low915': low915,
                 'ema': ema,
             }
+
             breakout_status = bp_strategy.calculate_breakout_status(row_dict)
             support_price = bp_strategy.calculate_support_price(row_dict)
 
@@ -894,22 +1015,28 @@ def refresh_big_players(tickers: str = ""):
             })
 
         return {"refreshed": refreshed}
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/api/strategies/bigplayers/qty")
+@app.get("/api/strategies/bigplayers/qty")
 def recompute_bigplayers_qty(payload: dict):
-    """Lightweight MaxQty recompute for Big Players strategy."""
+    """
+    Lightweight MaxQty recompute for Big Players strategy.
+    Same as Advance ORB qty endpoint.
+    """
     budget = payload.get("budget")
     parts = payload.get("parts")
     symbols = payload.get("symbols") or []
+
     if not isinstance(budget, int) or budget <= 0:
         raise HTTPException(status_code=400, detail="budget must be a positive integer")
     if not isinstance(parts, int) or parts <= 0:
         raise HTTPException(status_code=400, detail="parts must be a positive integer")
     if not isinstance(symbols, list) or not symbols:
         return {"data": []}
+
     rows = []
     for entry in symbols:
         if not isinstance(entry, dict):
@@ -925,8 +1052,10 @@ def recompute_bigplayers_qty(payload: dict):
         if price <= 0:
             continue
         rows.append({"Symbol": sym, "Price": price})
+
     if not rows:
         return {"data": []}
+
     df_qty = calculate_max_quantity_column(
         pd.DataFrame(rows),
         total_capital=budget,
@@ -943,7 +1072,7 @@ def recompute_bigplayers_qty(payload: dict):
 
 
 # ================================================================
-# ORDER ENDPOINTS
+# SECTION 3: ORDER ENDPOINTS (UNCHANGED)
 # ================================================================
 
 @app.post("/api/orders/place")
@@ -1064,88 +1193,13 @@ def place_order_batch_endpoint(payload: dict):
     }
 
 
+# ================================================================
+# SECTION 4: HEALTH & STATIC FILES (UNCHANGED)
+# ================================================================
+
 @app.get("/api/health")
 def health():
     return {"status": "healthy"}
-
-
-@app.get("/api/strategies/advanceorb/refresh")
-def refresh_advance_orb(tickers: str = ""):
-    """Lightweight refresh of price/volume/change for a fixed list of tickers.
-
-    Re-checks the opening-candle eligibility as well as live
-    price/volume/change. The first 5-minute candle may still be forming when
-    the initial screener request runs, so a row that initially passes can
-    later exceed the 1.5% range. Such rows must be removed before auto-buy
-    evaluates the refreshed dataset.
-    """
-    try:
-        symbols = [s.strip().upper() for s in tickers.split(",") if s.strip()]
-        if not symbols:
-            return {"refreshed": []}
-
-        # Keep the live refresh subject to the same <=1.5% opening-candle
-        # rule as the full screener request. Return only symbols whose 9:15
-        # candle is still valid; the frontend removes the others from its
-        # in-memory snapshot.
-        opening_candle_map = batch_opening_candle(symbols)
-        valid_symbols = {
-            symbol for symbol, candle in opening_candle_map.items()
-            if isinstance(candle, tuple) and candle and candle[0]
-        }
-
-        tv_query = (Query()
-            .select('name', 'close', 'change', 'volume', 'relative_volume')
-            .set_markets('india')
-            .where(col('exchange') == 'NSE')
-            .set_tickers(*[f'NSE:{sym}' for sym in symbols])
-        )
-
-        body = dict(tv_query.query)
-        body['range'] = [0, max(50, len(symbols) + 10)]
-        response = requests.post(
-            tv_query.url,
-            json=body,
-            headers=TV_HEADERS,
-            timeout=20,
-        )
-        response.raise_for_status()
-        payload = response.json()
-
-        refreshed: list[dict] = []
-        for symbol_row in (payload.get('data') or []):
-            values = symbol_row.get('d') or []
-            if len(values) < 5:
-                continue
-            name = values[0]
-            if not name or name not in valid_symbols:
-                continue
-            close = pd.to_numeric(values[1], errors='coerce')
-            change = pd.to_numeric(values[2], errors='coerce')
-            vol = pd.to_numeric(values[3], errors='coerce')
-            relvol = pd.to_numeric(values[4], errors='coerce')
-
-            if pd.notna(vol) and vol >= 1_000_000:
-                volume_str = f"{vol/1_000_000:.1f}M"
-            elif pd.notna(vol) and vol >= 1_000:
-                volume_str = f"{vol/1_000:.1f}K"
-            elif pd.notna(vol):
-                volume_str = str(int(vol))
-            else:
-                volume_str = "0"
-            relvol_str = f"{relvol:.2f}x" if pd.notna(relvol) else "0x"
-
-            refreshed.append({
-                "Symbol": name,
-                "Price": round(float(close), 2) if pd.notna(close) else None,
-                "CHG%": round(float(change), 2) if pd.notna(change) else None,
-                "Volume": volume_str,
-                "RELVOL": relvol_str,
-            })
-
-        return {"refreshed": refreshed}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 # Serve only the frontend assets from the same origin as the API. Do not expose
@@ -1166,52 +1220,9 @@ def stylesheet():
 app.mount("/js", StaticFiles(directory=PROJECT_ROOT / "js"), name="frontend-js")
 
 
-# =================================================================
-# AUTH (Supabase) — public config + JWT verification for the app shell
-# =================================================================
-# - /login             — serves the standalone /login page.
-# - /api/auth/config   — anon key + URL. Safe to expose (anon key is
-#                        meant to be public; Supabase RLS guards data).
-# - /api/me            — verifies the Supabase bearer token by doing a
-#                        GET on `${SUPABASE_URL}/auth/v1/user` with the
-#                        service-role key as apikey. 503 if server-side
-#                        role key is missing; 401 if the user JWT is
-#                        bad/expired. Future endpoints (e.g. /api/me/
-#                        settings) will piggyback on this lookup.
-# (Auth surface stripped — no /login, no /api/auth/*, no /api/me/profile.)
-
-
-# =================================================================
-# BROKER CONNECTION (Dhan) — user-supplied creds via popup
-# =================================================================
-# The screener Settings tab has a "Select Broker" dropdown. Picking
-# Dhan opens a popup (brokerModalOverlay in index.html) where the
-# user enters `client_id` and `totp_secret`. submitBrokerCreds()
-# POSTs them here. We then:
-#   1. validate input
-#   2. mint a TOTP code via `pyotp.TOTP(totp_secret).now()`
-#   3. POST to https://auth.dhan.co/app/generateAccessToken with
-#      userId/pin/totp to mint today's access_token
-#   4. Stash everything in broker.quantity_calculator._DHAN_CREDS
-#      via set_dhan_credentials + set_dhan_access_token
-#
-# From that moment, every refresh that hits /v2/margincalculator
-# (heavy screener refresh + lightweight budget stepper) and
-# /v2/orders (place_dhan_order from /api/orders/place) reads the
-# active token through DHAN_ACCESS_TOKEN (which now resolves
-# through the `_Cred` proxy in broker/quantity_calculator.py).
-#
-# Why this is a server endpoint, not pure client-side:
-#   - The TOTP secret MUST be sent over the wire — even on a
-#     trusted local connection this is a footgun, so /api/broker/
-#     connect logs nothing that could be recovered from logs.
-#   - Dhan's generateAccessToken rejects browser CORS preflights
-#     even with allow_origins (they only allow server probes).
-#     Going server-side is the only viable path.
-#
-# /api/broker/status is called by js/settings.js on page load to
-# refresh the green/red status badge next to the dropdown.
-# /api/broker/disconnect is wired to the "Disconnect" button.
+# ================================================================
+# SECTION 5: BROKER ENDPOINTS (UNCHANGED)
+# ================================================================
 
 @app.post("/api/broker/connect")
 def broker_connect(payload: dict):
@@ -1245,15 +1256,6 @@ def broker_connect(payload: dict):
     try:
         # Dhan's /app/generateAccessToken takes the auth params as
         # QUERY STRING on the POST, not as a JSON or form body.
-        # The official DhanHQ-py library does it this way:
-        #   POST 'https://auth.dhan.co/app/generateAccessToken
-        #          ?dhanClientId=...&pin=...&totp=...'
-        # Sending them as a body or with the wrong field name
-        # (e.g. userId instead of dhanClientId) gets a 400 from
-        # Dhan with no clear message — exactly what we hit when
-        # this endpoint was first wired up. The proxy must route
-        # this through the static-IP whitelist (Dhan requires
-        # whitelisted IPs for /generateAccessToken too).
         r = requests.post(
             "https://auth.dhan.co/app/generateAccessToken",
             params={
@@ -1296,9 +1298,7 @@ def broker_disconnect():
 
 @app.post("/api/broker/refresh-token")
 def broker_refresh_token():
-    """Manually trigger /RenewToken right now. Mostly used as a
-    'kick the auto-renew loop' button if the daily renewal ever
-    fails — the auto-loop calls the same helper on schedule."""
+    """Manually trigger /RenewToken right now."""
     return _dhan_renew()
 
 
@@ -1332,13 +1332,10 @@ def broker_status():
     }
 
 
-# =================================================================
-# SPA FALLBACK — any GET that doesn't match an explicit route or
-# a static-asset mount, and isn't under /api/ /js/ /style.css,
-# returns index.html. Lets the user paste a deep link like
-# /settings, refresh inside the settings tab, or land on any tab
-# via the in-app router — and get the SPA, not a 404.
-# =================================================================
+# ================================================================
+# SECTION 6: SPA FALLBACK (UNCHANGED)
+# ================================================================
+
 @app.get("/{full_path:path}", include_in_schema=False)
 def spa_fallback(full_path: str):
     # 404 the things that genuinely should 404 (so static typos
