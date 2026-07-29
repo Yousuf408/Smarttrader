@@ -968,7 +968,7 @@ function startLiveTickPoll() {
                 const activePage = document.querySelector('.page.active');
                 const onScreener = activePage && activePage.id === 'page-screener';
                 const strategyId = document.getElementById('strategySelect')?.value;
-                if (onScreener && (strategyId === 'advanceorb' || strategyId === 'bigplayers')) {
+                if (onScreener && strategyId === 'advanceorb') {
                     _applyTicks(data.ticks);
                 }
             }

@@ -171,13 +171,82 @@ async function fetchBigPlayersRefresh(silent = true) {
 // SECTION 7: START/STOP AUTO REFRESH
 // ================================================================
 
+// ── Big Players' own EventSource (no dependency on screener.js) ──
+let _bpEventSource = null;
+
+function _bpApplyTicks(ticks) {
+    const rows = document.querySelectorAll('#screenerBody tr');
+    if (!rows.length) return;
+    const headers = Array.from(document.querySelectorAll('#screenerHead th'));
+    const priceIdx = headers.findIndex(h => h.textContent.trim() === 'Price');
+    const chgIdx   = headers.findIndex(h => h.textContent.trim() === 'CHG%');
+    if (priceIdx < 0) return;
+
+    for (const tr of rows) {
+        const cells = tr.querySelectorAll('td');
+        const symEl = cells[0];
+        if (!symEl) continue;
+        const sym = symEl.textContent.trim();
+        const tick = ticks[sym];
+        if (!tick) continue;
+
+        // Price
+        if (tick.ltp != null && priceIdx < cells.length) {
+            cells[priceIdx].textContent = `₹${Number(tick.ltp).toFixed(2)}`;
+            cells[priceIdx].style.transition = 'background 0.15s';
+            cells[priceIdx].style.background = 'rgba(34,197,94,0.15)';
+            setTimeout(() => { cells[priceIdx].style.background = ''; }, 300);
+        }
+        // CHG%
+        if (tick.change_pct != null && chgIdx >= 0 && chgIdx < cells.length) {
+            const v = Number(tick.change_pct);
+            const sign = v > 0 ? '+' : '';
+            cells[chgIdx].textContent = `${sign}${v.toFixed(2)}%`;
+            cells[chgIdx].style.color = v >= 0 ? 'var(--color-green, #22c55e)' : 'var(--color-red, #ef4444)';
+        }
+        // Also update in-memory data
+        if (lastBigPlayersData && lastBigPlayersData.data) {
+            const row = lastBigPlayersData.data.find(r => (r.Symbol || r.symbol) === sym);
+            if (row) {
+                if (tick.ltp != null) row.Price = Number(tick.ltp);
+                if (tick.change_pct != null) row.CHG = Number(tick.change_pct);
+            }
+        }
+    }
+}
+
+function _startBigPlayersTicks() {
+    _stopBigPlayersTicks();
+    _bpEventSource = new EventSource('/api/market/bigplayers-ticks/stream');
+    _bpEventSource.onmessage = function (ev) {
+        try {
+            const data = JSON.parse(ev.data);
+            if (data.connected && data.ticks) {
+                const activePage = document.querySelector('.page.active');
+                const onScreener = activePage && activePage.id === 'page-screener';
+                if (onScreener) {
+                    _bpApplyTicks(data.ticks);
+                }
+            }
+        } catch (_) {}
+    };
+    _bpEventSource.onerror = function () {};
+}
+
+function _stopBigPlayersTicks() {
+    if (_bpEventSource) {
+        _bpEventSource.close();
+        _bpEventSource = null;
+    }
+}
+
 function startBigPlayersAutoRefresh() {
     stopBigPlayersAutoRefresh();
     bigPlayersAutoTimer = setInterval(() => {
         fetchBigPlayersRefresh(true);
     }, BIG_PLAYERS_REFRESH_MS);
-    // Also kick off live tick polling so Price/CHG% update tick-by-tick
-    if (window.startLiveTickPoll) window.startLiveTickPoll();
+    // Big Players has its own dedicated tick stream
+    _startBigPlayersTicks();
 }
 
 function stopBigPlayersAutoRefresh() {
@@ -185,7 +254,7 @@ function stopBigPlayersAutoRefresh() {
         clearInterval(bigPlayersAutoTimer);
         bigPlayersAutoTimer = null;
     }
-    if (window.stopLiveTickPoll) window.stopLiveTickPoll();
+    _stopBigPlayersTicks();
 }
 
 // ================================================================

@@ -1306,6 +1306,41 @@ async def stream_live_ticks(request: Request):
     )
 
 
+@app.get("/api/market/bigplayers-ticks/stream")
+async def stream_bigplayers_ticks():
+    """Server-Sent Events endpoint for Big Players — dedicated stream
+    so Big Players can consume ticks independently from Advance ORB.
+    """
+    import json as _json
+
+    async def _bp_generate():
+        last_digest = ""
+        while True:
+            try:
+                if not angel_is_connected() or not angel_ws_connected():
+                    payload = _json.dumps({"connected": False, "ticks": {}})
+                else:
+                    payload = _json.dumps({"connected": True, "ticks": _build_ticks_by_symbol()})
+                digest = hashlib.md5(payload.encode()).hexdigest()
+                if digest != last_digest:
+                    last_digest = digest
+                    yield f"data: {payload}\n\n"
+                else:
+                    yield ": heartbeat\n\n"
+            except Exception:
+                yield f"data: {_json.dumps({'connected': False, 'ticks': {}})}\n\n"
+            await asyncio.sleep(0.25)
+
+    return StreamingResponse(
+        _bp_generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-store",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
 # ================================================================
 # Auto-subscribe symbols to WebSocket (called by refresh endpoints)
 # ================================================================
