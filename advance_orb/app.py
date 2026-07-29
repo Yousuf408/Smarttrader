@@ -7,12 +7,13 @@ import re
 import time
 import requests
 import pyotp
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+import hashlib
 from tradingview_screener import Query, col
 from tradingview_screener.query import HEADERS as TV_HEADERS
 import pandas as pd
@@ -481,7 +482,11 @@ def _calc_qty_for_broker(df, budget, parts):
         return df
 
     def _map_qty(symbols, prices):
-        """dispatch to the active broker's margin calculator."""
+        """dispatch to the active broker's margin calculator.
+
+        Prefers Dhan (faster margin API), falls back to Angel One
+        when Dhan returns zero for every symbol (e.g. stale token).
+        """
         dhan_token = _broker_cred("access_token")
         if dhan_token:
             temp = pd.DataFrame({"Symbol": symbols, "Price": prices})
@@ -489,7 +494,17 @@ def _calc_qty_for_broker(df, budget, parts):
                 temp, total_capital=budget, num_parts=parts,
                 access_token=dhan_token,
             )
-            return dict(zip(temp["Symbol"], temp["MaxQty"]))
+            qty_map = dict(zip(temp["Symbol"], temp["MaxQty"]))
+            # If Dhan returned 0 for ALL symbols, fall back to Angel
+            if sum(qty_map.values()) == 0 and angel_is_connected():
+                result = angel_calculate_quantities(
+                    symbols, prices, total_capital=budget, num_parts=parts,
+                )
+                result = {s: result.get(s, 0) for s in symbols}
+                # Only use Angel result if it's better than Dhan's all-zero
+                if sum(result.values()) > 0:
+                    return result
+            return qty_map
         if angel_is_connected():
             result = angel_calculate_quantities(
                 symbols, prices, total_capital=budget, num_parts=parts,
@@ -1221,25 +1236,8 @@ def health():
 # P3 — LIVE MARKET TICKS (from Angel One WebSocket)
 # ================================================================
 
-@app.get("/api/market/live-ticks")
-def get_live_ticks():
-    """Return latest tick data for all subscribed symbols.
-
-    Keyed by symbol name so the frontend can directly merge Price,
-    CHG%, and Volume into its table rows.
-
-    .. note::
-
-       Angel One scrip symbols carry a suffix like ``-EQ`` (equities) or
-       ``-BE`` (BSE) while TradingView / Yahoo Finance use the bare name.
-       This endpoint stores each tick under **both** the full WS symbol
-       (e.g. ``RELIANCE-EQ``) **and** the stripped base symbol
-       (``RELIANCE``) so the frontend can look up by whatever name the
-       table uses.
-    """
-    if not angel_is_connected() or not angel_ws_connected():
-        return {"connected": False, "ticks": {}}
-
+def _build_ticks_by_symbol():
+    """Helper: return dict of {symbol: tick_data} with base-symbol aliases."""
     ticks = angel_ws_ticks()
     by_symbol = {}
     for token, data in ticks.items():
@@ -1255,14 +1253,57 @@ def get_live_ticks():
             "open": data.get("open"),
             "timestamp": data.get("timestamp"),
         }
-        # Store under the full WS symbol
         by_symbol[sym] = entry
-        # Also store under the base symbol (strip -EQ, -BE etc.)
         base = sym.split("-")[0]
         if base != sym:
             by_symbol[base] = entry
+    return by_symbol
 
-    return {"connected": True, "ticks": by_symbol}
+
+@app.get("/api/market/live-ticks")
+def get_live_ticks():
+    """Return latest tick data for all subscribed symbols."""
+    if not angel_is_connected() or not angel_ws_connected():
+        return {"connected": False, "ticks": {}}
+    return {"connected": True, "ticks": _build_ticks_by_symbol()}
+
+
+@app.get("/api/market/live-ticks/stream")
+async def stream_live_ticks(request: Request):
+    """Server-Sent Events endpoint — pushes tick data every ~250 ms.
+
+    The frontend opens a single EventSource connection and receives
+    ``{"connected": true, "ticks": {…}}`` JSON payloads as ``data``
+    lines whenever the tick dict changes, instead of polling every 5 s.
+    """
+    import json as _json
+
+    async def _generate():
+        last_digest = ""
+        while True:
+            try:
+                if not angel_is_connected() or not angel_ws_connected():
+                    payload = _json.dumps({"connected": False, "ticks": {}})
+                else:
+                    payload = _json.dumps({"connected": True, "ticks": _build_ticks_by_symbol()})
+                digest = hashlib.md5(payload.encode()).hexdigest()
+                if digest != last_digest:
+                    last_digest = digest
+                    yield f"data: {payload}\n\n"
+                else:
+                    yield ": heartbeat\n\n"  # SSE comment → keeps connection alive
+            except Exception:
+                yield f"data: {_json.dumps({'connected': False, 'ticks': {}})}\n\n"
+            await asyncio.sleep(0.25)
+
+    return StreamingResponse(
+        _generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-store",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 # ================================================================

@@ -898,91 +898,91 @@ window.stopAdvanceOrbAutoRefresh = stopAdvanceOrbAutoRefresh;
 
 
 // ================================================================
-// P3 — LIVE TICK POLLING (Angel One WebSocket overlay)
+// P3 — LIVE TICK STREAM (Angel One WebSocket overlay via SSE)
 // ================================================================
-// Poll `/api/market/live-ticks` every 5 s and patch Price / CHG% /
-// Volume cells in-place in the existing table rows — no full re-render.
-const LIVE_TICK_MS = 5000;
-let liveTickTimer = null;
+// Opens a single EventSource connection to
+// ``/api/market/live-ticks/stream`` and patches Price / CHG% /
+// Volume cells in-place on every pushed tick (~250 ms interval).
+// No polling — the server pushes changes as they happen.
+let _tickEventSource = null;
 let _lastTickPayload = null;
 
-async function pollLiveTicks() {
-    const activePage = document.querySelector('.page.active');
-    const onScreener = activePage && activePage.id === 'page-screener';
-    const strategyId = document.getElementById('strategySelect')?.value;
-    if (!onScreener || (strategyId !== 'advanceorb' && strategyId !== 'bigplayers')) return;
+function _applyTicks(ticks) {
+    const rows = document.querySelectorAll('#screenerBody tr');
+    if (!rows.length) return;
+    const headers = Array.from(document.querySelectorAll('#screenerHead th'));
+    const priceIdx = headers.findIndex(h => h.textContent.trim() === 'Price');
+    const chgIdx   = headers.findIndex(h => h.textContent.trim() === 'CHG%');
+    const volIdx   = headers.findIndex(h => h.textContent.trim() === 'Volume');
+    if (priceIdx < 0) return;
 
-    try {
-        const res = await fetch('/api/market/live-ticks', { cache: 'no-store' });
-        if (!res.ok) return;
-        const body = await res.json();
-        if (!body.connected || !body.ticks) return;
+    for (const tr of rows) {
+        const cells = tr.querySelectorAll('td');
+        const symEl = cells[0];
+        if (!symEl) continue;
+        const sym = symEl.textContent.trim();
+        const tick = ticks[sym];
+        if (!tick) continue;
 
-        _lastTickPayload = body.ticks;
-        const rows = document.querySelectorAll('#screenerBody tr');
-        if (!rows.length) return;
+        if (tick.ltp != null && priceIdx < cells.length) {
+            cells[priceIdx].textContent = `₹${Number(tick.ltp).toFixed(2)}`;
+            // Flash cell briefly to show update
+            cells[priceIdx].style.transition = 'background 0.15s';
+            cells[priceIdx].style.background = 'rgba(34,197,94,0.15)';
+            setTimeout(() => { cells[priceIdx].style.background = ''; }, 300);
+        }
+        if (tick.change_pct != null && chgIdx >= 0 && chgIdx < cells.length) {
+            const v = Number(tick.change_pct);
+            const sign = v > 0 ? '+' : '';
+            cells[chgIdx].textContent = `${sign}${v.toFixed(2)}%`;
+            cells[chgIdx].style.color = v >= 0 ? 'var(--color-green, #22c55e)' : 'var(--color-red, #ef4444)';
+        }
+        if (tick.volume != null && volIdx >= 0 && volIdx < cells.length) {
+            const vol = Number(tick.volume);
+            let txt;
+            if (vol >= 1_000_000) txt = `${(vol / 1_000_000).toFixed(1)}M`;
+            else if (vol >= 1_000) txt = `${(vol / 1_000).toFixed(1)}K`;
+            else txt = String(vol);
+            cells[volIdx].textContent = txt;
+        }
 
-        // Build a column-index map from the table header
-        const headers = Array.from(document.querySelectorAll('#screenerHead th'));
-        const priceIdx = headers.findIndex(h => h.textContent.trim() === 'Price');
-        const chgIdx   = headers.findIndex(h => h.textContent.trim() === 'CHG%');
-        const volIdx   = headers.findIndex(h => h.textContent.trim() === 'Volume');
-        if (priceIdx < 0) return;
-
-        for (const tr of rows) {
-            const cells = tr.querySelectorAll('td');
-            const symEl = cells[0]; // first column is Symbol
-            if (!symEl) continue;
-            const sym = symEl.textContent.trim();
-            const tick = body.ticks[sym];
-            if (!tick) continue;
-
-            // Update Price cell
-            if (tick.ltp != null && priceIdx < cells.length) {
-                cells[priceIdx].textContent = `₹${Number(tick.ltp).toFixed(2)}`;
-            }
-            // Update CHG% cell
-            if (tick.change_pct != null && chgIdx >= 0 && chgIdx < cells.length) {
-                const v = Number(tick.change_pct);
-                const sign = v > 0 ? '+' : '';
-                cells[chgIdx].textContent = `${sign}${v.toFixed(2)}%`;
-                cells[chgIdx].style.color = v >= 0 ? 'var(--color-green, #22c55e)' : 'var(--color-red, #ef4444)';
-            }
-            // Update Volume cell
-            if (tick.volume != null && volIdx >= 0 && volIdx < cells.length) {
-                const vol = Number(tick.volume);
-                let txt;
-                if (vol >= 1_000_000) txt = `${(vol / 1_000_000).toFixed(1)}M`;
-                else if (vol >= 1_000) txt = `${(vol / 1_000).toFixed(1)}K`;
-                else txt = String(vol);
-                cells[volIdx].textContent = txt;
-            }
-
-            // Also update the in-memory data so auto-buy sees fresh prices
-            if (lastAdvanceOrbData && lastAdvanceOrbData.data) {
-                const row = lastAdvanceOrbData.data.find(r => r.Symbol === sym);
-                if (row) {
-                    if (tick.ltp != null) row.Price = Number(tick.ltp);
-                    if (tick.change_pct != null) row['CHG%'] = Number(tick.change_pct);
-                }
+        if (lastAdvanceOrbData && lastAdvanceOrbData.data) {
+            const row = lastAdvanceOrbData.data.find(r => r.Symbol === sym);
+            if (row) {
+                if (tick.ltp != null) row.Price = Number(tick.ltp);
+                if (tick.change_pct != null) row['CHG%'] = Number(tick.change_pct);
             }
         }
-    } catch (e) {
-        // Silently ignore network blips
     }
 }
 
 function startLiveTickPoll() {
     stopLiveTickPoll();
-    // First poll immediately, then repeat
-    pollLiveTicks();
-    liveTickTimer = setInterval(pollLiveTicks, LIVE_TICK_MS);
+    const url = '/api/market/live-ticks/stream';
+    _tickEventSource = new EventSource(url);
+    _tickEventSource.onmessage = function (ev) {
+        try {
+            const data = JSON.parse(ev.data);
+            if (data.connected && data.ticks) {
+                _lastTickPayload = data.ticks;
+                const activePage = document.querySelector('.page.active');
+                const onScreener = activePage && activePage.id === 'page-screener';
+                const strategyId = document.getElementById('strategySelect')?.value;
+                if (onScreener && (strategyId === 'advanceorb' || strategyId === 'bigplayers')) {
+                    _applyTicks(data.ticks);
+                }
+            }
+        } catch (_) {}
+    };
+    _tickEventSource.onerror = function () {
+        // EventSource auto-reconnects; nothing more to do
+    };
 }
 
 function stopLiveTickPoll() {
-    if (liveTickTimer) {
-        clearInterval(liveTickTimer);
-        liveTickTimer = null;
+    if (_tickEventSource) {
+        _tickEventSource.close();
+        _tickEventSource = null;
     }
 }
 
