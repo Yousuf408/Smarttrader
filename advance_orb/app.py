@@ -869,12 +869,22 @@ def get_big_players(budget: int = 100000, parts: int = 4):
         _calc_qty_for_broker(df, budget, parts)
 
         # Evaluate Big Players strategy per stock
+        # Core rule: the 9:15 opening candle must be RED (close < open).
+        # This is a hard requirement, not optional.
         bp_strategy = BigPlayersStrategy()
         result = []
         for _, row in df.iterrows():
             symbol = row['name']
             if symbol not in small_candle_symbols:
                 continue
+
+            candle = opening_candle_map.get(symbol)
+            close915 = candle[4] if candle and len(candle) >= 5 else None
+            open915 = candle[2] if candle and len(candle) >= 3 else None
+            # Skip if candle isn't red (close >= open) or data is missing
+            if close915 is None or open915 is None or close915 >= open915:
+                continue
+
             row_dict = {
                 'Symbol': symbol,
                 'Price': row['close'],
@@ -906,6 +916,7 @@ def get_big_players(budget: int = 100000, parts: int = 4):
                 "market_cap": f"> {MARKET_CAP_MIN/1e9:.0f}B INR",
                 "exchange": "NSE",
                 "small_candle": f"9:15 IST range <= {SMALL_CANDLE_THRESHOLD}%",
+                "red_candle": "9:15 candle close < open (must be red)",
             }
         }
     except Exception as e:
@@ -971,6 +982,13 @@ def refresh_big_players(tickers: str = ""):
                     change = round(float(ws_chg), 2)
 
             if pd.isna(close) or pd.isna(change):
+                continue
+
+            # Red-candle rule (hard requirement): 9:15 close < open
+            candle = opening_candle_map.get(name)
+            close915 = candle[4] if candle and len(candle) >= 5 else None
+            open915 = candle[2] if candle and len(candle) >= 3 else None
+            if close915 is None or open915 is None or close915 >= open915:
                 continue
 
             high915 = opening_candle_map.get(name, (False, None, None))[1]

@@ -10,9 +10,6 @@ let lastBigPlayersData = null;
 let bigPlayersAutoTimer = null;
 const BIG_PLAYERS_REFRESH_MS = 30000;
 
-// ---- Red filter state ----
-let currentRedFilter = true;   // default: only red candles
-
 // ================================================================
 // SECTION 2: AUTO-BUY CONFIGURATION (Big Players Specific)
 // ================================================================
@@ -27,57 +24,12 @@ const BIG_PLAYERS_AUTO_BUY = {
 };
 
 // ================================================================
-// SECTION 3: DYNAMICALLY ADD RED FILTER CHECKBOX
+// SECTION 3: FETCH BIG PLAYERS DATA
 // ================================================================
 
-function addRedFilterCheckbox() {
-    // Check if already added to avoid duplicates
-    if (document.getElementById('redFilterCheckbox')) return;
-
-    // Find a suitable container – try common IDs
-    let container = document.getElementById('screenerControls') ||
-                    document.getElementById('strategyControls') ||
-                    document.querySelector('#page-screener .controls') ||
-                    document.querySelector('#page-screener') ||
-                    document.body;
-
-    // Create label and checkbox
-    const label = document.createElement('label');
-    label.style.marginLeft = '20px';
-    label.style.fontSize = '14px';
-    label.style.display = 'inline-flex';
-    label.style.alignItems = 'center';
-    label.style.gap = '6px';
-
-    const checkbox = document.createElement('input');
-    checkbox.type = 'checkbox';
-    checkbox.id = 'redFilterCheckbox';
-    checkbox.checked = true;   // default: enabled
-    checkbox.addEventListener('change', toggleRedFilter);
-
-    const text = document.createTextNode(' Only Red First Candle (close < open)');
-
-    label.appendChild(checkbox);
-    label.appendChild(text);
-
-    // Insert before the first child or at the end
-    container.insertBefore(label, container.firstChild);
-}
-
-// ================================================================
-// SECTION 4: FETCH BIG PLAYERS DATA (with red_filter)
-// ================================================================
-
-async function fetchBigPlayers(redFilter) {
-    // Read checkbox if not passed explicitly
-    if (redFilter === undefined) {
-        const checkbox = document.getElementById('redFilterCheckbox');
-        redFilter = checkbox ? checkbox.checked : true;
-    }
-    currentRedFilter = redFilter;
-
+async function fetchBigPlayers() {
     try {
-        const url = `/api/strategies/bigplayers?red_filter=${redFilter}`;
+        const url = '/api/strategies/bigplayers';
         const response = await fetch(url);
         if (!response.ok) throw new Error(`API returned ${response.status}`);
         const result = await response.json();
@@ -166,7 +118,7 @@ function renderBigPlayersData(result) {
 // SECTION 6: BIG PLAYERS REFRESH (with red_filter)
 // ================================================================
 
-async function fetchBigPlayersRefresh(silent = true, redFilter) {
+async function fetchBigPlayersRefresh(silent = true) {
     if (!lastBigPlayersData || !lastBigPlayersData.data || lastBigPlayersData.data.length === 0) {
         return;
     }
@@ -174,14 +126,8 @@ async function fetchBigPlayersRefresh(silent = true, redFilter) {
     const symbols = lastBigPlayersData.data.map(r => r.Symbol || r.symbol).filter(Boolean);
     if (symbols.length === 0) return;
 
-    if (redFilter === undefined) {
-        const checkbox = document.getElementById('redFilterCheckbox');
-        redFilter = checkbox ? checkbox.checked : currentRedFilter;
-    }
-    currentRedFilter = redFilter;
-
     try {
-        const url = `/api/strategies/bigplayers/refresh?tickers=${encodeURIComponent(symbols.join(','))}&red_filter=${redFilter}`;
+        const url = `/api/strategies/bigplayers/refresh?tickers=${encodeURIComponent(symbols.join(','))}`;
         const response = await fetch(url, { cache: 'no-store' });
         if (!response.ok) return;
 
@@ -346,25 +292,7 @@ function calculateBreakoutStatus(row) {
 }
 
 // ================================================================
-// SECTION 10: TOGGLE RED FILTER (called when checkbox changes)
-// ================================================================
-
-function toggleRedFilter() {
-    const checkbox = document.getElementById('redFilterCheckbox');
-    if (!checkbox) return;
-    const redFilter = checkbox.checked;
-    currentRedFilter = redFilter;
-    // Re‑fetch data with the new filter
-    fetchBigPlayers(redFilter).then(result => {
-        if (result) {
-            lastBigPlayersData = result;
-            renderBigPlayersData(result);
-        }
-    });
-}
-
-// ================================================================
-// SECTION 11: EXPOSE GLOBALLY
+// SECTION 10: EXPOSE GLOBALLY
 // ================================================================
 
 window.fetchBigPlayers = fetchBigPlayers;
@@ -374,23 +302,18 @@ window.startBigPlayersAutoRefresh = startBigPlayersAutoRefresh;
 window.stopBigPlayersAutoRefresh = stopBigPlayersAutoRefresh;
 window.autoBuyAllStocksBigPlayers = autoBuyAllStocksBigPlayers;
 window.calculateBreakoutStatus = calculateBreakoutStatus;
-window.toggleRedFilter = toggleRedFilter;
 window.lastBigPlayersData = lastBigPlayersData;
 
 // ================================================================
-// SECTION 12: INIT – Add checkbox and start auto‑refresh
+// SECTION 11: INIT
 // ================================================================
 
-// Add the red‑filter checkbox to the page
-addRedFilterCheckbox();
-
-// Optionally, start auto‑refresh when the script loads
-// (you may want to call this only when the Big Players strategy is selected)
-// startBigPlayersAutoRefresh();
+// (auto‑refresh is started only when the user selects the Big Players
+//  strategy via the strategy select handler)
 
 console.log('🏢 Big Players strategy module loaded!');
 console.log('📌 Features:');
 console.log('  - Fetch Big Players data from backend');
 console.log('  - Auto-refresh every 30 seconds (optional)');
 console.log('  - Auto-buy only Active breakout stocks');
-console.log('  - 🟥 Red‑candle filter toggle (checkbox injected)');
+console.log('  - 🔴 Stocks must have RED 9:15 candle (close < open)');
