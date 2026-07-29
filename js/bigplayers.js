@@ -230,6 +230,8 @@ function startBigPlayersAutoRefresh() {
     bigPlayersAutoTimer = setInterval(() => {
         fetchBigPlayersRefresh(true);
     }, BIG_PLAYERS_REFRESH_MS);
+    // Also kick off live tick polling so Price/CHG% update tick-by-tick
+    if (window.startLiveTickPoll) window.startLiveTickPoll();
 }
 
 function stopBigPlayersAutoRefresh() {
@@ -237,6 +239,7 @@ function stopBigPlayersAutoRefresh() {
         clearInterval(bigPlayersAutoTimer);
         bigPlayersAutoTimer = null;
     }
+    if (window.stopLiveTickPoll) window.stopLiveTickPoll();
 }
 
 // ================================================================

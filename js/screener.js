@@ -910,7 +910,7 @@ async function pollLiveTicks() {
     const activePage = document.querySelector('.page.active');
     const onScreener = activePage && activePage.id === 'page-screener';
     const strategyId = document.getElementById('strategySelect')?.value;
-    if (!onScreener || strategyId !== 'advanceorb') return;
+    if (!onScreener || (strategyId !== 'advanceorb' && strategyId !== 'bigplayers')) return;
 
     try {
         const res = await fetch('/api/market/live-ticks', { cache: 'no-store' });

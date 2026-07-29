@@ -936,6 +936,19 @@ def refresh_big_players(tickers: str = ""):
         ema_map = compute_200_ema_batch(symbols)
         bp_strategy = BigPlayersStrategy()
 
+        # ── P3: Overlay WebSocket tick data when Angel One is connected ──
+        ws_ticks = {}
+        if angel_is_connected() and angel_ws_connected():
+            raw = angel_ws_ticks()
+            for token, d in raw.items():
+                sym = d.get("symbol", "")
+                if sym:
+                    ws_ticks[sym] = d
+                    base = sym.split("-")[0]
+                    if base != sym:
+                        ws_ticks[base] = d
+            ws_auto_subscribe(symbols)
+
         refreshed: list[dict] = []
         for symbol_row in (payload.get('data') or []):
             values = symbol_row.get('d') or []
@@ -946,6 +959,17 @@ def refresh_big_players(tickers: str = ""):
                 continue
             close = pd.to_numeric(values[1], errors='coerce')
             change = pd.to_numeric(values[2], errors='coerce')
+
+            # P3 — Overlay WS tick data (freshest)
+            ws = ws_ticks.get(name)
+            if ws:
+                ws_ltp = ws.get("ltp")
+                if ws_ltp is not None:
+                    close = float(ws_ltp)
+                ws_chg = ws.get("change_pct")
+                if ws_chg is not None:
+                    change = round(float(ws_chg), 2)
+
             if pd.isna(close) or pd.isna(change):
                 continue
 
@@ -1185,6 +1209,15 @@ def get_live_ticks():
 
     Keyed by symbol name so the frontend can directly merge Price,
     CHG%, and Volume into its table rows.
+
+    .. note::
+
+       Angel One scrip symbols carry a suffix like ``-EQ`` (equities) or
+       ``-BE`` (BSE) while TradingView / Yahoo Finance use the bare name.
+       This endpoint stores each tick under **both** the full WS symbol
+       (e.g. ``RELIANCE-EQ``) **and** the stripped base symbol
+       (``RELIANCE``) so the frontend can look up by whatever name the
+       table uses.
     """
     if not angel_is_connected() or not angel_ws_connected():
         return {"connected": False, "ticks": {}}
@@ -1193,16 +1226,24 @@ def get_live_ticks():
     by_symbol = {}
     for token, data in ticks.items():
         sym = data.get("symbol", "") or ""
-        if sym:
-            by_symbol[sym] = {
-                "ltp": data.get("ltp"),
-                "change_pct": data.get("change_pct"),
-                "volume": data.get("volume"),
-                "high": data.get("high"),
-                "low": data.get("low"),
-                "open": data.get("open"),
-                "timestamp": data.get("timestamp"),
-            }
+        if not sym:
+            continue
+        entry = {
+            "ltp": data.get("ltp"),
+            "change_pct": data.get("change_pct"),
+            "volume": data.get("volume"),
+            "high": data.get("high"),
+            "low": data.get("low"),
+            "open": data.get("open"),
+            "timestamp": data.get("timestamp"),
+        }
+        # Store under the full WS symbol
+        by_symbol[sym] = entry
+        # Also store under the base symbol (strip -EQ, -BE etc.)
+        base = sym.split("-")[0]
+        if base != sym:
+            by_symbol[base] = entry
+
     return {"connected": True, "ticks": by_symbol}
 
 
