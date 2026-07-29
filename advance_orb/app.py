@@ -45,6 +45,15 @@ from broker.angel_margin_calculator import (
     _CREDS as _angel_creds,
     ANGEL_PROXIES,
 )
+from broker.angel_ws import (
+    start_websocket as angel_ws_start,
+    stop_websocket as angel_ws_stop,
+    get_latest_ticks as angel_ws_ticks,
+    set_watchlist as angel_ws_watchlist,
+    is_ws_connected as angel_ws_connected,
+    add_to_watchlist as angel_ws_add,
+    get_subscription_status as angel_ws_status,
+)
 
 # =================================================================
 # No login flow, no Supabase, no JWT — the auth surface has been
@@ -231,14 +240,24 @@ def has_small_opening_candle(symbol: str) -> bool:
         local_index = local_index.tz_convert(IST)
     candles = candles.copy()
     candles.index = local_index
+    today = pd.Timestamp.now(tz=IST).date()
 
-    opening_candles = candles[
+    opening_today = candles[
+        (candles.index.date == today) &
         (candles.index.hour == 9) & (candles.index.minute >= 15)
     ]
-    if opening_candles.empty:
-        return False
 
-    candle = opening_candles.iloc[0]
+    if not opening_today.empty:
+        candle = opening_today.iloc[0]
+    else:
+        opening = candles[
+            (candles.index.hour == 9) & (candles.index.minute >= 15)
+        ]
+        if not opening.empty:
+            candle = opening.iloc[-1]
+        else:
+            return (False, None, None, None, None, None)
+
     high = pd.to_numeric(candle["High"], errors="coerce")
     low = pd.to_numeric(candle["Low"], errors="coerce")
     if pd.isna(high) or pd.isna(low) or low <= 0:
@@ -351,12 +370,24 @@ def batch_opening_candle(symbols: list[str]) -> dict:
                 local_index = local_index.tz_convert(IST)
             candles = candles.copy()
             candles.index = local_index
-            opening = candles[
+            today = pd.Timestamp.now(tz=IST).date()
+
+            opening_today = candles[
+                (candles.index.date == today) &
                 (candles.index.hour == 9) & (candles.index.minute >= 15)
             ]
-            if opening.empty:
-                return (False, None, None, None, None, None)
-            candle = opening.iloc[0]
+
+            if not opening_today.empty:
+                candle = opening_today.iloc[0]
+            else:
+                opening = candles[
+                    (candles.index.hour == 9) & (candles.index.minute >= 15)
+                ]
+                if not opening.empty:
+                    candle = opening.iloc[-1]
+                else:
+                    return (False, None, None, None, None, None)
+
             high = pd.to_numeric(candle["High"], errors="coerce")
             low = pd.to_numeric(candle["Low"], errors="coerce")
             open915 = pd.to_numeric(candle["Open"], errors="coerce")
@@ -1144,6 +1175,59 @@ def health():
     return {"status": "healthy"}
 
 
+# ================================================================
+# P3 — LIVE MARKET TICKS (from Angel One WebSocket)
+# ================================================================
+
+@app.get("/api/market/live-ticks")
+def get_live_ticks():
+    """Return latest tick data for all subscribed symbols.
+
+    Keyed by symbol name so the frontend can directly merge Price,
+    CHG%, and Volume into its table rows.
+    """
+    if not angel_is_connected() or not angel_ws_connected():
+        return {"connected": False, "ticks": {}}
+
+    ticks = angel_ws_ticks()
+    by_symbol = {}
+    for token, data in ticks.items():
+        sym = data.get("symbol", "") or ""
+        if sym:
+            by_symbol[sym] = {
+                "ltp": data.get("ltp"),
+                "change_pct": data.get("change_pct"),
+                "volume": data.get("volume"),
+                "high": data.get("high"),
+                "low": data.get("low"),
+                "open": data.get("open"),
+                "timestamp": data.get("timestamp"),
+            }
+    return {"connected": True, "ticks": by_symbol}
+
+
+# ================================================================
+# Auto-subscribe symbols to WebSocket (called by refresh endpoints)
+# ================================================================
+
+def ws_auto_subscribe(symbols: list[str]):
+    """Add symbols to the Angel One WebSocket watchlist.
+
+    Resolves each symbol to its token via the cached scrip master and
+    subscribes them all — no extra API calls.
+    """
+    if not angel_is_connected():
+        return
+    from broker.angel_margin_calculator import resolve_symbol_token as _resolve
+    for sym in set(s for s in symbols if s):
+        try:
+            name, token_str = _resolve(sym.upper(), "NSE")
+            if token_str:
+                angel_ws_add(name, int(token_str))
+        except Exception:
+            pass
+
+
 @app.get("/api/strategies/advanceorb/refresh")
 def refresh_advance_orb(tickers: str = ""):
     """Lightweight refresh of price/volume/change for a fixed list of tickers.
@@ -1187,6 +1271,17 @@ def refresh_advance_orb(tickers: str = ""):
         response.raise_for_status()
         payload = response.json()
 
+        # ── P3: Overlay WebSocket tick data when Angel One is connected ──
+        ws_ticks = {}
+        if angel_is_connected() and angel_ws_connected():
+            raw = angel_ws_ticks()
+            for token, d in raw.items():
+                sym = d.get("symbol", "")
+                if sym:
+                    ws_ticks[sym] = d
+            # Also subscribe any new symbols the frontend sent us
+            ws_auto_subscribe(symbols)
+
         refreshed: list[dict] = []
         for symbol_row in (payload.get('data') or []):
             values = symbol_row.get('d') or []
@@ -1195,25 +1290,39 @@ def refresh_advance_orb(tickers: str = ""):
             name = values[0]
             if not name or name not in valid_symbols:
                 continue
-            close = pd.to_numeric(values[1], errors='coerce')
-            change = pd.to_numeric(values[2], errors='coerce')
-            vol = pd.to_numeric(values[3], errors='coerce')
-            relvol = pd.to_numeric(values[4], errors='coerce')
 
-            if pd.notna(vol) and vol >= 1_000_000:
-                volume_str = f"{vol/1_000_000:.1f}M"
-            elif pd.notna(vol) and vol >= 1_000:
-                volume_str = f"{vol/1_000:.1f}K"
-            elif pd.notna(vol):
-                volume_str = str(int(vol))
+            # Default values from TV data (always available)
+            close_val = pd.to_numeric(values[1], errors='coerce')
+            change_val = pd.to_numeric(values[2], errors='coerce')
+            vol_raw = pd.to_numeric(values[3], errors='coerce')
+
+            # P3 — Overlay WebSocket tick data when available (freshest)
+            ws = ws_ticks.get(name)
+            if ws:
+                ltp = ws.get("ltp")
+                if ltp is not None:
+                    close_val = float(ltp)
+                chg_pct = ws.get("change_pct")
+                if chg_pct is not None:
+                    change_val = round(float(chg_pct), 2)
+                ws_vol = ws.get("volume")
+                if ws_vol is not None:
+                    vol_raw = int(ws_vol)
+
+            if pd.notna(vol_raw) and vol_raw >= 1_000_000:
+                volume_str = f"{vol_raw/1_000_000:.1f}M"
+            elif pd.notna(vol_raw) and vol_raw >= 1_000:
+                volume_str = f"{vol_raw/1_000:.1f}K"
+            elif pd.notna(vol_raw):
+                volume_str = str(int(vol_raw))
             else:
                 volume_str = "0"
-            relvol_str = f"{relvol:.2f}x" if pd.notna(relvol) else "0x"
+            relvol_str = f"{values[4]:.2f}x" if len(values) > 4 and pd.notna(values[4]) else "0x"
 
             refreshed.append({
                 "Symbol": name,
-                "Price": round(float(close), 2) if pd.notna(close) else None,
-                "CHG%": round(float(change), 2) if pd.notna(change) else None,
+                "Price": round(float(close_val), 2) if pd.notna(close_val) else None,
+                "CHG%": round(float(change_val), 2) if pd.notna(change_val) else None,
                 "Volume": volume_str,
                 "RELVOL": relvol_str,
             })
@@ -1365,6 +1474,26 @@ def broker_connect(payload: dict):
         auth_result = angel_authenticate()
 
         if auth_result.get("ok"):
+            # ── P1: Auto-start WebSocket after successful Angel One auth ──
+            # Seed a minimal watchlist so the initial on_open subscription
+            # doesn't fire with an empty list (which would skip all subs).
+            # Real symbols get added later via ws_auto_subscribe when the
+            # screener runs.
+            try:
+                feed_token = _angel_creds.get("feed_token", "")
+                from broker.angel_margin_calculator import resolve_symbol_token as _resolve
+                # Add NIFTY 50 index as a default subscriber (always useful)
+                initial_ws = [
+                    ("NIFTY", 26000, "index"),
+                ]
+                ws_res = angel_ws_start(feed_token=feed_token, watchlist=initial_ws)
+                if ws_res.get("success"):
+                    print("✅ WebSocket connected successfully")
+                else:
+                    print(f"⚠️ WebSocket start: {ws_res.get('error')}")
+            except Exception as e:
+                print(f"⚠️ WebSocket start error: {e}")
+
             return {
                 "ok": True,
                 "connected": True,
@@ -1391,6 +1520,7 @@ def broker_connect(payload: dict):
 
 @app.post("/api/broker/disconnect")
 def broker_disconnect():
+    angel_ws_stop()
     clear_dhan_credentials()
     angel_disconnect()
     return {"ok": True, "connected": False}

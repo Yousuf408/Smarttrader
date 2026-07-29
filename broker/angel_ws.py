@@ -3,6 +3,20 @@
 # Integrates with angel_margin_calculator.py for auth
 # ==============================================================================
 
+# ── websocket-client namespace-package workaround ──────────────────
+# The websocket-client 1.9.0 installs as a plain directory without an
+# ``__init__.py``, which makes ``import websocket`` resolve to a *namespace
+# package* — an empty module that does not carry ``WebSocketApp``.
+# SmartWebSocketV2 does ``import websocket`` then calls
+# ``websocket.WebSocketApp(...)``, which fails with ``AttributeError``.
+#
+# We fix this by patching the websocket namespace *before* importing the
+# SmartApi SDK, so that when ``smartWebSocketV2.py`` runs its module-level
+# ``import websocket`` it picks up our patched version.
+import websocket as _ws_ns
+from websocket._app import WebSocketApp as _WebSocketApp
+_ws_ns.WebSocketApp = _WebSocketApp
+
 from SmartApi.smartWebSocketV2 import SmartWebSocketV2
 from logzero import logger
 import threading
@@ -15,6 +29,7 @@ from .angel_margin_calculator import (
     _CREDS,
     get_access_token,
     is_connected as is_api_connected,
+    load_master,
     ANGEL_PROXIES
 )
 
@@ -32,6 +47,9 @@ _sws = None
 _thread = None
 _connected = False
 _correlation_id = "trading_app_live"
+
+# Reverse lookup: token → display symbol (populated by _build_token_map)
+_TOKEN_SYMBOL_MAP = {}
 
 # Watchlist from config (you'll define this)
 WATCHLIST = [
@@ -64,12 +82,23 @@ def on_data(wsapp, message):
     global latest_ticks, _raw_messages
 
     try:
+        logger.debug(f"📩 on_data received: type={type(message).__name__}")
+
         # Store raw message for debugging (last 5 only)
         _raw_messages.append(message)
         if len(_raw_messages) > 5:
             _raw_messages.pop(0)
 
         token = str(message.get('token', ''))
+        if not token and isinstance(message, dict):
+            # Try alternate key names
+            token = str(message.get('tk', '') or message.get('symbolToken', '') or '')
+        if not token:
+            logger.debug("on_data — no token in message, skipping")
+            return
+
+        # Look up a human-readable symbol name for this token
+        symbol = _TOKEN_SYMBOL_MAP.get(token, "")
         if not token:
             logger.warning(f"🔴 No token in message!")
             return
@@ -100,7 +129,7 @@ def on_data(wsapp, message):
             "change": change,
             "change_pct": chng_pct,
             "timestamp": timestamp,
-            "symbol": message.get('symbol', ''),
+            "symbol": symbol,
             "token": token
         }
 
@@ -127,35 +156,30 @@ def on_open(wsapp):
 
         logger.info(f"📡 Subscribing to {len(WATCHLIST)} stocks...")
 
-        # Separate indices and stocks
-        indices = []  # Mode 1 tokens
-        stocks = []   # Mode 2 tokens
+        # Collect ALL tokens as STRINGS — the SDK expects string tokens
+        # in the subscription JSON (``"tokens": ["2885"]``, not ``[2885]``).
+        # Also, the SDK's ``_on_data`` only processes *binary* frames
+        # (data_type == 2). Mode 1 / LTP sends *text* frames that the SDK
+        # silently discards, so we must use Mode 2 (Quote) for **all**
+        # subscriptions, indices included.
+        all_tokens = [str(t) for _, t, _ in WATCHLIST]
+        has_index = any(k == "index" for _, _, k in WATCHLIST)
+        has_stock = any(k == "stock" for _, _, k in WATCHLIST)
 
-        for name, token, kind in WATCHLIST:
-            if kind == "index":
-                indices.append(token)
-            else:
-                stocks.append(token)
+        if has_index:
+            logger.info(f"  • Indices: {sum(1 for _, _, k in WATCHLIST if k == 'index')} (Mode 2)")
+        if has_stock:
+            logger.info(f"  • Stocks: {sum(1 for _, _, k in WATCHLIST if k == 'stock')} (Mode 2)")
 
-        logger.info(f"  • Indices: {len(indices)} (Mode 1)")
-        logger.info(f"  • Stocks: {len(stocks)} (Mode 2)")
-
-        # Subscribe to indices in Mode 1
-        if indices:
-            _sws.subscribe(_correlation_id, 1, [
-                {"exchangeType": 1, "tokens": indices}
-            ])
-            logger.info(f"✓ Subscribed {len(indices)} indices in Mode 1")
-
-        # Subscribe to stocks in Mode 2 (batches of 950)
+        # Batch-subscribe everything in Mode 2 (binary frames → triggers on_data)
         BATCH_SIZE = 950
-        for i in range(0, len(stocks), BATCH_SIZE):
-            batch = stocks[i:i + BATCH_SIZE]
+        for i in range(0, len(all_tokens), BATCH_SIZE):
+            batch = all_tokens[i:i + BATCH_SIZE]
             _sws.subscribe(_correlation_id, 2, [
                 {"exchangeType": 1, "tokens": batch}
             ])
             batch_num = (i // BATCH_SIZE) + 1
-            logger.info(f"✓ Subscribed batch {batch_num}: {len(batch)} stocks in Mode 2")
+            logger.info(f"✓ Subscribed batch {batch_num}: {len(batch)} tokens in Mode 2")
 
         logger.info(f"✅ Total subscribed: {len(WATCHLIST)} tokens")
 
@@ -230,6 +254,9 @@ def start_websocket(feed_token=None, watchlist=None):
     if not WATCHLIST:
         logger.warning("⚠️ WATCHLIST is empty! Use set_watchlist() or pass watchlist param.")
 
+    # Build token→symbol map for the on_data callback
+    _build_token_map()
+
     # Reset state
     latest_ticks = {}
     _connected = True
@@ -239,8 +266,15 @@ def start_websocket(feed_token=None, watchlist=None):
     logger.info(f"   Watchlist: {len(WATCHLIST)} items")
 
     try:
+        # The WebSocket API expects the full ``Bearer eyJ...`` format
+        # in the Authorization header, just like the REST API.
+        ws_auth = access_token
+        if not ws_auth.startswith("Bearer "):
+            ws_auth = f"Bearer {ws_auth}"
+        logger.info(f"   WS auth token: {ws_auth[:30]}...")
+
         _sws = SmartWebSocketV2(
-            auth_token=access_token,
+            auth_token=ws_auth,
             api_key=api_key,
             client_code=client_id,
             feed_token=feed_token
@@ -302,7 +336,7 @@ def set_watchlist(watchlist):
     return {"success": True, "count": len(WATCHLIST)}
 
 def add_to_watchlist(name, token, kind="stock"):
-    """Add a single symbol to watchlist."""
+    """Add a single symbol to watchlist and subscribe if WS is connected."""
     global WATCHLIST
     # Check if already exists
     for existing_name, existing_token, _ in WATCHLIST:
@@ -312,6 +346,19 @@ def add_to_watchlist(name, token, kind="stock"):
 
     WATCHLIST.append((name, token, kind))
     logger.info(f"✅ Added {name} (token: {token}) to watchlist")
+
+    # Subscribe via the live WebSocket connection if it's already open
+    if _connected and _sws is not None:
+        try:
+            exchange = 2 if kind == "index" else 1  # 2=NSE indices, 1=NSE equities
+            token_str = str(token)
+            _sws.subscribe(_correlation_id, 2, [
+                {"exchangeType": exchange, "tokens": [token_str]}
+            ])
+            logger.info(f"📡 Subscribed {name} (token: {token_str}) on live WS")
+        except Exception as e:
+            logger.error(f"🔴 Subscribe error for {name}: {e}")
+
     return {"success": True, "count": len(WATCHLIST)}
 
 def remove_from_watchlist(token):
@@ -335,6 +382,34 @@ def get_watchlist():
         "watchlist": WATCHLIST,
         "count": len(WATCHLIST)
     }
+
+# ==============================================================================
+# TOKEN → SYMBOL MAPPING (from scrip master)
+# ==============================================================================
+
+def _build_token_map():
+    """Build a reverse lookup from token → symbol using the cached scrip master.
+
+    Called once during ``start_websocket`` so that tick data arriving in
+    ``on_data`` can be enriched with a human-readable symbol name.
+    """
+    global _TOKEN_SYMBOL_MAP
+    try:
+        df = load_master()
+        if df is None:
+            return
+        symbol_col = next((c for c in df.columns if 'symbol' in c.lower()), None)
+        token_col  = next((c for c in df.columns if 'token'  in c.lower()), None)
+        if not symbol_col or not token_col:
+            return
+        _TOKEN_SYMBOL_MAP = {
+            str(row[token_col]): str(row[symbol_col])
+            for _, row in df.iterrows()
+        }
+        logger.info(f"🗺️ Token→symbol map built: {len(_TOKEN_SYMBOL_MAP)} entries")
+    except Exception as e:
+        logger.warning(f"⚠️ Could not build token map: {e}")
+
 
 # ==============================================================================
 # GETTERS

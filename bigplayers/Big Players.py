@@ -33,7 +33,7 @@ from broker.quantity_calculator import (
 from broker.dhan_orders import place_dhan_order
 
 # ================================================================
-# BIG PLAYERS STRATEGY IMPORT
+# BIG PLAYERS STRATEGY IMPORT (only strategy left)
 # ================================================================
 from bigplayers.strategy import BigPlayersStrategy, calculate_breakout_status, calculate_support_price
 
@@ -41,32 +41,21 @@ from bigplayers.strategy import BigPlayersStrategy, calculate_breakout_status, c
 # No login flow, no Supabase, no JWT — the auth surface has been
 # stripped. All API endpoints in this app are open and read/write
 # the screener's in-memory caches. Frontend is served as static
-# files from PROJECT_ROOT (see secure-static-hosting.md for the
-# why-we-don't-mount-repo-root rule).
+# files from PROJECT_ROOT.
 # =================================================================
 
 
 # =================================================================
 # DAILY-AUTO-RENEW BACKGROUND TASK
 # =================================================================
-# /api/broker/connect mints a fresh JWT once via TOTP; Dhan's own
-# /RenewToken endpoint lets the backend swap a fresh JWT into the
-# in-memory store without bothering the user. This loop fires
-# ~1 h before the 24 h TTL expires and does exactly that, so
-# screener MaxQty stays live across the daily rollover.
-# The renew call goes through asyncio.to_thread because requests
-# is blocking, and we don't want the event loop to stall on the
-# round-trip while /api/strategies/* traffic is incoming.
-# =================================================================
 async def _dhan_auto_renew_loop():
     while True:
-        sleep_for = 60.0  # default poll cadence when not connected
+        sleep_for = 60.0
         try:
             issued = _broker_cred("token_issued_at")
             tok    = _broker_cred("access_token")
             if issued and tok:
                 age = time.time() - float(issued)
-                # Renew when age crosses (TTL - lead) ≈ 23 h elapsed.
                 renew_at_age = (
                     DHAN_TOKEN_TTL_SECONDS - DHAN_AUTO_RENEW_LEAD_SECONDS
                 )
@@ -82,14 +71,11 @@ async def _dhan_auto_renew_loop():
                         f"status={res.get('status_code')} "
                         f"detail={(res.get('detail') or '')[:120]}"
                     )
-                # Re-read after the renew (token_issued_at is preserved
-                # on renewals, so age is the same; but count_renews_at
-                # is now bumped — future ticks know we did one shot).
                 age = time.time() - float(issued)
                 remaining = max(0.0, renew_at_age - age)
                 sleep_for = min(
                     max(30.0, remaining + 5.0),
-                    15 * 60.0,  # never sleep more than 15 min
+                    15 * 60.0,
                 )
         except Exception as e:
             print(f"[broker] auto-renew loop tick error: {e!r}")
@@ -111,13 +97,13 @@ async def lifespan(_app):
 
 
 app = FastAPI(
-    title="TradeAlgo Pro - Advance ORB + Big Players",
-    description="Fetches NSE stocks with Advance ORB and Big Players strategies",
+    title="TradeAlgo Pro - Big Players Strategy",
+    description="Fetches NSE stocks with Big Players strategy (breakout & support)",
     version="1.0.0",
     lifespan=lifespan,
 )
 
-# CORS - Allow frontend to call this API
+# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -125,14 +111,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-# No-cache for every response — HTML, JS, CSS, JSON. After the
-# auth-strip the user's browser held stale copies of (a) the deleted
-# /login page, (b) the cached index.html with the inline auth gate,
-# and (c) static assets carrying the pre-toast-fix styles. Forcing
-# the browser to revalidate every request guarantees the version on
-# disk is what's running. Trade-off: more bandwidth per reload —
-# acceptable for a dashboard app of this size.
+# No-cache middleware
 @app.middleware("http")
 async def _no_cache_all(request, call_next):
     response = await call_next(request)
@@ -148,30 +127,13 @@ GAP_THRESHOLD = 2.0
 MARKET_CAP_MIN = 41_000_000_000  # 41 Billion INR
 SMALL_CANDLE_THRESHOLD = 1.5
 
-# ── 200-period EMA (auto-buy gate) ──
-# Surfaced per row via compute_200_ema_batch so the auto-buy
-# frontend gate `price > ema` has data. Screener does NOT filter
-# rows on EMA distance — the EMA is purely advisory now.
+# ── 200-period EMA (used for support price) ──
 EMA_SPAN = 200
 EMA_LOOKBACK_DAYS = 4
 
 IST = ZoneInfo("Asia/Kolkata")
 MAX_TV_STOCKS = 200
 YFINANCE_WORKERS = 8
-ADVANCE_ORB_COLUMNS = [
-    "Symbol",
-    "Price",
-    "CHG%",
-    "GAP%",
-    "Volume",
-    "RELVOL",
-    "Sector",
-    "200 EMA",
-    "1st High",
-    "1st Low",
-    "1st Range%",
-    "MaxQty",
-]
 
 BIG_PLAYERS_COLUMNS = [
     "Symbol",
@@ -183,72 +145,13 @@ BIG_PLAYERS_COLUMNS = [
 ]
 
 
-def has_small_opening_candle(symbol: str) -> bool:
-    """Return whether the latest available 9:15 IST five-minute candle is small."""
-    ticker = f"{str(symbol).strip().upper()}.NS"
-    try:
-        candles = yf.download(
-            tickers=ticker,
-            period="4d",
-            interval="5m",
-            progress=False,
-            auto_adjust=False,
-            prepost=False,
-            threads=False,
-        )
-    except Exception:
-        return False
-
-    if candles.empty:
-        return False
-
-    # yfinance can return a MultiIndex even for one ticker.
-    if isinstance(candles.columns, pd.MultiIndex):
-        try:
-            candles = candles.xs(ticker, axis=1, level=-1)
-        except (KeyError, IndexError):
-            try:
-                candles = candles.xs(ticker, axis=1, level=0)
-            except (KeyError, IndexError):
-                return False
-
-    if "High" not in candles or "Low" not in candles:
-        return False
-
-    local_index = pd.DatetimeIndex(candles.index)
-    if local_index.tz is None:
-        local_index = local_index.tz_localize('UTC').tz_convert(IST)
-    else:
-        local_index = local_index.tz_convert(IST)
-    candles = candles.copy()
-    candles.index = local_index
-
-    opening_candles = candles[
-        (candles.index.hour == 9) & (candles.index.minute >= 15)
-    ]
-    if opening_candles.empty:
-        return False
-
-    candle = opening_candles.iloc[0]
-    high = pd.to_numeric(candle["High"], errors="coerce")
-    low = pd.to_numeric(candle["Low"], errors="coerce")
-    if pd.isna(high) or pd.isna(low) or low <= 0:
-        return False
-
-    candle_range = (high - low) / low * 100
-    return candle_range <= SMALL_CANDLE_THRESHOLD
-
+# ================================================================
+# SHARED HELPER FUNCTIONS (used by Big Players)
+# ================================================================
 
 def compute_200_ema(symbol: str):
     """200-period EMA on 5-min closes over the previous
     EMA_LOOKBACK_DAYS days, or None if Yahoo returns nothing usable.
-
-    Returns float | None. NOT used as a screener-side row filter—
-    the EMA is only surfaced per row so the auto-buy JS gate
-    `row.price > row.ema` has data. Keeping the EMA off the row-
-    filter chain avoids the IndexError class of bugs that the
-    previous screener-version's drop-on-3%-distance filter hit in
-    production.
     """
     if not symbol or not symbol.strip():
         return None
@@ -276,10 +179,7 @@ def compute_200_ema(symbol: str):
 
 
 def compute_200_ema_batch(symbols: list[str]) -> dict:
-    """Parallel EMA fetch for an entire list of symbols. Each
-    result is float | None (None when Yahoo 401, delisted, rate-
-    limited, or fewer than EMA_SPAN closes available).
-    """
+    """Parallel EMA fetch for an entire list of symbols."""
     results: dict = {}
     unique = list({s for s in symbols if s})
     if not unique:
@@ -296,15 +196,11 @@ def compute_200_ema_batch(symbols: list[str]) -> dict:
 
 
 def batch_opening_candle(symbols: list[str]) -> dict:
-    """For each symbol, fetch yfinance 5-min candles ONLY ONCE and
-    return both pieces of information the screener needs from the
-    9:15 IST opening 5-min candle:
-        * is the candle "small" (range ≤ SMALL_CANDLE_THRESHOLD %)
-        * the candle's HIGH price (used as `high915` for the auto-buy
-          9:15 high-price-band filter on the frontend)
+    """
+    For each symbol, fetch the 9:15 IST 5‑minute candle **only if it belongs to today**.
     Returns:
-        {symbol: (is_small, high915, open915, low915, close915, range_pct)}
-        Missing/invalid candles always return the same six-value shape.
+        (is_small, high915, open915, low915, close915, range_pct)
+    If today's candle is not found, returns (False, None, None, None, None, None).
     """
     results: dict = {}
     unique = [s for s in {s for s in symbols if s}]
@@ -325,6 +221,7 @@ def batch_opening_candle(symbols: list[str]) -> dict:
             )
             if candles is None or candles.empty:
                 return (False, None, None, None, None, None)
+
             if isinstance(candles.columns, pd.MultiIndex):
                 try:
                     candles = candles.xs(ticker, axis=1, level=-1)
@@ -333,8 +230,11 @@ def batch_opening_candle(symbols: list[str]) -> dict:
                         candles = candles.xs(ticker, axis=1, level=0)
                     except (KeyError, IndexError):
                         return (False, None, None, None, None, None)
+
             if "High" not in candles or "Low" not in candles:
                 return (False, None, None, None, None, None)
+
+            # Convert index to IST
             local_index = pd.DatetimeIndex(candles.index)
             if local_index.tz is None:
                 local_index = local_index.tz_localize('UTC').tz_convert(IST)
@@ -342,27 +242,36 @@ def batch_opening_candle(symbols: list[str]) -> dict:
                 local_index = local_index.tz_convert(IST)
             candles = candles.copy()
             candles.index = local_index
-            opening = candles[
+
+            today = pd.Timestamp.now(tz=IST).date()
+
+            # Look for today's 9:15 candle (first 5‑minute bar after 9:15)
+            opening_today = candles[
+                (candles.index.date == today) &
                 (candles.index.hour == 9) & (candles.index.minute >= 15)
             ]
-            if opening.empty:
+
+            # If no candle today, return nothing (no fallback to previous day)
+            if opening_today.empty:
                 return (False, None, None, None, None, None)
-            candle = opening.iloc[0]
+
+            candle = opening_today.iloc[0]  # earliest today's 9:15+ candle
+
             high = pd.to_numeric(candle["High"], errors="coerce")
             low = pd.to_numeric(candle["Low"], errors="coerce")
             open915 = pd.to_numeric(candle["Open"], errors="coerce")
             close915 = pd.to_numeric(candle["Close"], errors="coerce")
+
             if pd.isna(high) or pd.isna(low) or low <= 0:
                 return (False, None, None, None, None, None)
-            # The first-candle rule is based strictly on its marked
-            # High/Low range. It is not the stock's current CHG% or GAP%.
+
             candle_range_pct = ((float(high) - float(low)) / float(low)) * 100
             is_small = bool(candle_range_pct <= SMALL_CANDLE_THRESHOLD)
-            open_val = float(open915) if pd.notna(open915) else None
+
             return (
                 is_small,
                 float(high),
-                open_val,
+                float(open915) if pd.notna(open915) else None,
                 float(low),
                 float(close915) if pd.notna(close915) else None,
                 float(candle_range_pct),
@@ -381,408 +290,15 @@ def batch_opening_candle(symbols: list[str]) -> dict:
     return results
 
 
-def filter_small_opening_candles(symbols: list[str]) -> set[str]:
-    """Yahoo Finance 9:15 IST candle check, executed across many symbols in parallel.
-
-    Each unique ticker is fetched with `yf.download` inside a thread pool. Any
-    failure (delisted ticker, missing data, rate limit, exception) is treated
-    as "not a small opening candle" so the symbol is excluded from results.
-    """
-    if not symbols:
-        return set()
-
-    unique = [str(s).strip().upper() for s in symbols if s]
-    matches: set[str] = set()
-
-    with ThreadPoolExecutor(max_workers=YFINANCE_WORKERS) as pool:
-        futures = {pool.submit(has_small_opening_candle, sym): sym for sym in unique}
-        for future in as_completed(futures):
-            try:
-                if future.result():
-                    matches.add(futures[future])
-            except Exception:
-                continue
-    return matches
-
-
-@app.get("/api")
-def root():
-    return {
-        "status": "ok",
-        "message": "Advance ORB + Big Players Strategy API",
-        "conditions": {
-            "price": f"{PRICE_MIN} to {PRICE_MAX} INR",
-            "gap": f"< {GAP_THRESHOLD}%",
-            "market_cap": f"> {MARKET_CAP_MIN/1e9:.0f}B INR",
-            "exchange": "NSE"
-        },
-        "strategies": ["advanceorb", "bigplayers"]
-    }
-
 # ================================================================
-# SECTION 1: ADVANCE ORB STRATEGY (UNCHANGED)
-# ================================================================
-
-@app.get("/api/strategies/advanceorb")
-def get_advance_orb(budget: int = 100000, parts: int = 4):
-    """
-    Fetch stocks from TradingView with 4 conditions:
-    1. Price: 200 to 3000 INR
-    2. Gap: < 2%
-    3. Market Cap: > 41B INR
-    4. Exchange: NSE
-
-    Query params:
-      budget: total capital in INR (default 100000)
-      parts:  number of equal parts to split budget into (default 4)
-    """
-    if budget <= 0:
-        raise HTTPException(status_code=400, detail="budget must be > 0")
-    if parts < 1 or parts > 20:
-        raise HTTPException(status_code=400, detail="parts must be between 1 and 20")
-    try:
-        # ─── Step 1: Fetch from TradingView ───
-        # Single POST to TradingView's scan endpoint, capped to MAX_TV_STOCKS
-        # rows (≈4 pages of the default 50-row page size).
-        tv_columns = [
-            'name', 'close', 'change', 'gap', 'volume',
-            'relative_volume', 'market_cap_basic', 'sector',
-        ]
-        tv_query = (Query()
-            .select(*tv_columns)
-            .set_markets('india')
-            .where(
-                col('close') > PRICE_MIN,
-                col('close') <= PRICE_MAX,
-                col('market_cap_basic') > MARKET_CAP_MIN,
-                col('exchange') == 'NSE'
-            )
-            .order_by('change', ascending=False)
-        )
-
-        body = dict(tv_query.query)
-        body['range'] = [0, MAX_TV_STOCKS]
-        response = requests.post(
-            tv_query.url,
-            json=body,
-            headers=TV_HEADERS,
-            timeout=30,
-        )
-        response.raise_for_status()
-        payload = response.json()
-        total = int(payload.get('totalCount') or 0)
-
-        raw_rows: list[dict] = []
-        for symbol_row in (payload.get('data') or [])[:MAX_TV_STOCKS]:
-            values = symbol_row.get('d') or []
-            ticker = symbol_row.get('s')
-            raw_rows.append(dict(zip(['ticker', *tv_columns], [ticker, *values])))
-
-        df = pd.DataFrame(raw_rows)
-        count = min(total, MAX_TV_STOCKS)
-
-        if count == 0:
-            return {
-                "strategy": "advanceorb",
-                "name": "Advance ORB",
-                "count": 0,
-                "data": [],
-                "columns": ADVANCE_ORB_COLUMNS,
-                "message": "No stocks found matching the conditions"
-            }
-
-        # ─── Step 2: Apply Gap Filter (< 2%) ───
-        df['gap'] = pd.to_numeric(df['gap'], errors='coerce')
-        df = df[df['gap'].notna() & (abs(df['gap']) < GAP_THRESHOLD)]
-
-        if df.empty:
-            return {
-                "strategy": "advanceorb",
-                "name": "Advance ORB",
-                "count": 0,
-                "data": [],
-                "columns": ADVANCE_ORB_COLUMNS,
-                "message": f"No stocks with gap < {GAP_THRESHOLD}%"
-            }
-
-        # ─── Step 3: Format Data for Frontend ───
-        # Run the Yahoo Finance candle check across every candidate in parallel,
-        # then keep only rows whose ticker is in the matching set.
-        candidate_symbols = df['name'].dropna().astype(str).tolist()
-
-        # Open-candle batch: pull each symbol's 9:15 IST 5-min candle in
-        # parallel. Returns (is_small, high915, open915, low915,
-        # close915, range_pct) per symbol.
-        #   * is_small   — used by the small-open-candle gate below
-        #   * high915    — read by the auto-buy band-filter on the frontend
-        # (open_val is returned for future use but no longer consumed here.)
-        opening_candle_map = batch_opening_candle(candidate_symbols)
-        small_candle_symbols = {
-            s for s, t in opening_candle_map.items()
-            if isinstance(t, tuple) and t and t[0]
-        }
-        # "open915" = today's OPEN price (= the first 5-min candle's Open).
-        # Used for the 200-EMA distance check instead of the live close,
-        # so a stock that opens within the band keeps its row even when
-        # the live price subsequently moves beyond 3% of EMA.
-        # Mirror: assign df['high915'] = today's 9:15 IST candle HIGH
-        # (= first 5-min candle's High). Read by the JS band-filter
-        # in autoBuyAllStocks — NOT part of any screener-side filter.
-        df['high915'] = df['name'].map(
-            lambda s: opening_candle_map.get(s, (False, None, None))[1]
-        )
-        df['low915'] = df['name'].map(
-            lambda s: opening_candle_map.get(s, (False, None, None, None))[3]
-        )
-        df['close915'] = df['name'].map(
-            lambda s: opening_candle_map.get(s, (False, None, None, None, None))[4]
-        )
-        df['candle_range_pct'] = df['name'].map(
-            lambda s: opening_candle_map.get(s, (False, None, None, None, None, None))[5]
-        )
-        # Compute 200-period EMA per candidate in parallel; surface
-        # in df['ema']. NOT a screener filter — the auto-buy frontend
-        # has the additional `price > ema` gate. Missing EMA simply
-        # yields None in the row; auto-buy treats None as 'skip the
-        # candidate' (never commit on unvalidated data).
-        ema_map = compute_200_ema_batch(candidate_symbols)
-        df['ema'] = df['name'].map(ema_map)
-
-        # Calculate Max Quantities via Dhan (see broker/quantity_calculator.py).
-        # quantity_calculator expects Symbol/Price cols; df has name/close.
-        # Token from broker runtime store (populated via the broker
-        # popup / /api/broker/connect). Empty string falls through
-        # so quantity_calculator.requests call hits the missing-token
-        # code path and the screener surfaces a clear "no broker"
-        # error to the UI instead of a silent bare 500.
-        dhan_access_token = _broker_cred("access_token") or None
-        df_qty = df.rename(columns={'name': 'Symbol', 'close': 'Price'})
-        df_qty = calculate_max_quantity_column(
-            df_qty,
-            total_capital=budget,
-            num_parts=parts,
-            access_token=dhan_access_token,
-        )
-        df['MaxQty'] = df_qty['MaxQty'].values
-
-        result = []
-        for _, row in df.iterrows():
-            symbol = row['name']
-            if symbol not in small_candle_symbols:
-                continue
-
-            # Format volume
-            vol = row.get('volume', 0)
-            if vol >= 1_000_000:
-                volume_str = f"{vol/1_000_000:.1f}M"
-            elif vol >= 1_000:
-                volume_str = f"{vol/1_000:.1f}K"
-            else:
-                volume_str = str(vol)
-
-            # Format relative volume
-            relvol = row.get('relative_volume', 0)
-            relvol_str = f"{relvol:.2f}x" if pd.notna(relvol) else "0x"
-
-            result.append({
-                "Symbol": symbol,
-                "Price": round(row['close'], 2),
-                "CHG%": round(row['change'], 2),
-                "GAP%": round(row['gap'], 2),
-                "Volume": volume_str,
-                "RELVOL": relvol_str,
-                "Sector": row.get('sector', 'Unknown'),
-                "ema": (
-                    round(float(row["ema"]), 2)
-                    if pd.notna(row.get("ema"))
-                    else None
-                ),
-                # Pull high915 from df column (float|None). Read by the
-                # auto-buy band-filter on the frontend (AUTO_BUY_MIN/MAX).
-                "high915": (
-                    round(float(row["high915"]), 2)
-                    if pd.notna(row.get("high915"))
-                    else None
-                ),
-                "low915": (
-                    round(float(row["low915"]), 2)
-                    if pd.notna(row.get("low915"))
-                    else None
-                ),
-                "close915": (
-                    round(float(row["close915"]), 2)
-                    if pd.notna(row.get("close915"))
-                    else None
-                ),
-                "candle_range_pct": (
-                    round(float(row["candle_range_pct"]), 4)
-                    if pd.notna(row.get("candle_range_pct"))
-                    else None
-                ),
-                "MaxQty": int(row.get("MaxQty", 0)),
-            })
-
-        return {
-            "strategy": "advanceorb",
-            "name": "Advance ORB",
-            "count": len(result),
-            "data": result,
-            "columns": ADVANCE_ORB_COLUMNS,
-            "conditions": {
-                "price": f"{PRICE_MIN} to {PRICE_MAX} INR",
-                "gap": f"< {GAP_THRESHOLD}%",
-                "market_cap": f"> {MARKET_CAP_MIN/1e9:.0f}B INR",
-                "exchange": "NSE",
-                "small_candle": f"9:15 IST range <= {SMALL_CANDLE_THRESHOLD}%",
-            }
-        }
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/api/strategies/advanceorb/qty")
-def recompute_advanceorb_qty(payload: dict):
-    """Lightweight MaxQty recompute for the Advance ORB screener.
-
-    Body: {budget:int, parts:int, symbols:[{Symbol,Price},...]}
-    Returns: {data:[{Symbol,MaxQty},...]}
-
-    Skips TradingView scan + yfinance EMA + 9:15 candle pulls so
-    budget/parts steppers refresh MaxQty instantly. The caller
-    must already hold a screener snapshot from the heavy
-    /api/strategies/advanceorb endpoint (Refresh click / strategy
-    switch / first load).
-    """
-    budget  = payload.get("budget")
-    parts   = payload.get("parts")
-    symbols = payload.get("symbols") or []
-    if not isinstance(budget, int) or budget <= 0:
-        raise HTTPException(status_code=400, detail="budget must be a positive integer")
-    if not isinstance(parts, int) or parts <= 0:
-        raise HTTPException(status_code=400, detail="parts must be a positive integer")
-    if not isinstance(symbols, list) or not symbols:
-        return {"data": []}
-    rows = []
-    for entry in symbols:
-        if not isinstance(entry, dict):
-            continue
-        sym = entry.get("Symbol") or entry.get("symbol")
-        price = entry.get("Price") or entry.get("price")
-        if not sym or price is None:
-            continue
-        try:
-            price = float(price)
-        except (TypeError, ValueError):
-            continue
-        if price <= 0:
-            continue
-        rows.append({"Symbol": sym, "Price": price})
-    if not rows:
-        return {"data": []}
-    df_qty = calculate_max_quantity_column(
-        pd.DataFrame(rows),
-        total_capital=budget,
-        num_parts=parts,
-        access_token=_broker_cred("access_token") or None,
-    )
-    out = []
-    for sym, q in zip(df_qty["Symbol"], df_qty["MaxQty"]):
-        out.append({
-            "Symbol": sym,
-            "MaxQty": int(q) if pd.notna(q) else 0,
-        })
-    return {"data": out}
-
-
-@app.get("/api/strategies/advanceorb/refresh")
-def refresh_advance_orb(tickers: str = ""):
-    """Lightweight refresh of price/volume/change for a fixed list of tickers.
-
-    Re-checks the opening-candle eligibility as well as live
-    price/volume/change. The first 5-minute candle may still be forming when
-    the initial screener request runs, so a row that initially passes can
-    later exceed the 1.5% range. Such rows must be removed before auto-buy
-    evaluates the refreshed dataset.
-    """
-    try:
-        symbols = [s.strip().upper() for s in tickers.split(",") if s.strip()]
-        if not symbols:
-            return {"refreshed": []}
-
-        # Keep the live refresh subject to the same <=1.5% opening-candle
-        # rule as the full screener request. Return only symbols whose 9:15
-        # candle is still valid; the frontend removes the others from its
-        # in-memory snapshot.
-        opening_candle_map = batch_opening_candle(symbols)
-        valid_symbols = {
-            symbol for symbol, candle in opening_candle_map.items()
-            if isinstance(candle, tuple) and candle and candle[0]
-        }
-
-        tv_query = (Query()
-            .select('name', 'close', 'change', 'volume', 'relative_volume')
-            .set_markets('india')
-            .where(col('exchange') == 'NSE')
-            .set_tickers(*[f'NSE:{sym}' for sym in symbols])
-        )
-
-        body = dict(tv_query.query)
-        body['range'] = [0, max(50, len(symbols) + 10)]
-        response = requests.post(
-            tv_query.url,
-            json=body,
-            headers=TV_HEADERS,
-            timeout=20,
-        )
-        response.raise_for_status()
-        payload = response.json()
-
-        refreshed: list[dict] = []
-        for symbol_row in (payload.get('data') or []):
-            values = symbol_row.get('d') or []
-            if len(values) < 5:
-                continue
-            name = values[0]
-            if not name or name not in valid_symbols:
-                continue
-            close = pd.to_numeric(values[1], errors='coerce')
-            change = pd.to_numeric(values[2], errors='coerce')
-            vol = pd.to_numeric(values[3], errors='coerce')
-            relvol = pd.to_numeric(values[4], errors='coerce')
-
-            if pd.notna(vol) and vol >= 1_000_000:
-                volume_str = f"{vol/1_000_000:.1f}M"
-            elif pd.notna(vol) and vol >= 1_000:
-                volume_str = f"{vol/1_000:.1f}K"
-            elif pd.notna(vol):
-                volume_str = str(int(vol))
-            else:
-                volume_str = "0"
-            relvol_str = f"{relvol:.2f}x" if pd.notna(relvol) else "0x"
-
-            refreshed.append({
-                "Symbol": name,
-                "Price": round(float(close), 2) if pd.notna(close) else None,
-                "CHG%": round(float(change), 2) if pd.notna(change) else None,
-                "Volume": volume_str,
-                "RELVOL": relvol_str,
-            })
-
-        return {"refreshed": refreshed}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-# ================================================================
-# SECTION 2: BIG PLAYERS STRATEGY (NEW)
+# BIG PLAYERS STRATEGY ENDPOINTS
 # ================================================================
 
 @app.get("/api/strategies/bigplayers")
 def get_big_players(budget: int = 100000, parts: int = 4):
     """
     Fetch Big Players strategy data.
-    Uses the same stocks as Advance ORB with Big Players columns:
+    Uses the same base filters as before with Big Players columns:
     Symbol, Price, CHG%, Breakout, Support Price, MaxQty
     """
     if budget <= 0:
@@ -791,8 +307,7 @@ def get_big_players(budget: int = 100000, parts: int = 4):
         raise HTTPException(status_code=400, detail="parts must be between 1 and 20")
 
     try:
-        # ─── Step 1: Get same stocks as Advance ORB ───
-        # Reuse the existing ORB endpoint logic to get the base data
+        # ─── Step 1: Fetch base stocks from TradingView ───
         tv_columns = [
             'name', 'close', 'change', 'gap', 'volume',
             'relative_volume', 'market_cap_basic', 'sector',
@@ -852,19 +367,28 @@ def get_big_players(budget: int = 100000, parts: int = 4):
                 "message": f"No stocks with gap < {GAP_THRESHOLD}%"
             }
 
-        # ─── Step 3: Get ORB data for calculations ───
+        # ─── Step 3: Get TODAY's opening candle data ───
         candidate_symbols = df['name'].dropna().astype(str).tolist()
         opening_candle_map = batch_opening_candle(candidate_symbols)
-        small_candle_symbols = {
-            s for s, t in opening_candle_map.items()
-            if isinstance(t, tuple) and t and t[0]
-        }
 
-        # Calculate EMA for support price
+        # Filter: small candle AND red candle (close < open) AND today's data exists
+        qualified_symbols = set()
+        for s, candle_data in opening_candle_map.items():
+            if not isinstance(candle_data, tuple) or not candle_data:
+                continue
+            is_small = candle_data[0]
+            open915 = candle_data[2]
+            close915 = candle_data[4]
+
+            # Only qualify if we have today's candle and it's small + red
+            if is_small and open915 is not None and close915 is not None and close915 < open915:
+                qualified_symbols.add(s)
+
+        # Compute EMA for support price
         ema_map = compute_200_ema_batch(candidate_symbols)
         df['ema'] = df['name'].map(ema_map)
 
-        # Add high915/low915 for breakout calculation
+        # Add high915/low915 for breakout calculation (only for qualified symbols)
         df['high915'] = df['name'].map(
             lambda s: opening_candle_map.get(s, (False, None, None))[1]
         )
@@ -891,8 +415,8 @@ def get_big_players(budget: int = 100000, parts: int = 4):
         for _, row in df.iterrows():
             symbol = row['name']
 
-            # Only include small candle stocks
-            if symbol not in small_candle_symbols:
+            # Only include stocks that had a small + red candle today
+            if symbol not in qualified_symbols:
                 continue
 
             # Prepare row for breakout calculation
@@ -905,7 +429,6 @@ def get_big_players(budget: int = 100000, parts: int = 4):
                 'ema': row.get('ema'),
             }
 
-            # Calculate Breakout status and Support Price
             breakout_status = bp_strategy.calculate_breakout_status(row_dict)
             support_price = bp_strategy.calculate_support_price(row_dict)
 
@@ -930,6 +453,7 @@ def get_big_players(budget: int = 100000, parts: int = 4):
                 "market_cap": f"> {MARKET_CAP_MIN/1e9:.0f}B INR",
                 "exchange": "NSE",
                 "small_candle": f"9:15 IST range <= {SMALL_CANDLE_THRESHOLD}%",
+                "red_candle": "9:15 IST close < open (today only)",
             }
         }
 
@@ -942,6 +466,7 @@ def refresh_big_players(tickers: str = ""):
     """
     Lightweight refresh for Big Players strategy.
     Re-checks price, change, breakout status, and support price.
+    Also re‑validates that the stock still has a small + red candle today.
     """
     try:
         symbols = [s.strip().upper() for s in tickers.split(",") if s.strip()]
@@ -967,11 +492,21 @@ def refresh_big_players(tickers: str = ""):
         response.raise_for_status()
         payload = response.json()
 
-        # Get opening candle data for breakout calculation
+        # Get today's opening candle data
         opening_candle_map = batch_opening_candle(symbols)
         ema_map = compute_200_ema_batch(symbols)
 
-        # Initialize Big Players strategy
+        # Build a set of symbols that still have a small + red candle today
+        valid_symbols = set()
+        for s, candle_data in opening_candle_map.items():
+            if not isinstance(candle_data, tuple) or not candle_data:
+                continue
+            is_small = candle_data[0]
+            open915 = candle_data[2]
+            close915 = candle_data[4]
+            if is_small and open915 is not None and close915 is not None and close915 < open915:
+                valid_symbols.add(s)
+
         bp_strategy = BigPlayersStrategy()
 
         refreshed: list[dict] = []
@@ -980,7 +515,7 @@ def refresh_big_players(tickers: str = ""):
             if len(values) < 3:
                 continue
             name = values[0]
-            if not name:
+            if not name or name not in valid_symbols:
                 continue
 
             close = pd.to_numeric(values[1], errors='coerce')
@@ -989,7 +524,6 @@ def refresh_big_players(tickers: str = ""):
             if pd.isna(close) or pd.isna(change):
                 continue
 
-            # Prepare row for breakout calculation
             high915 = opening_candle_map.get(name, (False, None))[1]
             low915 = opening_candle_map.get(name, (False, None, None))[3]
             ema = ema_map.get(name)
@@ -1024,7 +558,6 @@ def refresh_big_players(tickers: str = ""):
 def recompute_bigplayers_qty(payload: dict):
     """
     Lightweight MaxQty recompute for Big Players strategy.
-    Same as Advance ORB qty endpoint.
     """
     budget = payload.get("budget")
     parts = payload.get("parts")
@@ -1072,21 +605,32 @@ def recompute_bigplayers_qty(payload: dict):
 
 
 # ================================================================
-# SECTION 3: ORDER ENDPOINTS (UNCHANGED)
+# ROOT ENDPOINT
+# ================================================================
+
+@app.get("/api")
+def root():
+    return {
+        "status": "ok",
+        "message": "Big Players Strategy API",
+        "conditions": {
+            "price": f"{PRICE_MIN} to {PRICE_MAX} INR",
+            "gap": f"< {GAP_THRESHOLD}%",
+            "market_cap": f"> {MARKET_CAP_MIN/1e9:.0f}B INR",
+            "exchange": "NSE",
+            "first_candle": "small (≤1.5%) and red (close < open) – today only",
+        },
+        "strategies": ["bigplayers"]
+    }
+
+
+# ================================================================
+# ORDER ENDPOINTS (unchanged)
 # ================================================================
 
 @app.post("/api/orders/place")
 def place_order_endpoint(payload: dict):
-    """Single-order placement for the manual Place-Order button.
-
-    Body: {
-      "symbol": "...", "quantity": int,
-      "transactionType": "BUY"|"SELL" (default BUY),
-      "productType": "INTRADAY"|"CNC" (default INTRADAY),
-      "afterMarketOrder": bool (default False),
-      "amoTime": "OPEN"|"OPEN_30"|"OPEN_60" (default OPEN, only matters when AMO=True)
-    }
-    """
+    """Single-order placement for the manual Place-Order button."""
     symbol = (payload.get("symbol") or "").strip().upper()
     quantity = payload.get("quantity")
     transaction_type = (payload.get("transactionType") or "BUY").upper()
@@ -1094,7 +638,6 @@ def place_order_endpoint(payload: dict):
     after_market_order = bool(payload.get("afterMarketOrder", False))
     amo_time = str(payload.get("amoTime") or "OPEN").upper()
 
-    # Validate
     if not symbol:
         raise HTTPException(status_code=400, detail="symbol required")
     if not isinstance(quantity, int) or isinstance(quantity, bool) or quantity < 1:
@@ -1114,10 +657,7 @@ def place_order_endpoint(payload: dict):
         after_market_order=after_market_order,
         amo_time=amo_time,
     )
-    # Mirror place_dhan_order.success to HTTP status — caller can read .error on 4xx/5xx.
     if isinstance(result, dict) and not result.get("success") and result.get("symbol") == symbol:
-        # Common rejection paths (Symbol not found, Invalid quantity, HTTP non-200) — keep 200 and let client decide.
-        # Only blow up to 502 if uvicorn couldn't reach Dhan at all.
         if isinstance(result.get("error"), str) and result["error"].startswith("Exception:"):
             raise HTTPException(status_code=502, detail=result["error"])
     return result
@@ -1125,15 +665,7 @@ def place_order_endpoint(payload: dict):
 
 @app.post("/api/orders/place-batch")
 def place_order_batch_endpoint(payload: dict):
-    """Batch placement for Auto Buy. Hard cap: 5 orders (user policy).
-
-    Each order gets submitted via place_dhan_order in parallel using
-    a ThreadPoolExecutor sized to the batch (max 5) so we finish quickly
-    but never burst-rate-limit Dhan's order API. Per-order outcomes are
-    returned — partial successes are normal (e.g. one symbol missing
-    from the instrument master), caller should surface succeeded/failed
-    counts and per-symbol errors.
-    """
+    """Batch placement for Auto Buy. Hard cap: 5 orders."""
     orders = payload.get("orders") or []
     source = (payload.get("source") or "auto_buy")
 
@@ -1194,7 +726,7 @@ def place_order_batch_endpoint(payload: dict):
 
 
 # ================================================================
-# SECTION 4: HEALTH & STATIC FILES (UNCHANGED)
+# HEALTH & STATIC FILES
 # ================================================================
 
 @app.get("/api/health")
@@ -1202,26 +734,21 @@ def health():
     return {"status": "healthy"}
 
 
-# Serve only the frontend assets from the same origin as the API. Do not expose
-# the repository root, which also contains backend source and project metadata.
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-
 
 @app.get("/", include_in_schema=False)
 def frontend():
     return FileResponse(PROJECT_ROOT / "index.html", media_type="text/html")
 
-
 @app.get("/style.css", include_in_schema=False)
 def stylesheet():
     return FileResponse(PROJECT_ROOT / "style.css", media_type="text/css")
-
 
 app.mount("/js", StaticFiles(directory=PROJECT_ROOT / "js"), name="frontend-js")
 
 
 # ================================================================
-# SECTION 5: BROKER ENDPOINTS (UNCHANGED)
+# BROKER ENDPOINTS
 # ================================================================
 
 @app.post("/api/broker/connect")
@@ -1254,8 +781,6 @@ def broker_connect(payload: dict):
     set_dhan_credentials(client_id, pin, totp_secret, broker_name="dhan")
 
     try:
-        # Dhan's /app/generateAccessToken takes the auth params as
-        # QUERY STRING on the POST, not as a JSON or form body.
         r = requests.post(
             "https://auth.dhan.co/app/generateAccessToken",
             params={
@@ -1298,7 +823,6 @@ def broker_disconnect():
 
 @app.post("/api/broker/refresh-token")
 def broker_refresh_token():
-    """Manually trigger /RenewToken right now."""
     return _dhan_renew()
 
 
@@ -1333,13 +857,11 @@ def broker_status():
 
 
 # ================================================================
-# SECTION 6: SPA FALLBACK (UNCHANGED)
+# SPA FALLBACK
 # ================================================================
 
 @app.get("/{full_path:path}", include_in_schema=False)
 def spa_fallback(full_path: str):
-    # 404 the things that genuinely should 404 (so static typos
-    # surface clearly instead of getting the dashboard).
     if full_path.startswith(("api/", "js/", "style.css")):
         raise HTTPException(status_code=404, detail="Not Found")
     return FileResponse(PROJECT_ROOT / "index.html", media_type="text/html")
