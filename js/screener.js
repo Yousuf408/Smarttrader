@@ -1076,10 +1076,18 @@ function refreshScreener() {
 // EXPORT TO ANGEL ONE WATCHLIST
 // ================================================================
 async function exportToWatchlist() {
+    // Only works from Big Players strategy (New Low filtered = few stocks)
+    const strategyId = document.getElementById('strategySelect')?.value;
+    if (strategyId !== 'bigplayers') {
+        showToast('⚠️ Switch to Big Players', 'Angel watchlist export only works from Big Players strategy');
+        return;
+    }
+
     const btn = document.querySelector('.btn-export-wl');
     const origText = btn?.textContent || '📋 Angel WL';
 
     // Collect all visible symbols from the table body
+    // (already filtered by New Low Only toggle if active)
     const rows = document.querySelectorAll('#screenerBody tr');
     const symbols = [];
     rows.forEach(row => {
@@ -1116,10 +1124,11 @@ async function exportToWatchlist() {
         }
 
         if (result.ok) {
+            const label = result.watchlist || 'SmartStream';
             showToast(
-                '✅ Exported to Angel One',
-                `${result.added} stocks added to "${result.watchlist || 'TradeAlgo Pro'}"` +
-                (result.failed?.length ? `. ${result.failed.length} failed` : ''),
+                `✅ ${result.added} added to ${label}`,
+                `Real-time data subscription active` +
+                (result.failed?.length ? `. ${result.failed.length} unresolved` : ''),
             );
         } else {
             showToast('❌ Export Failed', result.error || 'Unknown error');
