@@ -164,6 +164,9 @@ async function fetchBigPlayersRefresh(silent = true) {
             if (updated.low915 != null) {
                 row.low915 = parseFloat(updated.low915);
             }
+            if (updated.high915 != null) {
+                row.high915 = parseFloat(updated.high915);
+            }
             touched++;
         }
 
@@ -295,23 +298,29 @@ async function autoBuyAllStocksBigPlayers() {
     }
 
     let eligibleStocks = lastBigPlayersData.data.filter(row => {
-        const breakout = row.breakout || row.Breakout || 'Waiting';
+        const low915 = parseFloat(row.low915);
+        const high915 = parseFloat(row.high915);
+        const todayLow = parseFloat(row.TodayLow);
+        const price = parseFloat(row.price || row.Price || 0);
         const maxQty = parseInt(row.maxQty || row.MaxQty || 0);
-        const isActive = breakout === 'Active';
-        const hasMargin = maxQty > 0;
 
-        let aboveSupport = true;
-        if (BIG_PLAYERS_AUTO_BUY.requirePriceAboveSupport) {
-            const price = parseFloat(row.price || row.Price || 0);
-            const support = parseFloat(row.supportPrice || row.SupportPrice || 0);
-            aboveSupport = price > support;
-        }
+        // Must have candle data + margin
+        if (!Number.isFinite(low915) || !Number.isFinite(high915) || low915 <= 0 || high915 <= 0) return false;
+        if (maxQty <= 0) return false;
 
-        return isActive && hasMargin && aboveSupport;
+        // Condition 2: stock must have created a new low (broke below low915)
+        if (!Number.isFinite(todayLow) || todayLow >= low915) return false;
+
+        // Condition 3: price must have recovered to ≥ 75% of the candle's range above the low
+        const range = high915 - low915;
+        if (range <= 0) return false;
+        const entryPrice = low915 + range * 0.75;
+
+        return price >= entryPrice;
     });
 
     if (eligibleStocks.length === 0) {
-        showToast('⚠️ No Active Breakouts', 'No stocks with Active breakout status and sufficient margin');
+        showToast('⚠️ No 75% Recovery', 'No stocks have recovered to 75% of candle range after new low');
         return;
     }
 
@@ -334,7 +343,13 @@ async function autoBuyAllStocksBigPlayers() {
         supportPrice: r.supportPrice || r.SupportPrice,
     }));
 
-    showToast('🏢 Big Players Auto-Buy', `Submitting ${orders.length} stock(s) with Active breakout`);
+    const entryDetails = topN.map(r => {
+        const lo = parseFloat(r.low915);
+        const hi = parseFloat(r.high915);
+        const ep = lo + (hi - lo) * 0.75;
+        return `${r.Symbol}@₹${ep.toFixed(2)}`;
+    }).join(', ');
+    showToast('🏢 BP Auto-Buy', `Submitting ${orders.length}: ${entryDetails}`);
 
     try {
         const response = await fetch('/api/orders/place-batch', {
