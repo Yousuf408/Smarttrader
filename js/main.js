@@ -51,7 +51,7 @@ const STRATEGIES = {
         icon: '🏢',
         entryRule: 'Support & Resistance',
         risk: '1.8%',
-        columns: ['Symbol', 'Price', 'CHG%', 'Breakout', 'Support Price', 'MaxQty'],
+        columns: ['Symbol', 'Price', 'CHG%', 'Breakout', 'Support Price', '9:15 High', '9:15 Low', 'MaxQty'],
         
     }
 };
