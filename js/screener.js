@@ -665,7 +665,7 @@ async function autoBuyAllStocks() {
     // -----------------------------------------------------------------
     const bandFiltered = eligible.filter(row => {
         const high915 = parseFloat(row.high915);
-        const price = parseFloat(row.price);
+        const price = parseFloat(row.Price ?? row.price);
         // Skip rows missing either anchor (zero / NaN) — can't decide.
         if (!Number.isFinite(high915) || high915 <= 0) return false;
         if (!Number.isFinite(price) || price <= 0) return false;
@@ -684,7 +684,7 @@ async function autoBuyAllStocks() {
         const expectedBand = `+${AUTO_BUY_MIN_MOVE_ABOVE_915_PCT}–+${AUTO_BUY_MAX_MOVE_ABOVE_915_PCT}%`;
         const probes = eligible.map(row => {
             const high915 = parseFloat(row.high915);
-            const price = parseFloat(row.price);
+            const price = parseFloat(row.Price ?? row.price);
             if (!Number.isFinite(high915) || high915 <= 0 ||
                 !Number.isFinite(price) || price <= 0) {
                 return `${row.Symbol}: missing price / 9:15 high`;
@@ -721,7 +721,7 @@ async function autoBuyAllStocks() {
     const aboveEma = bandFiltered.filter(row => {
         if (!AUTO_BUY_REQUIRE_PRICE_ABOVE_EMA) return true;
         const ema = parseFloat(row.ema);
-        const price = parseFloat(row.price);
+        const price = parseFloat(row.Price ?? row.price);
         if (!Number.isFinite(ema)) return false;          // yfinance missed
         if (!Number.isFinite(price) || price <= 0) return false;
         return price > ema;
@@ -731,7 +731,7 @@ async function autoBuyAllStocks() {
         const expectedBand = `+${AUTO_BUY_MIN_MOVE_ABOVE_915_PCT}–+${AUTO_BUY_MAX_MOVE_ABOVE_915_PCT}%`;
         const emaProbes = bandFiltered.slice(0, 6).map(row => {
             const ema   = parseFloat(row.ema);
-            const price = parseFloat(row.price);
+            const price = parseFloat(row.Price ?? row.price);
             const hi    = parseFloat(row.high915);
             const band  = Number.isFinite(hi) && hi > 0 ? ((price - hi) / hi * 100) : null;
             const above = Number.isFinite(ema) ? price > ema : null;
