@@ -373,7 +373,9 @@ async function onStrategyChange() {
         tbody.innerHTML = `<tr><td colspan="${columns.length}" style="text-align:center;padding:40px;">🔎 Filtering best-performing stocks…</td></tr>`;
         document.getElementById('screenerCount').textContent = 'Loading...';
 
-        // Hide the Big Players-specific toggles
+        // Show the Advance ORB Auto Buy toggle, hide Big Players-specific toggles
+        const orbab = document.getElementById('autoBuyWrap');
+        if (orbab) orbab.style.display = '';
         const nw = document.getElementById('newLowFilterWrap');
         if (nw) nw.style.display = 'none';
         const bpab = document.getElementById('bpAutoBuyWrap');
@@ -405,7 +407,9 @@ async function onStrategyChange() {
         tbody.innerHTML = `<tr><td colspan="${columns.length}" style="text-align:center;padding:40px;">🏢 Fetching Big Players data…</td></tr>`;
         document.getElementById('screenerCount').textContent = 'Loading...';
 
-        // Show the Big Players-specific toggles
+        // Hide the Advance ORB Auto Buy toggle, show Big Players-specific toggles
+        const orbab = document.getElementById('autoBuyWrap');
+        if (orbab) orbab.style.display = 'none';
         const nw = document.getElementById('newLowFilterWrap');
         if (nw) nw.style.display = '';
         const bpab = document.getElementById('bpAutoBuyWrap');
