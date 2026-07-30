@@ -15,6 +15,7 @@ const BIG_PLAYERS_REFRESH_MS = 30000;
 // ================================================================
 
 let _bpAutoBuyEnabled = false;
+const _bpBoughtSymbols = new Set();
 
 const BIG_PLAYERS_AUTO_BUY = {
     requireBreakoutActive: true,
@@ -181,10 +182,6 @@ async function fetchBigPlayersRefresh(silent = true) {
                 if (!silent) showToast('🔄 Refreshed', `${touched} Big Players stocks updated`);
             }
 
-            // Auto-buy: if BP auto-buy is ON, fire it on every refresh
-            if (_bpAutoBuyEnabled) {
-                autoBuyAllStocksBigPlayers();
-            }
         }
     } catch (e) {
         console.error('Big Players refresh failed:', e);
@@ -242,6 +239,33 @@ function _bpApplyTicks(ticks) {
                 }
             }
         }
+
+        // ── Auto-buy on every tick (no 30s wait) ──
+        if (lastBigPlayersData && lastBigPlayersData.data && _bpAutoBuyEnabled) {
+            const row = lastBigPlayersData.data.find(r => (r.Symbol || r.symbol) === sym);
+            if (!row) continue;
+            if (_bpBoughtSymbols.has(sym)) continue;
+
+            const low915 = parseFloat(row.low915);
+            const high915 = parseFloat(row.high915);
+            const todayLow = parseFloat(row.TodayLow);
+            const price = parseFloat(row.Price ?? row.price);
+            const maxQty = parseInt(row.maxQty || row.MaxQty || 0);
+
+            // Must have candle data, created a new low, has margin
+            if (!Number.isFinite(low915) || !Number.isFinite(high915) || low915 <= 0 || high915 <= 0) continue;
+            if (maxQty <= 0) continue;
+            if (!Number.isFinite(todayLow) || todayLow >= low915) continue;
+
+            // Condition 3: price recovered to ≥ 75% of candle range above low
+            const range = high915 - low915;
+            if (range <= 0) continue;
+            if (!Number.isFinite(price) || price < low915 + range * 0.75) continue;
+
+            // All conditions met — buy immediately
+            _bpBoughtSymbols.add(sym);
+            _placeBpOrder(sym, maxQty);
+        }
     }
 }
 
@@ -288,8 +312,43 @@ function stopBigPlayersAutoRefresh() {
 }
 
 // ================================================================
-// SECTION 8: BIG PLAYERS AUTO BUY (unchanged)
+// SECTION 8: BIG PLAYERS AUTO BUY (tick-triggered via _bpApplyTicks)
 // ================================================================
+
+/** Place a single Big Players buy order immediately via the backend. */
+async function _placeBpOrder(symbol, quantity) {
+    try {
+        const response = await fetch('/api/orders/place-batch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                orders: [{
+                    symbol,
+                    quantity,
+                    transactionType: 'BUY',
+                    productType: 'INTRADAY',
+                    afterMarketOrder: window.amoEnabled || false,
+                    amoTime: 'OPEN',
+                }],
+                productType: 'INTRADAY',
+                afterMarketOrder: window.amoEnabled || false,
+                amoTime: 'OPEN',
+                source: 'bigplayers_tick_auto_buy',
+                strategy: 'Big Players',
+            }),
+        });
+        const result = await response.json();
+        if (response.ok && result.succeeded > 0) {
+            showToast('✅ BP Buy', `${symbol} × ${quantity} at 75% recovery`);
+        } else {
+            const err = (result.results && result.results[0] && result.results[0].error) || result.detail || 'Unknown';
+            showToast('❌ BP Buy Failed', `${symbol}: ${err}`);
+            console.error('BP auto-buy order failed:', symbol, err);
+        }
+    } catch (e) {
+        showToast('❌ BP Buy Error', `${symbol}: ${e.message}`);
+    }
+}
 
 async function autoBuyAllStocksBigPlayers() {
     if (!lastBigPlayersData || !Array.isArray(lastBigPlayersData.data) || lastBigPlayersData.data.length === 0) {
@@ -450,10 +509,9 @@ function toggleBpAutoBuy() {
     _bpAutoBuyEnabled = document.getElementById('bpAutoBuyToggle')?.checked || false;
     document.getElementById('bpAutoBuyStatus').textContent = _bpAutoBuyEnabled ? 'ON' : 'OFF';
     if (_bpAutoBuyEnabled) {
-        showToast('🏢 BP Auto Buy ON', 'Auto-buy enabled for Big Players');
-        if (lastBigPlayersData && Array.isArray(lastBigPlayersData.data) && lastBigPlayersData.data.length > 0) {
-            autoBuyAllStocksBigPlayers();
-        } else {
+        _bpBoughtSymbols.clear();  // Reset so all stocks are eligible again
+        showToast('🏢 BP Auto Buy ON', 'Watching live ticks for 75% recovery entry');
+        if (!lastBigPlayersData || !Array.isArray(lastBigPlayersData.data) || lastBigPlayersData.data.length === 0) {
             showToast('⚠️ Run Screener First', 'Click Refresh to load stocks before auto-buy.');
         }
     } else {
