@@ -171,7 +171,8 @@ async function submitBrokerCreds() {
 }
 
 // ================================================================
-// SMART PASTE — paste 4 lines into API Key → auto-fill remaining fields
+// SMART PASTE — paste into API Key → auto-fill remaining fields
+// Accepts newline-separated or space-separated credentials.
 // ================================================================
 document.addEventListener('DOMContentLoaded', () => {
     const apiKeyInput = document.getElementById('brokerApiKey');
@@ -179,11 +180,23 @@ document.addEventListener('DOMContentLoaded', () => {
         apiKeyInput.addEventListener('paste', (e) => {
             // Let the paste happen naturally first, then check content
             requestAnimationFrame(() => {
-                const pasted = apiKeyInput.value.trim();
-                if (!pasted.includes('\n')) return;
+                const raw = apiKeyInput.value.trim();
+                if (!raw) return;
 
-                const lines = pasted.split('\n').map(l => l.trim()).filter(Boolean);
-                if (lines.length < 2) return;
+                let parts;
+
+                // Prefer newline split; fall back to space split when
+                // the pasted string has 3+ space-delimited tokens.
+                if (raw.includes('\n')) {
+                    parts = raw.split('\n').map(s => s.trim()).filter(Boolean);
+                } else {
+                    const spaced = raw.split(/\s+/).filter(Boolean);
+                    if (spaced.length >= 3) {
+                        parts = spaced;
+                    }
+                }
+
+                if (!parts || parts.length < 2) return;
 
                 const fields = [
                     'brokerApiKey',
@@ -192,18 +205,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     'brokerAngelTotp',
                 ];
 
-                // Set API Key to the first line only
-                apiKeyInput.value = lines[0];
+                // Set API Key to the first value only
+                apiKeyInput.value = parts[0];
 
-                // Distribute remaining lines to the next fields
-                for (let i = 1; i < lines.length && i < fields.length; i++) {
+                // Distribute remaining values to the next fields
+                for (let i = 1; i < parts.length && i < fields.length; i++) {
                     const el = document.getElementById(fields[i]);
-                    if (el) el.value = lines[i];
+                    if (el) el.value = parts[i];
                 }
 
                 // Flash a brief toast
                 if (typeof showToast === 'function') {
-                    const count = Math.min(lines.length, fields.length);
+                    const count = Math.min(parts.length, fields.length);
                     showToast('📋 Auto-filled', `${count} fields populated from paste`);
                 }
             });
