@@ -383,21 +383,24 @@
 
             <!-- ANGEL ONE FIELDS IN MODAL -->
             <div id="modalAngelFields" style="display:none;">
+                <p class="broker-help-text" style="margin:0 0 8px 0; font-size:11px; opacity:0.6;">
+                    💡 Paste all 4 lines at once into <strong>API Key</strong> — they auto-fill
+                </p>
                 <div class="form-group">
                     <label>API Key</label>
-                    <input type="text" id="brokerApiKey" placeholder="Enter Angel One API Key" autocomplete="off" />
+                    <input type="text" id="brokerApiKey" placeholder="1st line — API Key" autocomplete="off" />
                 </div>
                 <div class="form-group">
                     <label>Client ID</label>
-                    <input type="text" id="brokerAngelClientId" placeholder="Enter Angel One Client ID" autocomplete="off" />
+                    <input type="text" id="brokerAngelClientId" placeholder="2nd line — Client ID" autocomplete="off" />
                 </div>
                 <div class="form-group">
                     <label>Password</label>
-                    <input type="password" id="brokerPassword" placeholder="Enter Angel One Password" autocomplete="off" />
+                    <input type="password" id="brokerPassword" placeholder="3rd line — Password" autocomplete="off" />
                 </div>
                 <div class="form-group">
                     <label>TOTP Secret <span style="opacity:0.5; font-weight:normal;">(optional)</span></label>
-                    <input type="text" id="brokerAngelTotp" placeholder="Enter TOTP Secret if required" autocomplete="off" />
+                    <input type="text" id="brokerAngelTotp" placeholder="4th line — TOTP Secret" autocomplete="off" />
                 </div>
             </div>
 

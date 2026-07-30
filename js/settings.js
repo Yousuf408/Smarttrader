@@ -170,6 +170,47 @@ async function submitBrokerCreds() {
     }
 }
 
+// ================================================================
+// SMART PASTE — paste 4 lines into API Key → auto-fill remaining fields
+// ================================================================
+document.addEventListener('DOMContentLoaded', () => {
+    const apiKeyInput = document.getElementById('brokerApiKey');
+    if (apiKeyInput) {
+        apiKeyInput.addEventListener('paste', (e) => {
+            // Let the paste happen naturally first, then check content
+            requestAnimationFrame(() => {
+                const pasted = apiKeyInput.value.trim();
+                if (!pasted.includes('\n')) return;
+
+                const lines = pasted.split('\n').map(l => l.trim()).filter(Boolean);
+                if (lines.length < 2) return;
+
+                const fields = [
+                    'brokerApiKey',
+                    'brokerAngelClientId',
+                    'brokerPassword',
+                    'brokerAngelTotp',
+                ];
+
+                // Set API Key to the first line only
+                apiKeyInput.value = lines[0];
+
+                // Distribute remaining lines to the next fields
+                for (let i = 1; i < lines.length && i < fields.length; i++) {
+                    const el = document.getElementById(fields[i]);
+                    if (el) el.value = lines[i];
+                }
+
+                // Flash a brief toast
+                if (typeof showToast === 'function') {
+                    const count = Math.min(lines.length, fields.length);
+                    showToast('📋 Auto-filled', `${count} fields populated from paste`);
+                }
+            });
+        });
+    }
+});
+
 function clearBrokerFields(broker) {
     if (broker === 'dhan') {
         document.getElementById('brokerClientId').value = '';
