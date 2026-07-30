@@ -5,6 +5,7 @@
 # Uses the same auth headers and proxy as the order placement module.
 # ==============================================================================
 
+import json
 import requests
 from broker.angel_orders import (
     _make_sdk_headers,
@@ -38,7 +39,10 @@ def get_watchlists():
             timeout=10,
         )
         if resp.status_code == 200:
-            data = resp.json()
+            try:
+                data = resp.json()
+            except json.JSONDecodeError:
+                return {"ok": False, "error": f"Angel One returned non-JSON: {resp.text[:200]}"}
             if data.get("status") and data.get("data"):
                 return {"ok": True, "watchlists": data["data"]}
             return {"ok": True, "watchlists": []}
@@ -69,7 +73,10 @@ def create_watchlist(name):
             timeout=10,
         )
         if resp.status_code in (200, 201):
-            data = resp.json()
+            try:
+                data = resp.json()
+            except json.JSONDecodeError:
+                return {"ok": False, "error": f"Angel One returned non-JSON: {resp.text[:200]}"}
             if data.get("status"):
                 return {"ok": True}
             return {"ok": False, "error": data.get("message", "Create failed")}
@@ -141,7 +148,11 @@ def add_symbols_to_watchlist(watchlist_name, symbols):
                 timeout=10,
             )
             if resp.status_code in (200, 201):
-                data = resp.json()
+                try:
+                    data = resp.json()
+                except json.JSONDecodeError:
+                    batch_errors.append(f"batch {i//50}: non-JSON response: {resp.text[:100]}")
+                    continue
                 if data.get("status"):
                     total_added += len(batch)
                 else:

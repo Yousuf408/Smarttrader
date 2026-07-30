@@ -431,8 +431,9 @@ body {
 .amo-status-xs.active { color: #6C5CE7; }
 .toggle-item-amo { border-color: rgba(108,92,231,0.2); }
 
-/* Export-to-watchlist button */
+/* Export-to-watchlist button — hidden until Angel One is connected */
 .btn-export-wl {
+    display: none;
     padding: 4px 10px !important;
     font-size: 11px !important;
     font-weight: 600;

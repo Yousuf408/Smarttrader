@@ -1104,7 +1104,16 @@ async function exportToWatchlist() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ symbols }),
         });
-        const result = await resp.json();
+
+        let result;
+        try {
+            result = await resp.json();
+        } catch (_) {
+            // Backend returned non-JSON (e.g. 500 HTML page) — read as text
+            const text = await resp.text();
+            showToast('❌ Server Error', text.slice(0, 200));
+            return;
+        }
 
         if (result.ok) {
             showToast(
@@ -1121,6 +1130,26 @@ async function exportToWatchlist() {
         if (btn) { btn.textContent = origText; btn.disabled = false; }
     }
 }
+
+// Show/hide the Angel WL export button based on Angel One connection status.
+async function updateExportButtonVisibility() {
+    const btn = document.querySelector('.btn-export-wl');
+    if (!btn) return;
+    try {
+        const resp = await fetch('/api/broker/status');
+        const status = await resp.json();
+        btn.style.display = (status && status.connected && status.broker === 'angel') ? '' : 'none';
+    } catch (_) {
+        btn.style.display = 'none';
+    }
+}
+
+// Poll broker status every 10 seconds so the button shows/hides live.
+// Also check immediately on page load.
+document.addEventListener('DOMContentLoaded', () => {
+    updateExportButtonVisibility();
+    setInterval(updateExportButtonVisibility, 10000);
+});
 
 // ================================================================
 // PLACE ORDER
