@@ -1073,6 +1073,56 @@ function refreshScreener() {
 }
 
 // ================================================================
+// EXPORT TO ANGEL ONE WATCHLIST
+// ================================================================
+async function exportToWatchlist() {
+    const btn = document.querySelector('.btn-export-wl');
+    const origText = btn?.textContent || '📋 Angel WL';
+
+    // Collect all visible symbols from the table body
+    const rows = document.querySelectorAll('#screenerBody tr');
+    const symbols = [];
+    rows.forEach(row => {
+        const first = row.querySelector('td');
+        if (first) {
+            const sym = first.textContent.trim();
+            if (sym) symbols.push(sym);
+        }
+    });
+
+    if (symbols.length === 0) {
+        showToast('⚠️ No Stocks', 'No symbols in the table to export');
+        return;
+    }
+
+    // Show loading state
+    if (btn) { btn.textContent = '⏳'; btn.disabled = true; }
+
+    try {
+        const resp = await fetch('/api/export-watchlist', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ symbols }),
+        });
+        const result = await resp.json();
+
+        if (result.ok) {
+            showToast(
+                '✅ Exported to Angel One',
+                `${result.added} stocks added to "${result.watchlist || 'TradeAlgo Pro'}"` +
+                (result.failed?.length ? `. ${result.failed.length} failed` : ''),
+            );
+        } else {
+            showToast('❌ Export Failed', result.error || 'Unknown error');
+        }
+    } catch (e) {
+        showToast('❌ Network Error', e.message);
+    } finally {
+        if (btn) { btn.textContent = origText; btn.disabled = false; }
+    }
+}
+
+// ================================================================
 // PLACE ORDER
 // ================================================================
 function _lookupRowQty(symbol) {

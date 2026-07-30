@@ -49,6 +49,7 @@ from broker.angel_ws import (
     add_to_watchlist as angel_ws_add,
     get_subscription_status as angel_ws_status,
 )
+from advance_orb.angel_watchlist import export_symbols as angel_wl_export
 
 # =================================================================
 # No login flow, no Supabase, no JWT — the auth surface has been
@@ -1013,6 +1014,30 @@ def broker_connect(payload: dict):
         status_code=400,
         detail=f"Broker {broker!r} not supported in this build. Pick Dhan or angel.",
     )
+
+
+@app.post("/api/export-watchlist")
+async def export_watchlist(request: Request):
+    """Export screener symbols to the TradeAlgo Pro watchlist on Angel One.
+
+    Expects JSON body: {"symbols": ["RELIANCE", "TCS", "INFY", ...]}
+    """
+    import json
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    if isinstance(body, str):
+        try:
+            body = json.loads(body)
+        except Exception:
+            body = {}
+    symbols = (body or {}).get("symbols", [])
+    if not symbols or not isinstance(symbols, list):
+        raise HTTPException(status_code=400, detail="symbols list is required")
+    # Run the blocking watchlist calls in a thread so the event loop isn't stalled
+    import asyncio
+    return await asyncio.to_thread(angel_wl_export, symbols)
 
 
 @app.post("/api/broker/disconnect")

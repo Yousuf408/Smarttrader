@@ -431,6 +431,16 @@ body {
 .amo-status-xs.active { color: #6C5CE7; }
 .toggle-item-amo { border-color: rgba(108,92,231,0.2); }
 
+/* Export-to-watchlist button */
+.btn-export-wl {
+    padding: 4px 10px !important;
+    font-size: 11px !important;
+    font-weight: 600;
+    border-radius: 8px;
+    line-height: 1.4;
+    white-space: nowrap;
+}
+
 /* Extra-small toggle for compact row */
 .toggle-xs { width: 28px !important; height: 16px !important; }
 .toggle-xs .toggle-slider::before {
