@@ -373,9 +373,11 @@ async function onStrategyChange() {
         tbody.innerHTML = `<tr><td colspan="${columns.length}" style="text-align:center;padding:40px;">🔎 Filtering best-performing stocks…</td></tr>`;
         document.getElementById('screenerCount').textContent = 'Loading...';
 
-        // Hide the Big Players-specific New Low toggle
+        // Hide the Big Players-specific toggles
         const nw = document.getElementById('newLowFilterWrap');
         if (nw) nw.style.display = 'none';
+        const bpab = document.getElementById('bpAutoBuyWrap');
+        if (bpab) bpab.style.display = 'none';
 
         const result = await fetchAdvanceORB();
         if (result) {
@@ -403,9 +405,11 @@ async function onStrategyChange() {
         tbody.innerHTML = `<tr><td colspan="${columns.length}" style="text-align:center;padding:40px;">🏢 Fetching Big Players data…</td></tr>`;
         document.getElementById('screenerCount').textContent = 'Loading...';
 
-        // Show the New Low Only toggle
+        // Show the Big Players-specific toggles
         const nw = document.getElementById('newLowFilterWrap');
         if (nw) nw.style.display = '';
+        const bpab = document.getElementById('bpAutoBuyWrap');
+        if (bpab) bpab.style.display = '';
 
         // Call Big Players API
         const result = await window.fetchBigPlayers();

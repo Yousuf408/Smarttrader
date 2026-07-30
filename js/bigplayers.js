@@ -11,8 +11,10 @@ let bigPlayersAutoTimer = null;
 const BIG_PLAYERS_REFRESH_MS = 30000;
 
 // ================================================================
-// SECTION 2: AUTO-BUY CONFIGURATION (Big Players Specific)
+// SECTION 2: AUTO-BUY STATE + CONFIGURATION (Big Players Specific)
 // ================================================================
+
+let _bpAutoBuyEnabled = false;
 
 const BIG_PLAYERS_AUTO_BUY = {
     requireBreakoutActive: true,
@@ -174,6 +176,11 @@ async function fetchBigPlayersRefresh(silent = true) {
             if (onScreener && isBigPlayers) {
                 renderBigPlayersData(lastBigPlayersData);
                 if (!silent) showToast('🔄 Refreshed', `${touched} Big Players stocks updated`);
+            }
+
+            // Auto-buy: if BP auto-buy is ON, fire it on every refresh
+            if (_bpAutoBuyEnabled) {
+                autoBuyAllStocksBigPlayers();
             }
         }
     } catch (e) {
@@ -392,6 +399,8 @@ window.stopBigPlayersAutoRefresh = stopBigPlayersAutoRefresh;
 window.autoBuyAllStocksBigPlayers = autoBuyAllStocksBigPlayers;
 window.calculateBreakoutStatus = calculateBreakoutStatus;
 window.lastBigPlayersData = lastBigPlayersData;
+window.toggleBpAutoBuy = toggleBpAutoBuy;
+window._bpAutoBuyEnabled = _bpAutoBuyEnabled;
 
 // ================================================================
 // SECTION 11: NEW LOW ONLY TOGGLE
@@ -419,6 +428,22 @@ function _applyNewLowFilter(data) {
         const low915 = parseFloat(r.low915 || 0);
         return todayLow < low915 && todayLow > 0 && low915 > 0;
     });
+}
+
+/** Toggle Big Players auto-buy ON/OFF. */
+function toggleBpAutoBuy() {
+    _bpAutoBuyEnabled = document.getElementById('bpAutoBuyToggle')?.checked || false;
+    document.getElementById('bpAutoBuyStatus').textContent = _bpAutoBuyEnabled ? 'ON' : 'OFF';
+    if (_bpAutoBuyEnabled) {
+        showToast('🏢 BP Auto Buy ON', 'Auto-buy enabled for Big Players');
+        if (lastBigPlayersData && Array.isArray(lastBigPlayersData.data) && lastBigPlayersData.data.length > 0) {
+            autoBuyAllStocksBigPlayers();
+        } else {
+            showToast('⚠️ Run Screener First', 'Click Refresh to load stocks before auto-buy.');
+        }
+    } else {
+        showToast('👤 BP Manual Mode', 'Big Players auto-buy disabled');
+    }
 }
 
 // Wrap renderBigPlayersData with new-low filtering

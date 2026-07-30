@@ -886,6 +886,40 @@ body {
 }
 
 /* ================================================================
+   BP AUTO BUY TOGGLE (Big Players)
+   ================================================================ */
+.bp-auto-buy-inline {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--bg-glass);
+    border: 1px solid rgba(46,204,113,0.15);
+    border-radius: var(--radius-sm);
+    padding: 3px 10px;
+    white-space: nowrap;
+}
+.bp-auto-buy-inline .bp-auto-buy-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+.bp-auto-buy-inline .toggle-switch { width: 34px; height: 20px; }
+.bp-auto-buy-inline .toggle-slider::before {
+    width: 14px; height: 14px;
+    left: 3px; bottom: 3px;
+}
+.bp-auto-buy-inline .toggle-switch input:checked + .toggle-slider::before {
+    transform: translateX(14px);
+}
+.bp-auto-buy-inline .toggle-status {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-muted);
+    min-width: 26px;
+    text-align: center;
+}
+
+/* ================================================================
    CONFIRM ORDER MODAL
    ================================================================ */
 .confirm-modal-overlay {
