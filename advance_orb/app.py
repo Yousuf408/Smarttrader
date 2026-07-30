@@ -213,6 +213,8 @@ BIG_PLAYERS_COLUMNS = [
     "CHG%",
     "Breakout",
     "Support Price",
+    "9:15 High",
+    "9:15 Low",
     "MaxQty",
 ]
 

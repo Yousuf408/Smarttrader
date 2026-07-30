@@ -80,6 +80,16 @@ function renderBigPlayersData(result) {
                     return `<span style="color:var(--text-muted);">-</span>`;
                 }
 
+                if (col === '9:15 High') {
+                    const h = parseFloat(row.high915);
+                    return Number.isFinite(h) ? h.toFixed(2) : '';
+                }
+
+                if (col === '9:15 Low') {
+                    const l = parseFloat(row.low915);
+                    return Number.isFinite(l) ? l.toFixed(2) : '';
+                }
+
                 if (col === 'Breakout') {
                     const status = row.breakout || row.Breakout || 'Waiting';
                     const color = status === 'Active' ? 'var(--color-success)' : 'var(--color-warning)';
