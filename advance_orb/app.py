@@ -2,6 +2,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import asyncio
+import datetime
 import os
 import re
 import time
@@ -324,20 +325,64 @@ def compute_200_ema_batch(symbols: list[str]) -> dict:
     return results
 
 
+def _detect_trading_date() -> datetime.date | None:
+    """Check if today is a live trading day by probing one stock's data.
+
+    Fetches 4 days of 5-min data for NIFTY.NS. Returns today's date if
+    today has 9:15 data, else the most recent trading day with data,
+    else None.
+    """
+    try:
+        probe = yf.download(
+            tickers="^NSEI",
+            period="4d",
+            interval="5m",
+            progress=False,
+            auto_adjust=False,
+            prepost=False,
+            threads=False,
+        )
+        if probe is None or probe.empty:
+            return None
+        if isinstance(probe.columns, pd.MultiIndex):
+            probe = probe.xs("^NSEI", axis=1, level=-1)
+        idx = pd.DatetimeIndex(probe.index)
+        if idx.tz is None:
+            idx = idx.tz_localize("UTC").tz_convert(IST)
+        else:
+            idx = idx.tz_convert(IST)
+        probe.index = idx
+        today = pd.Timestamp.now(tz=IST).date()
+        # Check if today has any 9:15 data
+        today_data = probe[(probe.index.date == today) &
+                           (probe.index.hour == 9) & (probe.index.minute >= 15)]
+        if not today_data.empty:
+            return today
+        # Find most recent trading day with 9:15 data
+        all_dates = sorted({
+            d for d in set(probe.index.date)
+            if len(probe[(probe.index.date == d) &
+                         (probe.index.hour == 9) & (probe.index.minute >= 15)]) > 0
+        }, reverse=True)
+        return all_dates[0] if all_dates else None
+    except Exception:
+        return None
+
+
 def batch_opening_candle(symbols: list[str]) -> dict:
     """For each symbol, fetch yfinance 5-min candles ONLY ONCE and
-    return both pieces of information the screener needs from the
-    9:15 IST opening 5-min candle:
-        * is the candle "small" (range ≤ SMALL_CANDLE_THRESHOLD %)
-        * the candle's HIGH price (used as `high915` for the auto-buy
-          9:15 high-price-band filter on the frontend)
+    return data from the 9:15 IST opening 5-min candle on the detected
+    trading day (today if market is live, else the most recent trading
+    day).
+
     Returns:
-        {symbol: (is_small, high915, open915, low915, close915, range_pct)}
-        Missing/invalid candles always return the same six-value shape.
+        {symbol: (is_small, high915, open915, low915, close915, range_pct, day_low)}
+        Missing/invalid candles always return the same seven-value shape.
     """
+    target_date = _detect_trading_date()
     results: dict = {}
     unique = [s for s in {s for s in symbols if s}]
-    if not unique:
+    if not unique or target_date is None:
         return results
 
     def _lookup(symbol: str):
@@ -353,7 +398,7 @@ def batch_opening_candle(symbols: list[str]) -> dict:
                 threads=False,
             )
             if candles is None or candles.empty:
-                return (False, None, None, None, None, None)
+                return (False, None, None, None, None, None, None)
             if isinstance(candles.columns, pd.MultiIndex):
                 try:
                     candles = candles.xs(ticker, axis=1, level=-1)
@@ -361,9 +406,9 @@ def batch_opening_candle(symbols: list[str]) -> dict:
                     try:
                         candles = candles.xs(ticker, axis=1, level=0)
                     except (KeyError, IndexError):
-                        return (False, None, None, None, None, None)
+                        return (False, None, None, None, None, None, None)
             if "High" not in candles or "Low" not in candles:
-                return (False, None, None, None, None, None)
+                return (False, None, None, None, None, None, None)
             local_index = pd.DatetimeIndex(candles.index)
             if local_index.tz is None:
                 local_index = local_index.tz_localize('UTC').tz_convert(IST)
@@ -371,32 +416,28 @@ def batch_opening_candle(symbols: list[str]) -> dict:
                 local_index = local_index.tz_convert(IST)
             candles = candles.copy()
             candles.index = local_index
-            today = pd.Timestamp.now(tz=IST).date()
 
-            opening_today = candles[
-                (candles.index.date == today) &
-                (candles.index.hour == 9) & (candles.index.minute >= 15)
+            # Get today's full-day low (lowest price across all today's 5-min candles)
+            day_mask = candles.index.date == target_date
+            day_data = candles[day_mask]
+            if day_data.empty:
+                return (False, None, None, None, None, None, None)
+            day_low = float(day_data["Low"].min())
+
+            # 9:15 candle
+            opening = day_data[
+                (day_data.index.hour == 9) & (day_data.index.minute >= 15)
             ]
+            if opening.empty:
+                return (False, None, None, None, None, None, None)
 
-            if not opening_today.empty:
-                candle = opening_today.iloc[0]
-            else:
-                opening = candles[
-                    (candles.index.hour == 9) & (candles.index.minute >= 15)
-                ]
-                if not opening.empty:
-                    candle = opening.iloc[-1]
-                else:
-                    return (False, None, None, None, None, None)
-
+            candle = opening.iloc[0]
             high = pd.to_numeric(candle["High"], errors="coerce")
             low = pd.to_numeric(candle["Low"], errors="coerce")
             open915 = pd.to_numeric(candle["Open"], errors="coerce")
             close915 = pd.to_numeric(candle["Close"], errors="coerce")
             if pd.isna(high) or pd.isna(low) or low <= 0:
-                return (False, None, None, None, None, None)
-            # The first-candle rule is based strictly on its marked
-            # High/Low range. It is not the stock's current CHG% or GAP%.
+                return (False, None, None, None, None, None, None)
             candle_range_pct = ((float(high) - float(low)) / float(low)) * 100
             is_small = bool(candle_range_pct <= SMALL_CANDLE_THRESHOLD)
             open_val = float(open915) if pd.notna(open915) else None
@@ -407,9 +448,10 @@ def batch_opening_candle(symbols: list[str]) -> dict:
                 float(low),
                 float(close915) if pd.notna(close915) else None,
                 float(candle_range_pct),
+                day_low,
             )
         except Exception:
-            return (False, None, None, None, None, None)
+            return (False, None, None, None, None, None, None)
 
     with ThreadPoolExecutor(max_workers=YFINANCE_WORKERS) as pool:
         futures = {pool.submit(_lookup, sym): sym for sym in unique}
@@ -418,7 +460,7 @@ def batch_opening_candle(symbols: list[str]) -> dict:
             try:
                 results[sym] = fut.result(timeout=20)
             except Exception:
-                results[sym] = (False, None, None, None, None, None)
+                results[sym] = (False, None, None, None, None, None, None)
     return results
 
 
@@ -900,6 +942,9 @@ def get_big_players(budget: int = 100000, parts: int = 4):
             if close915 is None or open915 is None or close915 >= open915:
                 continue
 
+            # Today's low from the 7th tuple element
+            today_low = candle[6] if candle and len(candle) >= 7 else None
+
             row_dict = {
                 'Symbol': symbol,
                 'Price': row['close'],
@@ -917,6 +962,7 @@ def get_big_players(budget: int = 100000, parts: int = 4):
                 "Breakout": breakout_status,
                 "SupportPrice": support_price,
                 "MaxQty": int(row.get("MaxQty", 0)),
+                "TodayLow": round(today_low, 2) if today_low else None,
             })
 
         return {
@@ -1006,8 +1052,10 @@ def refresh_big_players(tickers: str = ""):
             if close915 is None or open915 is None or close915 >= open915:
                 continue
 
-            high915 = opening_candle_map.get(name, (False, None, None))[1]
-            low915 = opening_candle_map.get(name, (False, None, None, None))[3]
+            candle = opening_candle_map.get(name)
+            high915 = candle[1] if candle and len(candle) >= 2 else None
+            low915 = candle[3] if candle and len(candle) >= 4 else None
+            today_low = candle[6] if candle and len(candle) >= 7 else None
             ema = ema_map.get(name)
 
             row_dict = {
@@ -1027,6 +1075,7 @@ def refresh_big_players(tickers: str = ""):
                 "CHG%": round(float(change), 2),
                 "Breakout": breakout_status,
                 "SupportPrice": support_price,
+                "TodayLow": round(today_low, 2) if today_low else None,
             })
 
         return {"refreshed": refreshed}

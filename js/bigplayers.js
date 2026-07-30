@@ -156,6 +156,9 @@ async function fetchBigPlayersRefresh(silent = true) {
             }
             if (typeof updated.Breakout === 'string') row.breakout = updated.Breakout;
             if (typeof updated.SupportPrice === 'number') row.supportPrice = updated.SupportPrice;
+            if (updated.TodayLow != null) {
+                row.TodayLow = parseFloat(updated.TodayLow);
+            }
             touched++;
         }
 
@@ -401,13 +404,15 @@ function onNewLowToggle() {
     }
 }
 
-/** Filter the data array when New Low Only is active. */
+/** Filter the data array when New Low Only is active.
+ *  Shows only stocks whose current price is BELOW today's low
+ *  (i.e. the stock has broken below today's low so far). */
 function _applyNewLowFilter(data) {
     if (!_newLowOnly || !data) return data;
     return data.filter(r => {
         const price = parseFloat(r.price || r.Price || 0);
-        const support = parseFloat(r.supportPrice || r.SupportPrice || 0);
-        return price < support && price > 0 && support > 0;
+        const todayLow = parseFloat(r.TodayLow || 0);
+        return price < todayLow && price > 0 && todayLow > 0;
     });
 }
 
