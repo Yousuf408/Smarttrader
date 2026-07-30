@@ -1138,7 +1138,7 @@ async function updateExportButtonVisibility() {
     try {
         const resp = await fetch('/api/broker/status');
         const status = await resp.json();
-        btn.style.display = (status && status.connected && status.broker === 'angel') ? '' : 'none';
+        btn.style.display = (status && status.connected && status.broker === 'angel') ? 'inline-flex' : 'none';
     } catch (_) {
         btn.style.display = 'none';
     }
