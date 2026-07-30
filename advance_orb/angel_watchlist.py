@@ -51,16 +51,21 @@ def export_symbols(symbols):
         }
 
     total_added = 0
+    total_exists = 0
     for name, token in resolved:
         result = ws.add_to_watchlist(name, int(token))
-        if result.get("success") and result.get("message") != "Already exists":
-            total_added += 1
+        if result.get("success"):
+            if result.get("message") == "Already exists":
+                total_exists += 1
+            else:
+                total_added += 1
 
     return {
         "ok": True,
         "added": total_added,
+        "already_exists": total_exists,
         "total": len(resolved),
         "failed": failed,
         "watchlist": "SmartStream (real-time)",
-        "info": "Symbols added to Angel One real-time data feed",
+        "ws_count": ws.get_watchlist().get("count", 0),
     }

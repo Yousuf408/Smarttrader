@@ -1125,9 +1125,11 @@ async function exportToWatchlist() {
 
         if (result.ok) {
             const label = result.watchlist || 'SmartStream';
-            showToast(
-                `✅ ${result.added} added to ${label}`,
-                `Real-time data subscription active` +
+            const parts = [];
+            if (result.added > 0) parts.push(`${result.added} new`);
+            if (result.already_exists > 0) parts.push(`${result.already_exists} already in WL`);
+            const msg = parts.length ? parts.join(', ') + ` → ${result.ws_count || 0} total` : 'Already in watchlist';
+            showToast(`✅ ${msg}`, `Real-time subscription active` +
                 (result.failed?.length ? `. ${result.failed.length} unresolved` : ''),
             );
         } else {
