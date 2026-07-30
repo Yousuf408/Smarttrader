@@ -157,11 +157,21 @@ def save_top5_strategy(
         }
 
         try:
-            result = (
+            # Check if this date+strategy+symbol combo already exists
+            existing = (
                 client.table("strategy_trades")
-                .upsert(record, on_conflict=["date", "strategy", "symbol"])
+                .select("id")
+                .eq("date", record["date"])
+                .eq("strategy", record["strategy"])
+                .eq("symbol", record["symbol"])
+                .limit(1)
                 .execute()
             )
+            if existing.data:
+                skipped += 1
+                continue
+
+            result = client.table("strategy_trades").insert(record).execute()
             if result.data:
                 saved += 1
             else:
