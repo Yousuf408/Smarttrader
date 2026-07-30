@@ -240,8 +240,22 @@ async function fetchBrokerStatus(broker, badge) {
     }
 }
 
-// Initial badge pull on page load.
-document.addEventListener('DOMContentLoaded', () => {
+// Initial badge pull + auto-select connected broker on page load.
+document.addEventListener('DOMContentLoaded', async () => {
+    // Fetch which broker is connected
+    try {
+        const resp = await fetch('/api/broker/status');
+        const status = await resp.json();
+        if (status && status.connected && status.broker) {
+            const select = document.getElementById('brokerSelect');
+            if (select) {
+                select.value = status.broker;
+                toggleBrokerFields();
+            }
+        }
+    } catch (_) {
+        // Server not reachable — leave dropdown as-is
+    }
     updateBrokerStatusBadge();
 });
 
