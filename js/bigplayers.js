@@ -66,10 +66,15 @@ function renderBigPlayersData(result) {
                 if (col === 'Price') return `₹${row.price || row.Price || ''}`;
 
                 if (col === 'CHG%') {
-                    const chg = row.chg || row.CHG || row.change || '';
-                    const isPositive = String(chg).includes('+') || (parseFloat(chg) > 0);
-                    const color = isPositive ? 'var(--color-success)' : 'var(--color-danger)';
-                    return `<span style="color:${color};font-weight:600;">${chg}</span>`;
+                    // The API key is "CHG%", but refresh/ticks set row.chg / row.CHG.
+                    let chg = row.chg ?? row.CHG ?? row['CHG%'] ?? row.change ?? '';
+                    if (chg !== '' && !isNaN(parseFloat(chg))) {
+                        const v = parseFloat(chg);
+                        const sign = v > 0 ? '+' : '';
+                        const color = v >= 0 ? 'var(--color-green, #22c55e)' : 'var(--color-red, #ef4444)';
+                        return `<span style="color:${color};font-weight:600;">${sign}${v.toFixed(2)}%</span>`;
+                    }
+                    return `<span style="color:var(--text-muted);">-</span>`;
                 }
 
                 if (col === 'Breakout') {
@@ -145,7 +150,10 @@ async function fetchBigPlayersRefresh(silent = true) {
             if (!updated) continue;
 
             if (typeof updated.Price === 'number') row.price = updated.Price;
-            if (typeof updated.CHG === 'number' || typeof updated.CHG === 'string') row.chg = updated.CHG;
+            // API returns CHG% (with percent sign in the key)
+            if (updated['CHG%'] != null) {
+                row.chg = parseFloat(updated['CHG%']);
+            }
             if (typeof updated.Breakout === 'string') row.breakout = updated.Breakout;
             if (typeof updated.SupportPrice === 'number') row.supportPrice = updated.SupportPrice;
             touched++;
@@ -208,8 +216,14 @@ function _bpApplyTicks(ticks) {
         if (lastBigPlayersData && lastBigPlayersData.data) {
             const row = lastBigPlayersData.data.find(r => (r.Symbol || r.symbol) === sym);
             if (row) {
-                if (tick.ltp != null) row.Price = Number(tick.ltp);
-                if (tick.change_pct != null) row.CHG = Number(tick.change_pct);
+                if (tick.ltp != null) {
+                    row.Price = Number(tick.ltp);
+                    row.price = Number(tick.ltp);
+                }
+                if (tick.change_pct != null) {
+                    row.CHG = Number(tick.change_pct);
+                    row.chg = Number(tick.change_pct);
+                }
             }
         }
     }
@@ -374,7 +388,39 @@ window.calculateBreakoutStatus = calculateBreakoutStatus;
 window.lastBigPlayersData = lastBigPlayersData;
 
 // ================================================================
-// SECTION 11: INIT
+// SECTION 11: NEW LOW ONLY TOGGLE
+// ================================================================
+
+let _newLowOnly = false;
+
+function onNewLowToggle() {
+    _newLowOnly = document.getElementById('newLowToggle')?.checked || false;
+    document.getElementById('newLowStatus').textContent = _newLowOnly ? 'ON' : 'OFF';
+    if (lastBigPlayersData) {
+        renderBigPlayersData(lastBigPlayersData);
+    }
+}
+
+/** Filter the data array when New Low Only is active. */
+function _applyNewLowFilter(data) {
+    if (!_newLowOnly || !data) return data;
+    return data.filter(r => {
+        const price = parseFloat(r.price || r.Price || 0);
+        const support = parseFloat(r.supportPrice || r.SupportPrice || 0);
+        return price < support && price > 0 && support > 0;
+    });
+}
+
+// Wrap renderBigPlayersData with new-low filtering
+const _origRenderBp = renderBigPlayersData;
+renderBigPlayersData = function (result) {
+    const filtered = {...result};
+    filtered.data = _applyNewLowFilter(result.data || []);
+    _origRenderBp(filtered);
+};
+
+// ================================================================
+// SECTION 12: INIT
 // ================================================================
 
 // (auto‑refresh is started only when the user selects the Big Players

@@ -136,6 +136,15 @@
                             </label>
                             <span class="toggle-status" id="toggleStatus">OFF</span>
                         </div>
+                        <!-- ===== NEW LOW ONLY (Big Players toggle, hidden for other strategies) ===== -->
+                        <div class="newlow-inline" id="newLowFilterWrap" style="display:none;">
+                            <span class="newlow-label">New Low Only</span>
+                            <label class="toggle-switch toggle-switch-sm">
+                                <input type="checkbox" id="newLowToggle" onchange="onNewLowToggle()" />
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <span class="toggle-status" id="newLowStatus">OFF</span>
+                        </div>
                     </div>
                 </div>
                 <div class="table-wrap">

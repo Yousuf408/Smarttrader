@@ -373,6 +373,10 @@ async function onStrategyChange() {
         tbody.innerHTML = `<tr><td colspan="${columns.length}" style="text-align:center;padding:40px;">🔎 Filtering best-performing stocks…</td></tr>`;
         document.getElementById('screenerCount').textContent = 'Loading...';
 
+        // Hide the Big Players-specific New Low toggle
+        const nw = document.getElementById('newLowFilterWrap');
+        if (nw) nw.style.display = 'none';
+
         const result = await fetchAdvanceORB();
         if (result) {
             lastAdvanceOrbData = result;
@@ -398,6 +402,10 @@ async function onStrategyChange() {
         thead.innerHTML = columns.map(col => `<th>${col}</th>`).join('');
         tbody.innerHTML = `<tr><td colspan="${columns.length}" style="text-align:center;padding:40px;">🏢 Fetching Big Players data…</td></tr>`;
         document.getElementById('screenerCount').textContent = 'Loading...';
+
+        // Show the New Low Only toggle
+        const nw = document.getElementById('newLowFilterWrap');
+        if (nw) nw.style.display = '';
 
         // Call Big Players API
         const result = await window.fetchBigPlayers();
