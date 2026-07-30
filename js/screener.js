@@ -324,6 +324,9 @@ function renderStrategyData(result) {
                 } else if (col === '1st Range%') {
                     const range = parseFloat(row.candle_range_pct);
                     value = Number.isFinite(range) ? `${range.toFixed(2)}%` : '';
+                } else if (col === 'Open 9:15') {
+                    const op = parseFloat(row.open915);
+                    value = Number.isFinite(op) ? `₹${op.toFixed(2)}` : '';
                 } else if (col === 'Prev High') {
                     const ph = parseFloat(row.yesterday_high);
                     value = Number.isFinite(ph) ? `₹${ph.toFixed(2)}` : '';

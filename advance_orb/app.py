@@ -202,6 +202,7 @@ GAP_UP_COLUMNS = [
     "RELVOL",
     "Sector",
     "200 EMA",
+    "Open 9:15",
     "Prev High",
     "MaxQty",
 ]
@@ -712,6 +713,9 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False):
         df['close915'] = df['name'].map(
             lambda s: opening_candle_map.get(s, (False, None, None, None, None))[4]
         )
+        df['open915'] = df['name'].map(
+            lambda s: opening_candle_map.get(s, (False, None, None, None, None, None, None, None))[2]
+        )
         df['candle_range_pct'] = df['name'].map(
             lambda s: opening_candle_map.get(s, (False, None, None, None, None, None, None, None))[5]
         )
@@ -741,15 +745,16 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False):
 
             if gap_up:
                 # Gap-up mode: skip 1.5% candle filter.
-                # Instead require price > 200 EMA AND price > yesterday's high.
-                price = pd.to_numeric(row['close'], errors='coerce')
+                # Instead require the 9:15 OPENING price > 200 EMA AND
+                # opening price > yesterday's high (gap-up at the open).
+                open915 = row.get('open915')
                 ema_val = row.get('ema')
                 yh = row.get('yesterday_high')
-                if not pd.notna(price) or price <= 0:
+                if not pd.notna(open915) or open915 <= 0:
                     continue
                 if not pd.notna(ema_val) or not pd.notna(yh):
                     continue
-                if price <= float(ema_val) or price <= float(yh):
+                if float(open915) <= float(ema_val) or float(open915) <= float(yh):
                     continue
             else:
                 # Normal mode: filter by small 9:15 candle (≤1.5% range)
@@ -781,6 +786,11 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False):
                 "ema": (
                     round(float(row["ema"]), 2)
                     if pd.notna(row.get("ema"))
+                    else None
+                ),
+                "open915": (
+                    round(float(row["open915"]), 2)
+                    if pd.notna(row.get("open915"))
                     else None
                 ),
                 "yesterday_high": (
