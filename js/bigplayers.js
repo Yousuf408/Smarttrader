@@ -159,6 +159,9 @@ async function fetchBigPlayersRefresh(silent = true) {
             if (updated.TodayLow != null) {
                 row.TodayLow = parseFloat(updated.TodayLow);
             }
+            if (updated.low915 != null) {
+                row.low915 = parseFloat(updated.low915);
+            }
             touched++;
         }
 
@@ -405,14 +408,16 @@ function onNewLowToggle() {
 }
 
 /** Filter the data array when New Low Only is active.
- *  Shows only stocks whose current price is BELOW today's low
- *  (i.e. the stock has broken below today's low so far). */
+ *  Condition 2 of the Big Players strategy: shows only stocks that have
+ *  ALREADY created a new low today — meaning the day's lowest price so far
+ *  (TodayLow) is BELOW the 9:15 opening candle's low (low915).
+ *  The stock has broken below the opening candle range, creating a new low. */
 function _applyNewLowFilter(data) {
     if (!_newLowOnly || !data) return data;
     return data.filter(r => {
-        const price = parseFloat(r.price || r.Price || 0);
-        const todayLow = parseFloat(r.TodayLow || 0);
-        return price < todayLow && price > 0 && todayLow > 0;
+        const todayLow = parseFloat(r.TodayLow || r.todayLow || 0);
+        const low915 = parseFloat(r.low915 || 0);
+        return todayLow < low915 && todayLow > 0 && low915 > 0;
     });
 }
 

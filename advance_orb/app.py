@@ -963,6 +963,7 @@ def get_big_players(budget: int = 100000, parts: int = 4):
                 "SupportPrice": support_price,
                 "MaxQty": int(row.get("MaxQty", 0)),
                 "TodayLow": round(today_low, 2) if today_low else None,
+                "low915": round(row['low915'], 2) if pd.notna(row.get('low915')) else None,
             })
 
         return {
@@ -1076,6 +1077,7 @@ def refresh_big_players(tickers: str = ""):
                 "Breakout": breakout_status,
                 "SupportPrice": support_price,
                 "TodayLow": round(today_low, 2) if today_low else None,
+                "low915": round(low915, 2) if low915 is not None else None,
             })
 
         return {"refreshed": refreshed}
