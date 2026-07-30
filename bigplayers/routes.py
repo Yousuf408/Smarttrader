@@ -12,6 +12,7 @@ from tradingview_screener import Query, col
 from tradingview_screener.query import HEADERS as TV_HEADERS
 
 from bigplayers.strategy import BigPlayersStrategy
+from advance_orb.supabase_db import save_top5_strategy
 from advance_orb.common import (
     PRICE_MIN, PRICE_MAX, GAP_THRESHOLD, MARKET_CAP_MIN,
     SMALL_CANDLE_THRESHOLD, MAX_TV_STOCKS,
@@ -166,6 +167,12 @@ def get_big_players(budget: int = 100000, parts: int = 4):
                 "low915": round(row['low915'], 2) if pd.notna(row.get('low915')) else None,
                 "high915": round(row['high915'], 2) if pd.notna(row.get('high915')) else None,
             })
+
+        # Save top 5 to Supabase for historical tracking
+        try:
+            save_top5_strategy("bigplayers", result[:5])
+        except Exception:
+            pass  # never break the screener over a DB hiccup
 
         return {
             "strategy": "bigplayers",

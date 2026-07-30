@@ -49,7 +49,10 @@ from broker.angel_ws import (
     add_to_watchlist as angel_ws_add,
     get_subscription_status as angel_ws_status,
 )
-# (watchlist export removed — Angel One WAF blocks the REST API)
+from advance_orb.supabase_db import save_top5_strategy, ensure_table
+
+# Ensure the strategy_trades table exists (run once at startup)
+ensure_table()
 
 # =================================================================
 # No login flow, no Supabase, no JWT — the auth surface has been
@@ -453,6 +456,12 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False):
             conditions["filter"] = "Price > 200 EMA AND Price > Prev High"
         else:
             conditions["small_candle"] = f"9:15 IST range <= {SMALL_CANDLE_THRESHOLD}%"
+
+        # Save top 5 to Supabase for historical tracking
+        try:
+            save_top5_strategy("advanceorb", result[:5])
+        except Exception:
+            pass  # never break the screener over a DB hiccup
 
         return {
             "strategy": "advanceorb",
