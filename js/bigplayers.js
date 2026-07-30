@@ -257,10 +257,14 @@ function _bpApplyTicks(ticks) {
             if (maxQty <= 0) continue;
             if (!Number.isFinite(todayLow) || todayLow >= low915) continue;
 
-            // Condition 3: price recovered to ≥ 75% of candle range above low
+            // Condition 3: price recovered to ≥ 75% of candle range above low,
+            // but NOT more than 0.50% above the 9:15 high (avoid late entry)
             const range = high915 - low915;
             if (range <= 0) continue;
-            if (!Number.isFinite(price) || price < low915 + range * 0.75) continue;
+            if (!Number.isFinite(price)) continue;
+            const minEntry = low915 + range * 0.75;
+            const maxEntry = high915 * 1.005;
+            if (price < minEntry || price > maxEntry) continue;
 
             // All conditions met — buy immediately
             _bpBoughtSymbols.add(sym);
@@ -370,12 +374,14 @@ async function autoBuyAllStocksBigPlayers() {
         // Condition 2: stock must have created a new low (broke below low915)
         if (!Number.isFinite(todayLow) || todayLow >= low915) return false;
 
-        // Condition 3: price must have recovered to ≥ 75% of the candle's range above the low
+        // Condition 3: price must have recovered to ≥ 75% of the candle's range
+        // above the low, but NOT more than 0.50% above the 9:15 high (avoid late entry)
         const range = high915 - low915;
         if (range <= 0) return false;
-        const entryPrice = low915 + range * 0.75;
+        const minEntry = low915 + range * 0.75;
+        const maxEntry = high915 * 1.005;
 
-        return price >= entryPrice;
+        return price >= minEntry && price <= maxEntry;
     });
 
     if (eligibleStocks.length === 0) {
