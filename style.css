@@ -364,7 +364,7 @@ body {
    ================================================================ */
 .screener-controls {
     display: flex;
-    gap: 14px;
+    gap: 8px;
     flex-wrap: wrap;
     align-items: center;
 }
@@ -373,11 +373,11 @@ body {
     background: var(--bg-secondary);
     border: 2px solid rgba(0,0,0,0.06);
     color: var(--text-primary);
-    padding: 10px 16px;
+    padding: 8px 12px;
     border-radius: var(--radius-sm);
     font-size: 13px;
     font-weight: 500;
-    min-width: 180px;
+    min-width: 140px;
     transition: var(--transition);
 }
 .screener-controls select:focus,
@@ -386,7 +386,75 @@ body {
     border-color: #6C5CE7;
     box-shadow: 0 0 0 4px rgba(108,92,231,0.10);
 }
-.screener-controls .strategy-select { min-width: 220px; }
+.screener-controls .strategy-select { min-width: 180px; }
+.screener-controls label { font-size: 12px; font-weight: 600; color: var(--text-secondary); white-space: nowrap; }
+.btn-refresh { padding: 8px 14px; font-size: 15px; }
+
+/* Full-row toggle group — all toggles in one row */
+.toggle-group {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+.toggle-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: var(--bg-secondary);
+    border: 1px solid rgba(0,0,0,0.06);
+    border-radius: 8px;
+    padding: 3px 8px;
+    white-space: nowrap;
+}
+.toggle-item-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    user-select: none;
+}
+.toggle-item-status {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--text-muted);
+    min-width: 22px;
+    text-align: center;
+}
+.toggle-item-status.active { color: var(--color-success); }
+.amo-status-xs {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--text-muted);
+    min-width: 24px;
+    text-align: center;
+}
+.amo-status-xs.active { color: #6C5CE7; }
+.toggle-item-amo { border-color: rgba(108,92,231,0.2); }
+
+/* Extra-small toggle for compact row */
+.toggle-xs { width: 28px !important; height: 16px !important; }
+.toggle-xs .toggle-slider::before {
+    width: 12px !important;
+    height: 12px !important;
+    left: 2px !important;
+    bottom: 2px !important;
+}
+.toggle-xs input:checked + .toggle-slider::before {
+    transform: translateX(12px) !important;
+}
+
+/* Click-to-copy feedback on symbol cells */
+.symbol-cell {
+    cursor: pointer;
+    user-select: none;
+    font-weight: 700;
+    transition: background 0.15s;
+}
+.symbol-cell:hover { background: rgba(108,92,231,0.06); }
+.symbol-cell-copied {
+    background: rgba(108,92,231,0.18) !important;
+    border-radius: 4px;
+}
 
 /* ================================================================
    INFO GRID
@@ -784,121 +852,8 @@ body {
 }
 
 /* ================================================================
-   AUTO BUY INLINE — fits the same row as Strategy / Budget / Parts
+   TOGGLE GROUP — all strategy toggles in one compact row
    ================================================================ */
-.auto-buy-inline {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    background: var(--bg-secondary);
-    border: 2px solid rgba(0,0,0,0.06);
-    padding: 4px 10px;
-    border-radius: var(--radius-sm);
-    transition: var(--transition);
-}
-.auto-buy-inline .auto-buy-label {
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--text-secondary);
-    user-select: none;
-}
-.auto-buy-inline .toggle-switch { width: 38px; height: 22px; }
-.auto-buy-inline .toggle-slider::before {
-    width: 16px;
-    height: 16px;
-    left: 3px;
-    bottom: 3px;
-}
-.auto-buy-inline .toggle-switch input:checked + .toggle-slider::before {
-    transform: translateX(16px);
-}
-
-/* ================================================================
-   AMO INLINE — global Order Mode switch (Market vs After-Market)
-   ================================================================ */
-.amo-inline {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    background: var(--bg-secondary);
-    border: 2px solid rgba(0,0,0,0.06);
-    padding: 4px 10px;
-    border-radius: var(--radius-sm);
-    transition: var(--transition);
-}
-.amo-inline .amo-label {
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--text-secondary);
-    user-select: none;
-}
-.amo-inline .toggle-switch { width: 38px; height: 22px; }
-.amo-inline .toggle-slider::before {
-    width: 16px;
-    height: 16px;
-    left: 3px;
-    bottom: 3px;
-}
-.amo-inline .toggle-switch input:checked + .toggle-slider::before {
-    transform: translateX(16px);
-}
-.amo-inline .amo-status {
-    font-size: 12px;
-    font-weight: 700;
-    color: var(--text-muted);
-    min-width: 32px;
-    text-align: center;
-}
-.amo-inline .amo-status.active { color: #6C5CE7; }
-
-/* ================================================================
-   NEW LOW ONLY TOGGLE (Big Players)
-   ================================================================ */
-.newlow-inline {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    background: var(--bg-glass);
-    border: 1px solid rgba(108,92,231,0.15);
-    border-radius: var(--radius-sm);
-    padding: 3px 10px;
-    white-space: nowrap;
-}
-.newlow-inline .newlow-label {
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--text-secondary);
-}
-.newlow-inline .toggle-switch { width: 34px; height: 20px; }
-.newlow-inline .toggle-slider::before {
-    width: 14px; height: 14px;
-    left: 3px; bottom: 3px;
-}
-.newlow-inline .toggle-switch input:checked + .toggle-slider::before {
-    transform: translateX(14px);
-}
-.newlow-inline .toggle-status {
-    font-size: 11px;
-    font-weight: 700;
-    color: var(--text-muted);
-    min-width: 26px;
-    text-align: center;
-}
-
-/* ================================================================
-   BP AUTO BUY TOGGLE (Big Players)
-   ================================================================ */
-.bp-auto-buy-inline {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    background: var(--bg-glass);
-    border: 1px solid rgba(46,204,113,0.15);
-    border-radius: var(--radius-sm);
-    padding: 3px 10px;
-    white-space: nowrap;
-}
-.bp-auto-buy-inline .bp-auto-buy-label {
     font-size: 12px;
     font-weight: 600;
     color: var(--text-secondary);

@@ -278,6 +278,13 @@ async function fetchAdvanceORB() {
 // ================================================================
 // RENDER STRATEGY DATA (from API)
 // ================================================================
+/** Copy symbol text to clipboard with 1-second highlight feedback. */
+function copySymbol(text, el) {
+    navigator.clipboard.writeText(text).catch(() => {});
+    el.classList.add('symbol-cell-copied');
+    setTimeout(() => el.classList.remove('symbol-cell-copied'), 1000);
+}
+// ================================================================
 function renderStrategyData(result) {
     const strategyId = document.getElementById('strategySelect').value;
     const strategy = STRATEGIES[strategyId];
@@ -356,7 +363,13 @@ function renderStrategyData(result) {
 
             const symbol = row.Symbol || row.symbol || 'Unknown';
             return `<tr>
-                ${values.map(val => `<td>${val}</td>`).join('')}
+                ${values.map((val, vi) => {
+                    const colName = headerColumns[vi];
+                    if (colName === 'Symbol') {
+                        return `<td class="symbol-cell" onclick="copySymbol('${symbol}', this)" title="Click to copy">${val}</td>`;
+                    }
+                    return `<td>${val}</td>`;
+                }).join('')}
                 <td>
                     <button class="btn-place-order btn-sm" onclick="placeOrder('${symbol}')" ${autoBuyEnabled ? 'disabled' : ''}>
                         Place Order

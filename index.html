@@ -104,64 +104,74 @@
                             <option value="smartmoney">💰 SmartMoney</option>
                             <option value="bigplayers">🏢 Big Players</option>
                         </select>
-                        <!-- ===== BUDGET (Indian-formatted text input, no ± steppers) ===== -->
+                        <!-- ===== BUDGET ===== -->
                         <div class="budget-control">
                             <label for="budgetInput" class="field-label">Budget:</label>
                             <span class="prefix-rupee">₹</span>
                             <input type="text" id="budgetInput" inputmode="numeric" autocomplete="off" value="1,00,000" />
                         </div>
-                        <!-- ===== PARTS STEPPER (compact, ~50% input width) ===== -->
+                        <!-- ===== PARTS STEPPER ===== -->
                         <div class="stepper stepper-narrow">
                             <label for="partsInput" class="field-label">Parts:</label>
                             <button type="button" onclick="stepParts(-1)" aria-label="Decrease parts">−</button>
                             <input type="number" id="partsInput" value="4" min="1" max="20" step="1" />
                             <button type="button" onclick="stepParts(1)" aria-label="Increase parts">+</button>
                         </div>
-                        <button class="btn btn-primary" onclick="refreshScreener()">🔄 Refresh</button>
-                        <!-- ===== AMO MODE (global switch — Market vs After-Market Order) ===== -->
-                        <div class="amo-inline">
-                            <span class="amo-label">Order Mode</span>
-                            <label class="toggle-switch">
-                                <input type="checkbox" id="amoToggle" onchange="toggleAmoMode()" />
-                                <span class="toggle-slider"></span>
-                            </label>
-                            <span class="amo-status" id="amoStatus">MKT</span>
-                        </div>
-                        <!-- ===== AUTO BUY (Advance ORB, hidden for Big Players) ===== -->
-                        <div class="auto-buy-inline" id="autoBuyWrap">
-                            <span class="auto-buy-label">Auto Buy</span>
-                            <label class="toggle-switch">
-                                <input type="checkbox" id="autoBuyToggle" onchange="toggleAutoBuyMode()" />
-                                <span class="toggle-slider"></span>
-                            </label>
-                            <span class="toggle-status" id="toggleStatus">OFF</span>
-                        </div>
-                        <!-- ===== GAP UP MODE (Advance ORB toggle — replace 1.5% candle filter) ===== -->
-                        <div class="auto-buy-inline" id="gapUpWrap">
-                            <span class="auto-buy-label">Gap-Up</span>
-                            <label class="toggle-switch">
-                                <input type="checkbox" id="gapUpToggle" onchange="toggleGapUpMode()" />
-                                <span class="toggle-slider"></span>
-                            </label>
-                            <span class="toggle-status" id="gapUpStatus">OFF</span>
-                        </div>
-                        <!-- ===== NEW LOW ONLY (Big Players toggle, hidden for other strategies) ===== -->
-                        <div class="newlow-inline" id="newLowFilterWrap" style="display:none;">
-                            <span class="newlow-label">New Low Only</span>
-                            <label class="toggle-switch toggle-switch-sm">
-                                <input type="checkbox" id="newLowToggle" onchange="onNewLowToggle()" />
-                                <span class="toggle-slider"></span>
-                            </label>
-                            <span class="toggle-status" id="newLowStatus">OFF</span>
-                        </div>
-                        <!-- ===== BIG PLAYERS AUTO BUY toggle (hidden for other strategies) ===== -->
-                        <div class="bp-auto-buy-inline" id="bpAutoBuyWrap" style="display:none;">
-                            <span class="bp-auto-buy-label">BP Auto Buy</span>
-                            <label class="toggle-switch toggle-switch-sm">
-                                <input type="checkbox" id="bpAutoBuyToggle" onchange="toggleBpAutoBuy()" />
-                                <span class="toggle-slider"></span>
-                            </label>
-                            <span class="toggle-status" id="bpAutoBuyStatus">OFF</span>
+                        <button class="btn btn-primary btn-refresh" onclick="refreshScreener()">🔄</button>
+
+                        <!-- ===== TOGGLES GROUP (compact, flex row) ===== -->
+                        <div class="toggle-group">
+
+                            <!-- AUTO BUY (Advance ORB) -->
+                            <div class="toggle-item" id="autoBuyWrap">
+                                <span class="toggle-item-label">Auto Buy</span>
+                                <label class="toggle-switch toggle-xs">
+                                    <input type="checkbox" id="autoBuyToggle" onchange="toggleAutoBuyMode()" />
+                                    <span class="toggle-slider"></span>
+                                </label>
+                                <span class="toggle-item-status" id="toggleStatus">OFF</span>
+                            </div>
+
+                            <!-- GAP UP MODE (Advance ORB) -->
+                            <div class="toggle-item" id="gapUpWrap">
+                                <span class="toggle-item-label">Gap-Up</span>
+                                <label class="toggle-switch toggle-xs">
+                                    <input type="checkbox" id="gapUpToggle" onchange="toggleGapUpMode()" />
+                                    <span class="toggle-slider"></span>
+                                </label>
+                                <span class="toggle-item-status" id="gapUpStatus">OFF</span>
+                            </div>
+
+                            <!-- NEW LOW ONLY (Big Players) -->
+                            <div class="toggle-item" id="newLowFilterWrap" style="display:none;">
+                                <span class="toggle-item-label">New Low</span>
+                                <label class="toggle-switch toggle-xs">
+                                    <input type="checkbox" id="newLowToggle" onchange="onNewLowToggle()" />
+                                    <span class="toggle-slider"></span>
+                                </label>
+                                <span class="toggle-item-status" id="newLowStatus">OFF</span>
+                            </div>
+
+                            <!-- BP AUTO BUY (Big Players) -->
+                            <div class="toggle-item" id="bpAutoBuyWrap" style="display:none;">
+                                <span class="toggle-item-label">BP Auto</span>
+                                <label class="toggle-switch toggle-xs">
+                                    <input type="checkbox" id="bpAutoBuyToggle" onchange="toggleBpAutoBuy()" />
+                                    <span class="toggle-slider"></span>
+                                </label>
+                                <span class="toggle-item-status" id="bpAutoBuyStatus">OFF</span>
+                            </div>
+
+                            <!-- ===== ORDER MODE (always last) ===== -->
+                            <div class="toggle-item toggle-item-amo">
+                                <span class="toggle-item-label">Order Mode</span>
+                                <label class="toggle-switch toggle-xs">
+                                    <input type="checkbox" id="amoToggle" onchange="toggleAmoMode()" />
+                                    <span class="toggle-slider"></span>
+                                </label>
+                                <span class="amo-status-xs" id="amoStatus">MKT</span>
+                            </div>
+
                         </div>
                     </div>
                 </div>

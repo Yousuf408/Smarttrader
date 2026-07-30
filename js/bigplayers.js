@@ -105,7 +105,8 @@ function renderBigPlayersData(result) {
                 }
 
                 if (col === 'Symbol') {
-                    return `<strong>${row.Symbol || row.symbol || ''}</strong>`;
+                    const sym = row.Symbol || row.symbol || '';
+                    return `<strong class="symbol-cell" onclick="copySymbol('${sym}', this)" title="Click to copy">${sym}</strong>`;
                 }
 
                 return row[col] || row[col.toLowerCase()] || row[col.toUpperCase()] || '';
