@@ -193,6 +193,19 @@ ADVANCE_ORB_COLUMNS = [
     "MaxQty",
 ]
 
+GAP_UP_COLUMNS = [
+    "Symbol",
+    "Price",
+    "CHG%",
+    "GAP%",
+    "Volume",
+    "RELVOL",
+    "Sector",
+    "200 EMA",
+    "Prev High",
+    "MaxQty",
+]
+
 BIG_PLAYERS_COLUMNS = [
     "Symbol",
     "Price",
@@ -398,7 +411,7 @@ def batch_opening_candle(symbols: list[str]) -> dict:
                 threads=False,
             )
             if candles is None or candles.empty:
-                return (False, None, None, None, None, None, None)
+                return (False, None, None, None, None, None, None, None)
             if isinstance(candles.columns, pd.MultiIndex):
                 try:
                     candles = candles.xs(ticker, axis=1, level=-1)
@@ -406,9 +419,9 @@ def batch_opening_candle(symbols: list[str]) -> dict:
                     try:
                         candles = candles.xs(ticker, axis=1, level=0)
                     except (KeyError, IndexError):
-                        return (False, None, None, None, None, None, None)
+                        return (False, None, None, None, None, None, None, None)
             if "High" not in candles or "Low" not in candles:
-                return (False, None, None, None, None, None, None)
+                return (False, None, None, None, None, None, None, None)
             local_index = pd.DatetimeIndex(candles.index)
             if local_index.tz is None:
                 local_index = local_index.tz_localize('UTC').tz_convert(IST)
@@ -421,7 +434,7 @@ def batch_opening_candle(symbols: list[str]) -> dict:
             day_mask = candles.index.date == target_date
             day_data = candles[day_mask]
             if day_data.empty:
-                return (False, None, None, None, None, None, None)
+                return (False, None, None, None, None, None, None, None)
             day_low = float(day_data["Low"].min())
 
             # 9:15 candle
@@ -429,7 +442,7 @@ def batch_opening_candle(symbols: list[str]) -> dict:
                 (day_data.index.hour == 9) & (day_data.index.minute >= 15)
             ]
             if opening.empty:
-                return (False, None, None, None, None, None, None)
+                return (False, None, None, None, None, None, None, None)
 
             candle = opening.iloc[0]
             high = pd.to_numeric(candle["High"], errors="coerce")
@@ -437,10 +450,24 @@ def batch_opening_candle(symbols: list[str]) -> dict:
             open915 = pd.to_numeric(candle["Open"], errors="coerce")
             close915 = pd.to_numeric(candle["Close"], errors="coerce")
             if pd.isna(high) or pd.isna(low) or low <= 0:
-                return (False, None, None, None, None, None, None)
+                return (False, None, None, None, None, None, None, None)
             candle_range_pct = ((float(high) - float(low)) / float(low)) * 100
             is_small = bool(candle_range_pct <= SMALL_CANDLE_THRESHOLD)
             open_val = float(open915) if pd.notna(open915) else None
+
+            # Yesterday's high (previous trading day's max High)
+            yesterday_high = None
+            all_trading_dates = sorted(set(candles.index.date))
+            try:
+                prev_idx = all_trading_dates.index(target_date) - 1
+                if prev_idx >= 0:
+                    prev_date = all_trading_dates[prev_idx]
+                    prev_data = candles[candles.index.date == prev_date]
+                    if not prev_data.empty:
+                        yesterday_high = float(prev_data["High"].max())
+            except (ValueError, IndexError):
+                pass
+
             return (
                 is_small,
                 float(high),
@@ -449,9 +476,10 @@ def batch_opening_candle(symbols: list[str]) -> dict:
                 float(close915) if pd.notna(close915) else None,
                 float(candle_range_pct),
                 day_low,
+                yesterday_high,
             )
         except Exception:
-            return (False, None, None, None, None, None, None)
+            return (False, None, None, None, None, None, None, None)
 
     with ThreadPoolExecutor(max_workers=YFINANCE_WORKERS) as pool:
         futures = {pool.submit(_lookup, sym): sym for sym in unique}
@@ -460,7 +488,7 @@ def batch_opening_candle(symbols: list[str]) -> dict:
             try:
                 results[sym] = fut.result(timeout=20)
             except Exception:
-                results[sym] = (False, None, None, None, None, None, None)
+                results[sym] = (False, None, None, None, None, None, None, None)
     return results
 
 
@@ -570,7 +598,7 @@ def _calc_qty_for_broker(df, budget, parts):
 
 
 @app.get("/api/strategies/advanceorb")
-def get_advance_orb(budget: int = 100000, parts: int = 4):
+def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False):
     """
     Fetch stocks from TradingView with 4 conditions:
     1. Price: 200 to 3000 INR
@@ -652,8 +680,9 @@ def get_advance_orb(budget: int = 100000, parts: int = 4):
             }
 
         # ─── Step 3: Format Data for Frontend ───
-        # Run the Yahoo Finance candle check across every candidate in parallel,
-        # then keep only rows whose ticker is in the matching set.
+        # Run the Yahoo Finance candle check across every candidate in parallel.
+        # In normal mode, keep only rows whose ticker passes the ≤1.5% range check.
+        # In gap_up mode, skip the candle-range filter entirely.
         candidate_symbols = df['name'].dropna().astype(str).tolist()
 
         # Open-candle batch: pull each symbol's 9:15 IST 5-min candle in
@@ -684,7 +713,10 @@ def get_advance_orb(budget: int = 100000, parts: int = 4):
             lambda s: opening_candle_map.get(s, (False, None, None, None, None))[4]
         )
         df['candle_range_pct'] = df['name'].map(
-            lambda s: opening_candle_map.get(s, (False, None, None, None, None, None))[5]
+            lambda s: opening_candle_map.get(s, (False, None, None, None, None, None, None, None))[5]
+        )
+        df['yesterday_high'] = df['name'].map(
+            lambda s: opening_candle_map.get(s, (False, None, None, None, None, None, None, None))[7]
         )
         # Compute 200-period EMA per candidate in parallel; surface
         # in df['ema']. NOT a screener filter — the auto-buy frontend
@@ -706,8 +738,23 @@ def get_advance_orb(budget: int = 100000, parts: int = 4):
         result = []
         for _, row in df.iterrows():
             symbol = row['name']
-            if symbol not in small_candle_symbols:
-                continue
+
+            if gap_up:
+                # Gap-up mode: skip 1.5% candle filter.
+                # Instead require price > 200 EMA AND price > yesterday's high.
+                price = pd.to_numeric(row['close'], errors='coerce')
+                ema_val = row.get('ema')
+                yh = row.get('yesterday_high')
+                if not pd.notna(price) or price <= 0:
+                    continue
+                if not pd.notna(ema_val) or not pd.notna(yh):
+                    continue
+                if price <= float(ema_val) or price <= float(yh):
+                    continue
+            else:
+                # Normal mode: filter by small 9:15 candle (≤1.5% range)
+                if symbol not in small_candle_symbols:
+                    continue
 
             # Format volume
             vol = row.get('volume', 0)
@@ -722,9 +769,10 @@ def get_advance_orb(budget: int = 100000, parts: int = 4):
             relvol = row.get('relative_volume', 0)
             relvol_str = f"{relvol:.2f}x" if pd.notna(relvol) else "0x"
 
-            result.append({
+            close_price = float(pd.to_numeric(row['close'], errors='coerce'))
+            entry = {
                 "Symbol": symbol,
-                "Price": round(row['close'], 2),
+                "Price": round(close_price, 2),
                 "CHG%": round(row['change'], 2),
                 "GAP%": round(row['gap'], 2),
                 "Volume": volume_str,
@@ -735,44 +783,58 @@ def get_advance_orb(budget: int = 100000, parts: int = 4):
                     if pd.notna(row.get("ema"))
                     else None
                 ),
-                # Pull high915 from df column (float|None). Read by the
-                # auto-buy band-filter on the frontend (AUTO_BUY_MIN/MAX).
-                "high915": (
-                    round(float(row["high915"]), 2)
-                    if pd.notna(row.get("high915"))
-                    else None
-                ),
-                "low915": (
-                    round(float(row["low915"]), 2)
-                    if pd.notna(row.get("low915"))
-                    else None
-                ),
-                "close915": (
-                    round(float(row["close915"]), 2)
-                    if pd.notna(row.get("close915"))
-                    else None
-                ),
-                "candle_range_pct": (
-                    round(float(row["candle_range_pct"]), 4)
-                    if pd.notna(row.get("candle_range_pct"))
+                "yesterday_high": (
+                    round(float(row["yesterday_high"]), 2)
+                    if pd.notna(row.get("yesterday_high"))
                     else None
                 ),
                 "MaxQty": int(row.get("MaxQty", 0)),
-            })
+            }
+
+            if not gap_up:
+                # Normal mode: include candle detail columns
+                entry["high915"] = (
+                    round(float(row["high915"]), 2)
+                    if pd.notna(row.get("high915"))
+                    else None
+                )
+                entry["low915"] = (
+                    round(float(row["low915"]), 2)
+                    if pd.notna(row.get("low915"))
+                    else None
+                )
+                entry["close915"] = (
+                    round(float(row["close915"]), 2)
+                    if pd.notna(row.get("close915"))
+                    else None
+                )
+                entry["candle_range_pct"] = (
+                    round(float(row["candle_range_pct"]), 4)
+                    if pd.notna(row.get("candle_range_pct"))
+                    else None
+                )
+
+            result.append(entry)
+
+        out_columns = GAP_UP_COLUMNS if gap_up else ADVANCE_ORB_COLUMNS
+        conditions = {
+            "price": f"{PRICE_MIN} to {PRICE_MAX} INR",
+            "gap": f"< {GAP_THRESHOLD}%",
+            "market_cap": f"> {MARKET_CAP_MIN/1e9:.0f}B INR",
+            "exchange": "NSE",
+        }
+        if gap_up:
+            conditions["filter"] = "Price > 200 EMA AND Price > Prev High"
+        else:
+            conditions["small_candle"] = f"9:15 IST range <= {SMALL_CANDLE_THRESHOLD}%"
 
         return {
             "strategy": "advanceorb",
             "name": "Advance ORB",
             "count": len(result),
             "data": result,
-            "columns": ADVANCE_ORB_COLUMNS,
-            "conditions": {
-                "price": f"{PRICE_MIN} to {PRICE_MAX} INR",
-                "gap": f"< {GAP_THRESHOLD}%",
-                "market_cap": f"> {MARKET_CAP_MIN/1e9:.0f}B INR",
-                "exchange": "NSE",
-                "small_candle": f"9:15 IST range <= {SMALL_CANDLE_THRESHOLD}%",
-            }
+            "columns": out_columns,
+            "conditions": conditions,
         }
 
     except Exception as e:
@@ -1417,29 +1479,30 @@ def ws_auto_subscribe(symbols: list[str]):
 
 
 @app.get("/api/strategies/advanceorb/refresh")
-def refresh_advance_orb(tickers: str = ""):
+def refresh_advance_orb(tickers: str = "", gap_up: bool = False):
     """Lightweight refresh of price/volume/change for a fixed list of tickers.
 
-    Re-checks the opening-candle eligibility as well as live
-    price/volume/change. The first 5-minute candle may still be forming when
-    the initial screener request runs, so a row that initially passes can
-    later exceed the 1.5% range. Such rows must be removed before auto-buy
-    evaluates the refreshed dataset.
+    In normal mode, re-checks the 9:15 opening-candle ≤1.5% eligibility.
+    The first 5-minute candle may still be forming when the initial screener
+    request runs, so a row that initially passes can later exceed the 1.5%
+    range. Such rows must be removed before auto-buy evaluates.
+    In gap_up mode, the candle-range check is skipped.
     """
     try:
         symbols = [s.strip().upper() for s in tickers.split(",") if s.strip()]
         if not symbols:
             return {"refreshed": []}
 
-        # Keep the live refresh subject to the same <=1.5% opening-candle
-        # rule as the full screener request. Return only symbols whose 9:15
-        # candle is still valid; the frontend removes the others from its
-        # in-memory snapshot.
-        opening_candle_map = batch_opening_candle(symbols)
-        valid_symbols = {
-            symbol for symbol, candle in opening_candle_map.items()
-            if isinstance(candle, tuple) and candle and candle[0]
-        }
+        if gap_up:
+            # Gap-up mode: skip the candle-range check, keep all symbols valid
+            valid_symbols = set(symbols)
+        else:
+            # Normal mode: re-check ≤1.5% opening-candle rule
+            opening_candle_map = batch_opening_candle(symbols)
+            valid_symbols = {
+                symbol for symbol, candle in opening_candle_map.items()
+                if isinstance(candle, tuple) and candle and candle[0]
+            }
 
         tv_query = (Query()
             .select('name', 'close', 'change', 'volume', 'relative_volume')

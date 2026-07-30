@@ -136,6 +136,15 @@
                             </label>
                             <span class="toggle-status" id="toggleStatus">OFF</span>
                         </div>
+                        <!-- ===== GAP UP MODE (Advance ORB toggle — replace 1.5% candle filter) ===== -->
+                        <div class="auto-buy-inline" id="gapUpWrap">
+                            <span class="auto-buy-label">Gap-Up</span>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="gapUpToggle" onchange="toggleGapUpMode()" />
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <span class="toggle-status" id="gapUpStatus">OFF</span>
+                        </div>
                         <!-- ===== NEW LOW ONLY (Big Players toggle, hidden for other strategies) ===== -->
                         <div class="newlow-inline" id="newLowFilterWrap" style="display:none;">
                             <span class="newlow-label">New Low Only</span>

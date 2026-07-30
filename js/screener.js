@@ -240,12 +240,28 @@ document.addEventListener("DOMContentLoaded", () => {
 // ================================================================
 // FETCH ADVANCE ORB FROM BACKEND API
 // ================================================================
+let gapUpEnabled = false;
+
+function toggleGapUpMode() {
+    const toggle = document.getElementById('gapUpToggle');
+    const status = document.getElementById('gapUpStatus');
+    gapUpEnabled = toggle.checked;
+    status.textContent = gapUpEnabled ? 'ON' : 'OFF';
+    status.classList.toggle('active', gapUpEnabled);
+    showToast(gapUpEnabled ? '📊 Gap-Up Mode ON' : '📊 Gap-Up Mode OFF',
+        gapUpEnabled ? 'Filtering by 200 EMA + Prev High (no 1.5% candle check)'
+                     : 'Normal ORB mode with 1.5% candle range filter');
+    // Re-fetch with the new mode
+    onStrategyChange();
+}
+
 async function fetchAdvanceORB() {
     const budget = _readBudget();
     const parts  = _readParts();
+    const gapUp = gapUpEnabled ? '&gap_up=true' : '';
     try {
         const response = await fetch(
-            `/api/strategies/advanceorb?budget=${budget}&parts=${parts}`
+            `/api/strategies/advanceorb?budget=${budget}&parts=${parts}${gapUp}`
         );
         if (!response.ok) {
             throw new Error(`API returned ${response.status}`);
@@ -308,6 +324,9 @@ function renderStrategyData(result) {
                 } else if (col === '1st Range%') {
                     const range = parseFloat(row.candle_range_pct);
                     value = Number.isFinite(range) ? `${range.toFixed(2)}%` : '';
+                } else if (col === 'Prev High') {
+                    const ph = parseFloat(row.yesterday_high);
+                    value = Number.isFinite(ph) ? `₹${ph.toFixed(2)}` : '';
                 } else if (col === '9:15 HIGH') {
                     const h = parseFloat(row.high915);
                     value = Number.isFinite(h) ? h : '';
@@ -373,9 +392,11 @@ async function onStrategyChange() {
         tbody.innerHTML = `<tr><td colspan="${columns.length}" style="text-align:center;padding:40px;">🔎 Filtering best-performing stocks…</td></tr>`;
         document.getElementById('screenerCount').textContent = 'Loading...';
 
-        // Show the Advance ORB Auto Buy toggle, hide Big Players-specific toggles
-        const orbab = document.getElementById('autoBuyWrap');
-        if (orbab) orbab.style.display = '';
+        // Show Advance ORB toggles, hide Big Players-specific toggles
+        const autoBuyEl = document.getElementById('autoBuyWrap');
+        const gapUpEl = document.getElementById('gapUpWrap');
+        if (autoBuyEl) autoBuyEl.style.display = gapUpEnabled ? 'none' : '';
+        if (gapUpEl) gapUpEl.style.display = '';
         const nw = document.getElementById('newLowFilterWrap');
         if (nw) nw.style.display = 'none';
         const bpab = document.getElementById('bpAutoBuyWrap');
@@ -407,9 +428,11 @@ async function onStrategyChange() {
         tbody.innerHTML = `<tr><td colspan="${columns.length}" style="text-align:center;padding:40px;">🏢 Fetching Big Players data…</td></tr>`;
         document.getElementById('screenerCount').textContent = 'Loading...';
 
-        // Hide the Advance ORB Auto Buy toggle, show Big Players-specific toggles
+        // Hide Advance ORB toggles, show Big Players-specific toggles
         const orbab = document.getElementById('autoBuyWrap');
         if (orbab) orbab.style.display = 'none';
+        const gapUpEl = document.getElementById('gapUpWrap');
+        if (gapUpEl) gapUpEl.style.display = 'none';
         const nw = document.getElementById('newLowFilterWrap');
         if (nw) nw.style.display = '';
         const bpab = document.getElementById('bpAutoBuyWrap');
@@ -844,8 +867,9 @@ async function fetchAdvanceORBRefresh(silent = true) {
     const symbols = lastAdvanceOrbData.data.map(r => r.Symbol).filter(Boolean);
     if (symbols.length === 0) return;
     try {
+        const gapUp = gapUpEnabled ? '&gap_up=true' : '';
         const response = await fetch(
-            `/api/strategies/advanceorb/refresh?tickers=${encodeURIComponent(symbols.join(','))}`,
+            `/api/strategies/advanceorb/refresh?tickers=${encodeURIComponent(symbols.join(','))}${gapUp}`,
             { cache: 'no-store' }
         );
         if (!response.ok) return;
@@ -854,14 +878,15 @@ async function fetchAdvanceORBRefresh(silent = true) {
         for (const r of (result.refreshed || [])) {
             bySymbol[r.Symbol] = r;
         }
-        // The refresh endpoint re-checks the first 5-minute candle. If a
-        // candle has moved above the 1.5% maximum since the full scan, its
-        // symbol is intentionally absent from `refreshed`; remove it from
-        // the local dataset before rendering or auto-buy evaluates it.
-        const validSymbols = new Set(Object.keys(bySymbol));
-        lastAdvanceOrbData.data = lastAdvanceOrbData.data.filter(
-            row => validSymbols.has(row.Symbol)
-        );
+        // In normal mode, the refresh endpoint re-checks the 9:15 candle
+        // and omits symbols that no longer qualify (≤1.5% range). Remove
+        // those from the local dataset. In gap-up mode all symbols stay.
+        if (!gapUpEnabled) {
+            const validSymbols = new Set(Object.keys(bySymbol));
+            lastAdvanceOrbData.data = lastAdvanceOrbData.data.filter(
+                row => validSymbols.has(row.Symbol)
+            );
+        }
         let touched = 0;
         for (const row of lastAdvanceOrbData.data) {
             const updated = bySymbol[row.Symbol];
