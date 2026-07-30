@@ -2,18 +2,15 @@
 # ANGEL ONE WATCHLIST EXPORT
 #
 # Manages watchlists via Angel One's REST API — get, create, and add symbols.
-# Uses the same auth headers and proxy as the order placement module.
+# Routes requests through the SmartConnect SDK's session to avoid the WAF
+# blocking that raw requests.get/post triggers.
 # ==============================================================================
 
 import json
-import requests
-from broker.angel_orders import (
-    _make_sdk_headers,
-    ANGEL_PROXIES,
-)
 from broker.angel_margin_calculator import (
-    get_access_token,
+    _SMART_API,
     _CREDS,
+    get_access_token,
     resolve_symbol_token,
 )
 
@@ -21,23 +18,45 @@ WATCHLIST_BASE = "https://apiconnect.angelone.in/rest/secure/angelbroking/watchl
 WATCHLIST_NAME = "TradeAlgo Pro"
 
 
-def get_watchlists():
-    """Fetch all watchlists from the user's Angel One account.
+def _sdk_request(method, path, json_body=None):
+    """Make an HTTP request through the SmartConnect SDK's session.
+
+    Uses ``_SMART_API.reqsession`` (a ``requests.Session`` with the correct TLS
+    config, client-identification headers, and proxy) plus the Authorization
+    token, so Angel One's WAF doesn't reject the call.
+
+    Args:
+        method (str): ``"GET"`` or ``"POST"``.
+        path (str): Full URL path.
+        json_body (dict|None): JSON body for POST requests.
 
     Returns:
-        list of dict: [{wlname: str, ...}] or empty list on failure.
+        requests.Response or None if the SDK isn't available.
     """
-    api_key = _CREDS.get("api_key", "")
+    if _SMART_API is None:
+        return None
+
+    headers = _SMART_API.requestHeaders()
     token = get_access_token()
-    if not api_key or not token:
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+
+    session = _SMART_API.reqsession
+    if method.upper() == "GET":
+        return session.get(path, headers=headers, timeout=15)
+    else:
+        return session.post(path, json=json_body, headers=headers, timeout=15)
+
+
+def get_watchlists():
+    """Fetch all watchlists from the user's Angel One account."""
+    api_key = _CREDS.get("api_key", "")
+    if not api_key or not get_access_token():
         return {"ok": False, "error": "Angel One not connected"}
     try:
-        resp = requests.get(
-            f"{WATCHLIST_BASE}/getWatchlist",
-            headers=_make_sdk_headers(api_key, token),
-            proxies=ANGEL_PROXIES,
-            timeout=10,
-        )
+        resp = _sdk_request("GET", f"{WATCHLIST_BASE}/getWatchlist")
+        if resp is None:
+            return {"ok": False, "error": "SmartConnect SDK not initialised"}
         if resp.status_code == 200:
             try:
                 data = resp.json()
@@ -52,26 +71,14 @@ def get_watchlists():
 
 
 def create_watchlist(name):
-    """Create a new watchlist on the user's Angel One account.
-
-    Args:
-        name (str): Watchlist name.
-
-    Returns:
-        dict: {"ok": bool, "error": str|None}
-    """
+    """Create a new watchlist on the user's Angel One account."""
     api_key = _CREDS.get("api_key", "")
-    token = get_access_token()
-    if not api_key or not token:
+    if not api_key or not get_access_token():
         return {"ok": False, "error": "Angel One not connected"}
     try:
-        resp = requests.post(
-            f"{WATCHLIST_BASE}/createWatchlist",
-            json={"wlname": name},
-            headers=_make_sdk_headers(api_key, token),
-            proxies=ANGEL_PROXIES,
-            timeout=10,
-        )
+        resp = _sdk_request("POST", f"{WATCHLIST_BASE}/createWatchlist", {"wlname": name})
+        if resp is None:
+            return {"ok": False, "error": "SmartConnect SDK not initialised"}
         if resp.status_code in (200, 201):
             try:
                 data = resp.json()
@@ -89,17 +96,10 @@ def add_symbols_to_watchlist(watchlist_name, symbols):
     """Add a list of stock symbols to an Angel One watchlist.
 
     Each symbol is resolved to its Angel One token (e.g. RELIANCE → RELIANCE-EQ / 2885).
-
-    Args:
-        watchlist_name (str): Name of the target watchlist.
-        symbols (list of str): Stock symbols like ["RELIANCE", "TCS", "INFY"].
-
-    Returns:
-        dict: {"ok": bool, "added": int, "failed": list, "error": str|None}
+    Batches in chunks of 50 per the API limit.
     """
     api_key = _CREDS.get("api_key", "")
-    token = get_access_token()
-    if not api_key or not token:
+    if not api_key or not get_access_token():
         return {"ok": False, "error": "Angel One not connected", "added": 0, "failed": list(symbols)}
 
     # Resolve each symbol to its Angel One token + exchange
@@ -134,19 +134,19 @@ def add_symbols_to_watchlist(watchlist_name, symbols):
         }
 
     # Angel One's addToWatchlist accepts up to 50 symbols per call
-    # Batch in chunks of 50
     total_added = 0
     batch_errors = []
     for i in range(0, len(resolved), 50):
         batch = resolved[i : i + 50]
         try:
-            resp = requests.post(
+            resp = _sdk_request(
+                "POST",
                 f"{WATCHLIST_BASE}/addToWatchlist",
-                json={"wlname": watchlist_name, "symbols": batch},
-                headers=_make_sdk_headers(api_key, token),
-                proxies=ANGEL_PROXIES,
-                timeout=10,
+                {"wlname": watchlist_name, "symbols": batch},
             )
+            if resp is None:
+                batch_errors.append(f"batch {i//50}: SDK not initialised")
+                continue
             if resp.status_code in (200, 201):
                 try:
                     data = resp.json()
@@ -172,17 +172,8 @@ def add_symbols_to_watchlist(watchlist_name, symbols):
 
 
 def export_symbols(symbols):
-    """High-level helper: get or create 'TradeAlgo Pro' watchlist, then add symbols.
-
-    Args:
-        symbols (list of str): Stock symbols to add.
-
-    Returns:
-        dict: Result from add_symbols_to_watchlist or error.
-    """
-    api_key = _CREDS.get("api_key", "")
-    token = get_access_token()
-    if not api_key or not token:
+    """High-level helper: get or create 'TradeAlgo Pro' watchlist, then add symbols."""
+    if not _CREDS.get("api_key") or not get_access_token():
         return {"ok": False, "error": "Angel One not connected"}
 
     # Step 1: Get existing watchlists
