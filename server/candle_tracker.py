@@ -10,9 +10,21 @@ Architecture
                            (updates live ticks +       get_candle_data() /
                             current 5-min OHLC)        get_200_ema()
 
-On restart: candles.json picks up where the last session left off.  If no
-saved data exists, yfinance bootstraps historical 5-min closes for the
-200-period EMA (happens lazily on first EMA request per symbol).
+Persistence
+───────────
+  candles.json is saved:
+    a) On every 5-min boundary transition (when a candle is completed)
+    b) Every 60s as a safety net for the current in-progress candle
+
+  NOT on every tick — 727 stocks × ~250ms = hundreds of disk writes/second,
+  which would stall tick processing. A JSON round-trip takes ~50ms for this
+  dataset; doing it per-tick would drop 80%+ of frames.
+
+Bootstrap
+─────────
+  On first startup (candles.json missing/empty), a background thread fetches
+  4 trading days of 5-min yfinance data for all 727 symbols and pre-populates
+  candles.json so the 200-period EMA works immediately.
 """
 
 from __future__ import annotations
@@ -21,12 +33,13 @@ import json
 import math
 import threading
 import time
-from datetime import date, datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Any
 
 import yfinance as yf
 import pandas as pd
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from logzero import logger
 
@@ -36,6 +49,8 @@ MARKET_OPEN_MIN = 9 * 60 + 15   # 09:15 IST
 MARKET_CLOSE_MIN = 15 * 60 + 30  # 15:30 IST
 SLOT_LENGTH = 5                  # minutes per slot
 EMA_SPAN = 200
+BOOTSTRAP_DAYS = 4
+BOOTSTRAP_WORKERS = 8
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 STOCKS_PATH = PROJECT_ROOT / "stocks" / "watchlist.json"
@@ -63,11 +78,54 @@ def _today_str() -> str:
     return datetime.now(IST).strftime("%Y-%m-%d")
 
 
-def _is_small_candle(high: float, low: float, threshold: float = 1.5) -> bool:
-    """Return True if the candle range (as % of low) ≤ *threshold*."""
-    if low <= 0:
-        return False
-    return ((high - low) / low) * 100 <= threshold
+def _detect_trading_dates() -> list[str]:
+    """Return the last BOOTSTRAP_DAYS trading dates (most recent first) by probing NIFTY."""
+    try:
+        probe = yf.download("^NSEI", period="7d", interval="5m",
+                            progress=False, auto_adjust=False)
+        if probe is None or probe.empty:
+            return []
+        if isinstance(probe.columns, pd.MultiIndex):
+            probe = probe.xs("^NSEI", axis=1, level=-1)
+        idx = pd.DatetimeIndex(probe.index)
+        if idx.tz is None:
+            idx = idx.tz_localize("UTC").tz_convert(IST)
+        else:
+            idx = idx.tz_convert(IST)
+        probe.index = idx
+        # Collect dates with at least one 5-min candle after 09:15
+        all_dates = sorted({
+            d for d in set(probe.index.date)
+            if len(probe[(probe.index.date == d) &
+                         (probe.index.hour == 9) & (probe.index.minute >= 15)]) > 0
+        }, reverse=True)
+        return [d.strftime("%Y-%m-%d") for d in all_dates[:BOOTSTRAP_DAYS]]
+    except Exception:
+        return []
+
+
+def _yfinance_5min(symbol: str) -> pd.DataFrame | None:
+    """Download 4d of 5-min yfinance data for *symbol* and return a single-level DataFrame.
+
+    Returns None on failure or empty data.
+    """
+    ticker = f"{symbol.strip().upper()}.NS"
+    try:
+        df = yf.download(ticker, period=f"{BOOTSTRAP_DAYS}d", interval="5m",
+                         progress=False, auto_adjust=False)
+        if df is None or df.empty:
+            return None
+        if isinstance(df.columns, pd.MultiIndex):
+            try:
+                df = df.xs(ticker, axis=1, level=-1)
+            except (KeyError, IndexError):
+                try:
+                    df = df.xs(ticker, axis=1, level=0)
+                except (KeyError, IndexError):
+                    return None
+        return df
+    except Exception:
+        return None
 
 
 # ═════════════════════════════════════════════════════════════════════
@@ -99,16 +157,19 @@ class CandleTracker:
         # ── persistence ──────────────────────────────────────────────
         self._lock = threading.Lock()
         self._last_save = time.time()
-        self._save_interval = 30.0   # seconds
-        self._bootstrap_attempted = False
+        self._save_interval = 60.0   # seconds — safety net for current candle
 
         # ── historical EMA data cache ────────────────────────────────
-        # {symbol: [close, close, …]}  – ordered list of 5-min closes
-        self._ema_closes: dict[str, list[float]] = {}
         self._ema_cache: dict[str, float | None] = {}  # symbol → precomputed EMA or None
 
         self._load_stocks()
         self._load_candles()
+
+        # ── background 4-day yfinance bootstrap ──────────────────────
+        if not self.completed:
+            logger.info("⏳ Starting background 4-day yfinance bootstrap for all stocks…")
+            t = threading.Thread(target=self._bootstrap_historical, daemon=True)
+            t.start()
 
     # ── public API used by strategy screeners ────────────────────────
 
@@ -151,7 +212,7 @@ class CandleTracker:
             ]
             day_low = min(all_today_lows) if all_today_lows else None
 
-            yesterday_high = self._yesterday_high(symbol, today)
+            yesterday_high = self._yesterday_high(symbol)
 
             close920 = slot1.get("close") if slot1 else None
             inside_915 = bool(low <= close920 <= high) if close920 is not None else False
@@ -254,14 +315,14 @@ class CandleTracker:
                 if volume > 0:
                     c["volume"] = max(c.get("volume", 0), volume)
 
-            # Periodic auto-save
+            # Safety-net periodic save (every 60s) for the current in-progress candle
             if time.time() - self._last_save > self._save_interval:
-                self._flush_candles()
+                self._save_candles()
 
     # ── internals ────────────────────────────────────────────────────
 
     def _snapshot(self, slot: int, date_str: str) -> None:
-        """Move all current candles for *slot* into ``completed``."""
+        """Move all current candles for *slot* into ``completed`` and save."""
         if date_str not in self.completed:
             self.completed[date_str] = {}
         if slot not in self.completed[date_str]:
@@ -280,15 +341,18 @@ class CandleTracker:
                 "volume": c["volume"],
             }
             # Reset current entry so the next slot starts fresh
-            # (keep it alive, just update slot)
-            c["open"] = c["close"]   # next candle opens at last tick's price
+            c["open"] = c["close"]
             c["high"] = c["close"]
             c["low"] = c["close"]
             c["slot"] = slot + 1
 
-    def _yesterday_high(self, symbol: str, today_candles: dict) -> float | None:
+        # ── Save to disk at every 5-min boundary ─────────────────────
+        # This is the primary persistence point — each completed candle
+        # is written immediately so crash recovery loses at most 5 min.
+        self._save_candles()
+
+    def _yesterday_high(self, symbol: str) -> float | None:
         """Return yesterday's max high for *symbol* from completed data."""
-        # Check yesterday in completed
         all_dates = sorted(self.completed.keys(), reverse=True)
         today_str = _today_str()
         for d in all_dates:
@@ -316,27 +380,113 @@ class CandleTracker:
 
     def _yfinance_ema_fallback(self, symbol: str) -> float | None:
         """Fetch 5-min data from yfinance & compute 200 EMA."""
-        ticker = f"{symbol.strip().upper()}.NS"
-        try:
-            df = yf.download(ticker, period="4d", interval="5m",
-                             progress=False, auto_adjust=False)
-            if df is None or df.empty:
-                return None
-            if isinstance(df.columns, pd.MultiIndex):
-                try:
-                    df = df.xs(ticker, axis=1, level=-1)
-                except (KeyError, IndexError):
-                    try:
-                        df = df.xs(ticker, axis=1, level=0)
-                    except (KeyError, IndexError):
-                        return None
-            closes = pd.to_numeric(df["Close"], errors="coerce").dropna()
-            if len(closes) < EMA_SPAN:
-                return None
-            ema = closes.ewm(span=EMA_SPAN, adjust=False).mean().iloc[-1]
-            return float(ema) if pd.notna(ema) else None
-        except Exception:
+        df = _yfinance_5min(symbol)
+        if df is None:
             return None
+        closes = pd.to_numeric(df["Close"], errors="coerce").dropna()
+        if len(closes) < EMA_SPAN:
+            return None
+        ema = closes.ewm(span=EMA_SPAN, adjust=False).mean().iloc[-1]
+        return float(ema) if pd.notna(ema) else None
+
+    # ── background 4-day bootstrap ───────────────────────────────────
+
+    def _bootstrap_historical(self) -> None:
+        """Background thread: fetch 4 days of 5-min data for all stocks from yfinance.
+
+        Populates ``self.completed`` with historical candles and saves to
+        ``candles.json`` so the 200-period EMA and yesterday's high are
+        immediately available on restart.
+        """
+        trading_dates = _detect_trading_dates()
+        if not trading_dates:
+            logger.warning("⚠️ Bootstrap: could not determine trading dates")
+            return
+
+        logger.info(f"📅 Bootstrap target dates: {trading_dates}")
+        symbols = list(self.token_by_symbol.keys())
+        total = len(symbols)
+        loaded = 0
+
+        def _fetch(symbol: str) -> tuple[str, dict[int, dict] | None]:
+            df = _yfinance_5min(symbol)
+            if df is None:
+                return (symbol, None)
+
+            idx = pd.DatetimeIndex(df.index)
+            if idx.tz is None:
+                idx = idx.tz_localize("UTC").tz_convert(IST)
+            else:
+                idx = idx.tz_convert(IST)
+            df.index = idx
+
+            result: dict[str, dict[int, dict]] = {}
+            for td in trading_dates:
+                td_date = datetime.strptime(td, "%Y-%m-%d").date()
+                day_data = df[df.index.date == td_date]
+                if day_data.empty:
+                    continue
+                slots: dict[int, dict] = {}
+                for _, row in day_data.iterrows():
+                    cur_mins = row.name.hour * 60 + row.name.minute
+                    if cur_mins < MARKET_OPEN_MIN or cur_mins >= MARKET_CLOSE_MIN:
+                        continue
+                    slot = (cur_mins - MARKET_OPEN_MIN) // SLOT_LENGTH
+                    if slot not in slots:
+                        slots[slot] = {"open": 0.0, "high": 0.0, "low": float("inf"),
+                                       "close": 0.0, "volume": 0}
+                    c = slots[slot]
+                    high = pd.to_numeric(row["High"], errors="coerce")
+                    low = pd.to_numeric(row["Low"], errors="coerce")
+                    close = pd.to_numeric(row["Close"], errors="coerce")
+                    vol = pd.to_numeric(row["Volume"], errors="coerce")
+                    if pd.notna(high):
+                        c["high"] = max(c["high"], float(high))
+                    if pd.notna(low):
+                        c["low"] = min(c["low"], float(low))
+                    if c["open"] == 0:
+                        c["open"] = float(close) if pd.notna(close) else 0.0
+                    if pd.notna(close):
+                        c["close"] = float(close)
+                    if pd.notna(vol):
+                        c["volume"] = max(c.get("volume", 0), int(vol))
+                    # Fix inf low
+                    if c["low"] == float("inf"):
+                        c["low"] = c["open"]
+
+                if slots:
+                    for s in slots:
+                        if slots[s]["low"] == float("inf"):
+                            slots[s]["low"] = slots[s]["open"]
+                    result[td] = slots
+
+            return (symbol, result if result else None)
+
+        with ThreadPoolExecutor(max_workers=BOOTSTRAP_WORKERS) as pool:
+            futures = {pool.submit(_fetch, sym): sym for sym in symbols}
+            for fut in as_completed(futures):
+                sym = futures[fut]
+                try:
+                    symbol, data = fut.result(timeout=60)
+                    if data:
+                        with self._lock:
+                            for date_str, slots in data.items():
+                                if date_str not in self.completed:
+                                    self.completed[date_str] = {}
+                                for slot, entries in slots.items():
+                                    if slot not in self.completed[date_str]:
+                                        self.completed[date_str][slot] = {}
+                                    self.completed[date_str][slot][symbol] = entries
+                        loaded += 1
+                except Exception:
+                    pass
+
+                if loaded > 0 and loaded % 100 == 0:
+                    logger.info(f"📦 Bootstrap progress: {loaded}/{total} symbols loaded")
+
+        logger.info(f"✅ Bootstrap complete: {loaded}/{total} symbols with historical data")
+        if loaded > 0:
+            self._save_candles()
 
     # ── persistence ──────────────────────────────────────────────────
 
@@ -359,12 +509,11 @@ class CandleTracker:
     def _load_candles(self) -> None:
         """Load saved candles from candles.json (if any)."""
         if not CANDLES_PATH.exists():
-            logger.info("📂 No saved candles found — will bootstrap from yfinance on demand")
+            logger.info("📂 No saved candles found")
             return
         try:
             with open(CANDLES_PATH) as f:
                 data = json.load(f)
-            # Convert int keys back (JSON serialises them as strings)
             raw = data.get("candles", {})
             for date_str, slots_raw in raw.items():
                 self.completed[date_str] = {}
@@ -380,10 +529,9 @@ class CandleTracker:
         except Exception as e:
             logger.warning(f"⚠️ Failed to load candles.json: {e}")
 
-    def _flush_candles(self) -> None:
-        """Write current completed candles to candles.json."""
+    def _save_candles(self) -> None:
+        """Write all completed candles to candles.json."""
         try:
-            # Serialise: slot int → str for JSON compat
             out: dict = {}
             for date_str, slots in self.completed.items():
                 out[date_str] = {}
