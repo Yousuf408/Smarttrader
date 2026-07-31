@@ -23,6 +23,7 @@ import threading
 import time
 from datetime import datetime, timezone, timedelta
 import json
+from pathlib import Path
 
 # Import from your existing modules
 from .angel_margin_calculator import (
@@ -40,6 +41,8 @@ from server.candle_tracker import candle_tracker
 # CONSTANTS
 # ==============================================================================
 IST = timezone(timedelta(hours=5, minutes=30))
+
+SAVED_TICKS_PATH = Path(__file__).resolve().parent.parent / "stocks" / "latest_ticks.json"
 
 # ==============================================================================
 # GLOBAL STATE
@@ -63,6 +66,34 @@ WATCHLIST = [
     # ("TCS", 2950, "stock"),
     # ("INFY", 2945, "stock"),
 ]
+
+# ==============================================================================
+# TICK PERSISTENCE — last-known prices survive restarts / disconnects
+# ==============================================================================
+
+def _save_ticks():
+    """Persist latest_ticks to disk so they survive server restarts."""
+    global latest_ticks
+    try:
+        SAVED_TICKS_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with open(SAVED_TICKS_PATH, "w") as f:
+            json.dump(latest_ticks, f, indent=2)
+    except Exception:
+        pass
+
+def _load_saved_ticks():
+    """Load last-known ticks from disk. Populates latest_ticks with
+    stale-but-better-than-nothing prices when the WS isn't connected."""
+    global latest_ticks
+    try:
+        if SAVED_TICKS_PATH.exists() and SAVED_TICKS_PATH.stat().st_size > 100:
+            with open(SAVED_TICKS_PATH) as f:
+                saved = json.load(f)
+            if saved:
+                latest_ticks = saved
+                logger.info(f"📂 Loaded {len(saved)} saved ticks from disk")
+    except Exception:
+        pass
 
 # ==============================================================================
 # MARKET HOURS CHECK
@@ -143,6 +174,12 @@ def on_data(wsapp, message):
         if len(latest_ticks) % 10 == 0:
             logger.info(f"📊 TICK [{token}] LTP={ltp:.2f} | chng%={chng_pct:.2f}% | vol={volume}")
 
+        # Periodic tick-file save (every 30s, so last-known prices survive restarts)
+        global _last_tick_save
+        if time.time() - _last_tick_save > _TICK_SAVE_INTERVAL:
+            _save_ticks()
+            _last_tick_save = time.time()
+
     except Exception as e:
         logger.error(f"on_data error: {e}", exc_info=True)
 
@@ -196,11 +233,15 @@ def on_error(wsapp, error):
     """Called when WebSocket has an error."""
     logger.error(f"🔴 WebSocket Error: {error}")
 
+_last_tick_save = time.time()
+_TICK_SAVE_INTERVAL = 30.0  # seconds between tick-file saves
+
 def on_close(wsapp):
     """Called when WebSocket connection closes."""
     global _connected
     _connected = False
-    logger.info("🔌 WebSocket Closed")
+    _save_ticks()  # preserve last-known prices on disconnect
+    logger.info(f"🔌 WebSocket Closed ({len(latest_ticks)} ticks saved)")
 
 # ==============================================================================
 # START / STOP WEBSOCKET
@@ -263,7 +304,12 @@ def start_websocket(feed_token=None, watchlist=None):
     # Build token→symbol map for the on_data callback
     _build_token_map()
 
-    # Reset state
+    # Load last-known ticks from disk before resetting, so even if the
+    # WS takes time to deliver fresh ticks (or the market is closed),
+    # the endpoints have stale-but-better-than-nothing prices to show.
+    _load_saved_ticks()
+    # Now start fresh for the new connection — new ticks will overlay
+    # the saved ones via on_data.
     latest_ticks = {}
     _connected = True
 
@@ -502,6 +548,11 @@ def test_websocket():
         stop_websocket()
     else:
         print(f"❌ Failed: {result.get('error')}")
+
+# ── Load last-known ticks at module level so they're available ────
+# even before the WebSocket connects (e.g. after server restart
+# when the user hasn't re-authenticated yet).
+_load_saved_ticks()
 
 if __name__ == "__main__":
     test_websocket()
