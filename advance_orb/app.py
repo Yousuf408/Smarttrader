@@ -247,7 +247,12 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False):
         # from WebSocket LTP and cache's yesterday_close. Price filter
         # uses WebSocket LTP. TV-only fields (volume, relvol, sector) are
         # set to defaults since they aren't available from the WebSocket.
-        ws_ticks = angel_ws_ticks() if angel_is_connected() and angel_ws_connected() else {}
+        # Always use latest_ticks (loaded from saved file at startup, plus
+        # live WS ticks as they arrive).  The old guard
+        # ``angel_is_connected() and angel_ws_connected()`` caused the
+        # strategy to return empty when the WS was disconnected, even though
+        # the saved ticks file has all 700+ stocks' last-known prices.
+        ws_ticks = angel_ws_ticks()
         cache_data = candle_tracker._cache if hasattr(candle_tracker, '_cache') else {}
 
         raw_rows: list[dict] = []
@@ -257,8 +262,8 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False):
             cached = cache_data.get(sym, {})
 
             ltp = ws.get("ltp")
-            if ltp is None:
-                continue  # skip stocks with no WS data yet
+            if ltp is None or float(ltp) <= 0:
+                continue
 
             yc = cached.get("yesterday_close")
             gap_pct = ((float(ltp) - float(yc)) / float(yc) * 100) if yc and float(yc) > 0 else None
@@ -696,9 +701,8 @@ def health():
 @app.get("/api/market/live-ticks")
 def get_live_ticks():
     """Return latest tick data for all subscribed symbols."""
-    if not angel_is_connected() or not angel_ws_connected():
-        return {"connected": False, "ticks": {}}
-    return {"connected": True, "ticks": _build_ticks_by_symbol()}
+    is_conn = angel_is_connected() and angel_ws_connected()
+    return {"connected": is_conn, "ticks": _build_ticks_by_symbol()}
 
 
 @app.get("/api/market/live-ticks/stream")
@@ -715,10 +719,11 @@ async def stream_live_ticks(request: Request):
         last_digest = ""
         while True:
             try:
-                if not angel_is_connected() or not angel_ws_connected():
-                    payload = _json.dumps({"connected": False, "ticks": {}})
-                else:
-                    payload = _json.dumps({"connected": True, "ticks": _build_ticks_by_symbol()})
+                is_conn = angel_is_connected() and angel_ws_connected()
+                payload = _json.dumps({
+                    "connected": is_conn,
+                    "ticks": _build_ticks_by_symbol(),
+                })
                 digest = hashlib.md5(payload.encode()).hexdigest()
                 if digest != last_digest:
                     last_digest = digest
@@ -769,14 +774,13 @@ def refresh_advance_orb(tickers: str = "", gap_up: bool = False):
         # TV SCAN COMMENTED OUT for WS-only testing (Jul 31).
         # tv_query = (Query().select(...)...)
         #
-        # Instead: pull data directly from WebSocket ticks + cache.
+        # Instead: pull data directly from latest_ticks (saved + live).
         ws_ticks = {}
-        if angel_is_connected() and angel_ws_connected():
-            raw = angel_ws_ticks()
-            for token, d in raw.items():
-                sym = d.get("symbol", "")
-                if sym:
-                    ws_ticks[sym] = d
+        raw = angel_ws_ticks()
+        for token, d in raw.items():
+            sym = d.get("symbol", "")
+            if sym:
+                ws_ticks[sym] = d
 
         cache_data = candle_tracker._cache if hasattr(candle_tracker, '_cache') else {}
 

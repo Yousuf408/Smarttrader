@@ -59,7 +59,12 @@ def get_big_players(budget: int = 100000, parts: int = 4):
         #
         # Instead: use the 727-stock watchlist directly. Gap% is computed
         # from WebSocket LTP and cache's yesterday_close.
-        ws_ticks = angel_ws_ticks() if angel_is_connected() and angel_ws_connected() else {}
+        # Always use latest_ticks (loaded from saved file at startup, plus
+        # live WS ticks as they arrive).  The old guard
+        # ``angel_is_connected() and angel_ws_connected()`` caused the
+        # strategy to return empty when the WS was disconnected, even though
+        # the saved ticks file has all 700+ stocks' last-known prices.
+        ws_ticks = angel_ws_ticks()
         cache_data = candle_tracker._cache if hasattr(candle_tracker, '_cache') else {}
 
         raw_rows: list[dict] = []
@@ -69,7 +74,7 @@ def get_big_players(budget: int = 100000, parts: int = 4):
             cached = cache_data.get(sym, {})
 
             ltp = ws.get("ltp")
-            if ltp is None:
+            if ltp is None or float(ltp) <= 0:
                 continue
 
             yc = cached.get("yesterday_close")
@@ -200,17 +205,16 @@ def refresh_big_players(tickers: str = ""):
 
         # TV SCAN COMMENTED OUT for WS-only testing (Jul 31).
         # tv_query = (Query().select(...)...)
-        # Instead: pull data directly from WebSocket ticks.
+        # Instead: pull data directly from latest_ticks (saved + live).
         ws_ticks = {}
-        if angel_is_connected() and angel_ws_connected():
-            raw = angel_ws_ticks()
-            for token, d in raw.items():
-                sym = d.get("symbol", "")
-                if sym:
-                    ws_ticks[sym] = d
-                    base = sym.split("-")[0]
-                    if base != sym:
-                        ws_ticks[base] = d
+        raw = angel_ws_ticks()
+        for token, d in raw.items():
+            sym = d.get("symbol", "")
+            if sym:
+                ws_ticks[sym] = d
+                base = sym.split("-")[0]
+                if base != sym:
+                    ws_ticks[base] = d
 
         refreshed: list[dict] = []
         for name in symbols:
@@ -310,10 +314,11 @@ async def stream_bigplayers_ticks():
         last_digest = ""
         while True:
             try:
-                if not angel_is_connected() or not angel_ws_connected():
-                    payload = _json.dumps({"connected": False, "ticks": {}})
-                else:
-                    payload = _json.dumps({"connected": True, "ticks": _build_ticks_by_symbol()})
+                is_conn = angel_is_connected() and angel_ws_connected()
+                payload = _json.dumps({
+                    "connected": is_conn,
+                    "ticks": _build_ticks_by_symbol(),
+                })
                 digest = hashlib.md5(payload.encode()).hexdigest()
                 if digest != last_digest:
                     last_digest = digest
