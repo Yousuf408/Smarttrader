@@ -141,8 +141,8 @@ body {
     flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 2px;
-    padding: 12px 10px;
+    gap: 6px;
+    padding: 16px 12px;
     overflow-y: auto;
     overflow-x: hidden;
 }
@@ -150,8 +150,8 @@ body {
     display: flex;
     align-items: center;
     gap: 14px;
-    padding: 12px 14px;
-    border-radius: 12px;
+    padding: 14px 16px;
+    border-radius: 14px;
     color: var(--text-secondary);
     text-decoration: none;
     font-size: 14px;
