@@ -311,6 +311,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Server not reachable — leave dropdown as-is
     }
     updateBrokerStatusBadge();
+    updateCacheStatus();
 });
 
 // Esc key dismisses the popup — small UX nicety.
@@ -341,6 +342,32 @@ function isBrokerConnected(broker = null) {
             resolve(false);
         }
     });
+}
+
+// ================================================================
+// STRATEGY CACHE STATUS INDICATOR
+// ================================================================
+
+async function updateCacheStatus() {
+    const el = document.getElementById('cacheStatusIndicator');
+    if (!el) return;
+    try {
+        const res = await fetch('/api/cache/status');
+        const s = await res.json();
+        if (s.is_stale) {
+            el.textContent = `🟡 Stale — ${s.symbol_count || 0} stocks (rebuilding…)`;
+            el.style.color = '#f59e0b';
+        } else {
+            const updated = s.last_updated ? new Date(s.last_updated).toLocaleString('en-IN', {
+                day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'
+            }) : 'unknown';
+            el.textContent = `🟢 Fresh — ${s.symbol_count} stocks · updated ${updated}`;
+            el.style.color = '#22c55e';
+        }
+    } catch (_) {
+        el.textContent = '⚪ Cache status unavailable';
+        el.style.color = '#666';
+    }
 }
 
 // Get current broker info

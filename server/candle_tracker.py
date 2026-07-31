@@ -158,16 +158,21 @@ class CandleTracker:
         #   {symbol: {"ema": float, "yesterday_high": float,
         #              "yesterday_low": float, "yesterday_close": float}}
         self._cache: dict[str, dict] = {}
+        self._cache_last_updated: str | None = None  # ISO timestamp from __meta__
 
         self._load_stocks()
         self._load_candles()
         self._load_cache()
 
-        # ── background bootstrap: pre-compute cache for ALL stocks ───
-        if CACHE_PATH.stat().st_size < 1000 if CACHE_PATH.exists() else True:
-            logger.info("⏳ Cache empty — starting background bootstrap for all 727 stocks…")
+        # ── bootstrap / daily refresh ────────────────────────────────
+        if self._is_cache_stale():
+            logger.info("⏳ Cache stale — starting background refresh for all 727 stocks…")
             t = threading.Thread(target=self._bootstrap_all, daemon=True)
             t.start()
+
+        # ── daily refresh scheduler ──────────────────────────────────
+        t = threading.Thread(target=self._daily_refresh_loop, daemon=True)
+        t.start()
 
     # ═════════════════════════════════════════════════════════════════
     #  PUBLIC API
@@ -482,22 +487,78 @@ class CandleTracker:
             json.dump(payload, f, indent=2)
         self._last_save = time.time()
 
+    def _is_cache_stale(self) -> bool:
+        """Return True if cache needs refresh (empty, old format, or yesterday_data outdated)."""
+        if not self._cache or len(self._cache) < 100:
+            return True
+        # Remove meta key for count check
+        payload = {k: v for k, v in self._cache.items() if not k.startswith("__")}
+        if len(payload) < 100:
+            return True
+        if not self._cache_last_updated:
+            return True
+        try:
+            updated = datetime.fromisoformat(self._cache_last_updated)
+            now = datetime.now(IST)
+            # Stale if last update was before yesterday
+            yesterday = (now - timedelta(days=1))
+            if updated < yesterday:
+                return True
+        except Exception:
+            return True
+        return False
+
+    def _daily_refresh_loop(self) -> None:
+        """Background thread: refresh cache at ~9:00 AM IST each trading day."""
+        while True:
+            now = datetime.now(IST)
+            # If it's between 8:30 AM and 9:15 AM on a weekday, refresh
+            if now.weekday() < 5:
+                mins = now.hour * 60 + now.minute
+                if (8 * 60 + 30) <= mins <= (9 * 60 + 15):
+                    if self._is_cache_stale():
+                        logger.info("⏰ Daily refresh — cache is stale, re-bootstrapping…")
+                        self._bootstrap_all()
+            # Sleep 30 minutes between checks
+            time.sleep(1800)
+
+    def get_cache_status(self) -> dict:
+        """Return cache status dict for the frontend indicator."""
+        with self._lock:
+            payload = {k: v for k, v in self._cache.items() if not k.startswith("__")}
+            is_stale = self._is_cache_stale()
+            return {
+                "symbol_count": len(payload),
+                "last_updated": self._cache_last_updated or None,
+                "is_stale": is_stale,
+                "status": "stale" if is_stale else "fresh",
+            }
+
     def _load_cache(self) -> None:
         """Load pre-computed strategy cache from disk."""
         if not CACHE_PATH.exists():
             return
         try:
             with open(CACHE_PATH) as f:
-                self._cache = json.load(f)
-            logger.info(f"📂 Loaded strategy cache: {len(self._cache)} symbols")
+                data = json.load(f)
+            meta = data.pop("__meta__", {})
+            self._cache_last_updated = meta.get("last_updated")
+            self._cache = data
+            logger.info(f"📂 Loaded strategy cache: {len(self._cache)} symbols"
+                        f" (updated {self._cache_last_updated or 'unknown'})")
         except Exception as e:
             logger.warning(f"⚠️ Cache load failed: {e}")
 
     def _save_cache(self) -> None:
         """Write strategy cache to disk (tiny JSON)."""
         CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        payload = dict(self._cache)
+        payload["__meta__"] = {
+            "last_updated": datetime.now(IST).isoformat(),
+            "symbol_count": len([k for k in self._cache if not k.startswith("__")]),
+        }
         with open(CACHE_PATH, "w") as f:
-            json.dump(self._cache, f, indent=2)
+            json.dump(payload, f, indent=2)
 
 
 # ═════════════════════════════════════════════════════════════════════

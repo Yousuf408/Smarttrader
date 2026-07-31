@@ -1126,6 +1126,13 @@ def broker_status():
     return {"connected": False}
 
 
+@app.get("/api/cache/status")
+def cache_status():
+    """Return strategy cache status for the frontend indicator."""
+    from server.candle_tracker import candle_tracker as _ct
+    return _ct.get_cache_status()
+
+
 # =================================================================
 # SPA FALLBACK — any GET that doesn't match an explicit route or
 # a static-asset mount, and isn't under /api/ /js/ /style.css,
