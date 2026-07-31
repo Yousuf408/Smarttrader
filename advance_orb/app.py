@@ -282,6 +282,11 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False):
                 "relative_volume": 0.0,
                 "market_cap_basic": 0,
                 "sector": "N/A",
+                # day-open from Angel One tick (= NSE 9:15 open price).
+                # Used as open915 fallback when CandleTracker has no
+                # completed slot-0 data (e.g. after a server restart
+                # before the first 5-min boundary fires).
+                "tick_open": ws.get("open"),
             })
 
         df = pd.DataFrame(raw_rows) if raw_rows else pd.DataFrame()
@@ -310,6 +315,19 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False):
             s for s, t in opening_candle_map.items()
             if isinstance(t, tuple) and t and t[0]
         }
+
+        # Detect whether CandleTracker has completed slot-0 data for today.
+        # When the server restarts after hours (or before 9:20 IST on a
+        # trading day), candles.json may be absent / stale, so slot 0 is
+        # empty and batch_opening_candle returns all-None tuples.
+        # We use this flag to skip the small-candle filter in that case
+        # so stocks are still shown based on price/gap% alone.
+        import datetime as _dt
+        _today_str_check = _dt.datetime.now(IST).strftime("%Y-%m-%d")
+        has_candle_data = bool(
+            candle_tracker.completed.get(_today_str_check, {}).get(0)
+        )
+
         # "open915" = today's OPEN price (= the first 5-min candle's Open).
         # Used for the 200-EMA distance check instead of the live close,
         # so a stock that opens within the band keeps its row even when
@@ -317,6 +335,9 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False):
         # Mirror: assign df['high915'] = today's 9:15 IST candle HIGH
         # (= first 5-min candle's High). Read by the JS band-filter
         # in autoBuyAllStocks — NOT part of any screener-side filter.
+        # Fallback: when no CandleTracker data yet, use the day-open
+        # from the Angel One tick (open_price_of_the_day), which equals
+        # the NSE 9:15 opening price.
         df['high915'] = df['name'].map(
             lambda s: opening_candle_map.get(s, (False, None, None))[1]
         )
@@ -326,9 +347,14 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False):
         df['close915'] = df['name'].map(
             lambda s: opening_candle_map.get(s, (False, None, None, None, None))[4]
         )
-        df['open915'] = df['name'].map(
-            lambda s: opening_candle_map.get(s, (False, None, None, None, None, None, None, None))[2]
-        )
+        if has_candle_data:
+            df['open915'] = df['name'].map(
+                lambda s: opening_candle_map.get(s, (False, None, None, None, None, None, None, None))[2]
+            )
+        else:
+            # No slot-0 candle data — fall back to the tick's day-open
+            # (Angel One open_price_of_the_day == NSE 9:15 open price).
+            df['open915'] = df['tick_open']
         df['candle_range_pct'] = df['name'].map(
             lambda s: opening_candle_map.get(s, (False, None, None, None, None, None, None, None))[5]
         )
@@ -376,8 +402,13 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False):
                 if float(open915) <= float(ema_val) or float(open915) <= float(yh):
                     continue
             else:
-                # Normal mode: filter by small 9:15 candle (≤1.5% range)
-                if symbol not in small_candle_symbols:
+                # Normal mode: filter by small 9:15 candle (≤1.5% range).
+                # Skip this gate when no CandleTracker slot-0 data is
+                # available yet (server restarted after hours, or before
+                # 9:20 IST on a trading day).  Stocks are surfaced based on
+                # price/gap% alone; candle columns fill in once the first
+                # 5-min boundary completes.
+                if has_candle_data and symbol not in small_candle_symbols:
                     continue
 
             # Format volume
