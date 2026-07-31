@@ -5,7 +5,7 @@ Big Players Strategy API Routes (FastAPI APIRouter)
 import hashlib
 import asyncio
 import pandas as pd
-import requests
+import re, requests
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from tradingview_screener import Query, col
@@ -60,6 +60,7 @@ def get_big_players(budget: int = 100000, parts: int = 4):
             .select(*tv_columns)
             .set_markets('india')
             .where(
+                col('type') == 'stock',
                 col('close') > PRICE_MIN,
                 col('close') <= PRICE_MAX,
                 col('market_cap_basic') > MARKET_CAP_MIN,
@@ -111,8 +112,15 @@ def get_big_players(budget: int = 100000, parts: int = 4):
                 "message": f"No stocks with gap < {GAP_THRESHOLD}%"
             }
 
-        # Get candle + EMA data
+        # Reject non-equity symbols (bonds, NCDs, warrants, etc.)
         candidate_symbols = df['name'].dropna().astype(str).tolist()
+        candidate_symbols = [
+            s for s in candidate_symbols
+            if re.match(r'^[A-Z][A-Z0-9]{1,19}$', str(s).upper())
+        ]
+        df = df[df['name'].isin(candidate_symbols)]
+
+        # Get candle + EMA data
         opening_candle_map = batch_opening_candle(candidate_symbols)
         small_candle_symbols = {
             s for s, t in opening_candle_map.items()
@@ -204,7 +212,10 @@ def refresh_big_players(tickers: str = ""):
         tv_query = (Query()
             .select('name', 'close', 'change', 'volume', 'relative_volume')
             .set_markets('india')
-            .where(col('exchange') == 'NSE')
+            .where(
+                col('type') == 'stock',
+                col('exchange') == 'NSE'
+            )
             .set_tickers(*[f'NSE:{sym}' for sym in symbols])
         )
         body = dict(tv_query.query)

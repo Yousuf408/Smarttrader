@@ -2,7 +2,7 @@ from pathlib import Path
 
 import asyncio
 import time
-import requests
+import re, requests
 import pyotp
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -247,6 +247,7 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False):
             .select(*tv_columns)
             .set_markets('india')
             .where(
+                col('type') == 'stock',
                 col('close') > PRICE_MIN,
                 col('close') <= PRICE_MAX,
                 col('market_cap_basic') > MARKET_CAP_MIN,
@@ -305,6 +306,15 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False):
         # In normal mode, keep only rows whose ticker passes the ≤1.5% range check.
         # In gap_up mode, skip the candle-range filter entirely.
         candidate_symbols = df['name'].dropna().astype(str).tolist()
+        # Reject non-equity symbols (bonds, NCDs, warrants, etc.) that
+        # slipped past the TV type='stock' filter. NSE equity symbols
+        # are plain alphanumeric; anything with hyphens, percent signs,
+        # or date patterns is not a stock we can trade.
+        candidate_symbols = [
+            s for s in candidate_symbols
+            if re.match(r'^[A-Z][A-Z0-9]{1,19}$', str(s).upper())
+        ]
+        df = df[df['name'].isin(candidate_symbols)]
 
         # Open-candle batch: pull each symbol's 9:15 IST 5-min candle in
         # parallel. Returns (is_small, high915, open915, low915,
@@ -781,7 +791,10 @@ def refresh_advance_orb(tickers: str = "", gap_up: bool = False):
         tv_query = (Query()
             .select('name', 'close', 'change', 'volume', 'relative_volume')
             .set_markets('india')
-            .where(col('exchange') == 'NSE')
+            .where(
+                col('type') == 'stock',
+                col('exchange') == 'NSE'
+            )
             .set_tickers(*[f'NSE:{sym}' for sym in symbols])
         )
 
