@@ -241,6 +241,22 @@ document.addEventListener("DOMContentLoaded", () => {
 // FETCH ADVANCE ORB FROM BACKEND API
 // ================================================================
 let gapUpEnabled = false;
+let _inside915Only = false;
+
+function toggleInside915() {
+    const toggle = document.getElementById('inside915Toggle');
+    const status = document.getElementById('inside915Status');
+    _inside915Only = toggle.checked;
+    status.textContent = _inside915Only ? 'ON' : 'OFF';
+    status.classList.toggle('active', _inside915Only);
+    showToast(_inside915Only ? '📐 Inside 9:15 ON' : '📐 Inside 9:15 OFF',
+        _inside915Only ? 'Showing only stocks where 9:20 candle closed inside 9:15 range'
+                      : 'Showing all stocks');
+    // Re-render with the current data
+    if (lastAdvanceOrbData) {
+        renderStrategyData(lastAdvanceOrbData);
+    }
+}
 
 function toggleGapUpMode() {
     const toggle = document.getElementById('gapUpToggle');
@@ -290,8 +306,13 @@ function renderStrategyData(result) {
     const strategy = STRATEGIES[strategyId];
     if (!strategy) return;
 
-    const data = result.data || [];
+    let data = result.data || [];
     const columns = result.columns || strategy.columns || [];
+
+    // Apply Inside 9:15 filter for Advance ORB
+    if (strategyId === 'advanceorb' && _inside915Only) {
+        data = data.filter(r => r.inside_915 === true);
+    }
 
     // Update table headers
     const thead = document.querySelector('#screenerHead tr');
@@ -331,6 +352,8 @@ function renderStrategyData(result) {
                 } else if (col === '1st Range%') {
                     const range = parseFloat(row.candle_range_pct);
                     value = Number.isFinite(range) ? `${range.toFixed(2)}%` : '';
+                } else if (col === 'Inside 9:15') {
+                    value = row.inside_915 ? '✅' : (row.inside_915 === false ? '❌' : '—');
                 } else if (col === 'Open 9:15') {
                     const op = parseFloat(row.open915);
                     value = Number.isFinite(op) ? `₹${op.toFixed(2)}` : '';
@@ -411,8 +434,10 @@ async function onStrategyChange() {
         // Show Advance ORB toggles, hide Big Players-specific toggles
         const autoBuyEl = document.getElementById('autoBuyWrap');
         const gapUpEl = document.getElementById('gapUpWrap');
+        const inside915El = document.getElementById('inside915Wrap');
         if (autoBuyEl) autoBuyEl.style.display = gapUpEnabled ? 'none' : '';
         if (gapUpEl) gapUpEl.style.display = '';
+        if (inside915El) inside915El.style.display = '';
         const nw = document.getElementById('newLowFilterWrap');
         if (nw) nw.style.display = 'none';
         const bpab = document.getElementById('bpAutoBuyWrap');
@@ -449,6 +474,8 @@ async function onStrategyChange() {
         if (orbab) orbab.style.display = 'none';
         const gapUpEl = document.getElementById('gapUpWrap');
         if (gapUpEl) gapUpEl.style.display = 'none';
+        const inside915El = document.getElementById('inside915Wrap');
+        if (inside915El) inside915El.style.display = 'none';
         const nw = document.getElementById('newLowFilterWrap');
         if (nw) nw.style.display = '';
         const bpab = document.getElementById('bpAutoBuyWrap');

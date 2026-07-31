@@ -182,6 +182,7 @@ ADVANCE_ORB_COLUMNS = [
     "1st High",
     "1st Low",
     "1st Range%",
+    "Inside 9:15",
     "MaxQty",
 ]
 
@@ -339,7 +340,13 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False):
             lambda s: opening_candle_map.get(s, (False, None, None, None, None, None, None, None))[5]
         )
         df['yesterday_high'] = df['name'].map(
-            lambda s: opening_candle_map.get(s, (False, None, None, None, None, None, None, None))[7]
+            lambda s: opening_candle_map.get(s, (False, None, None, None, None, None, None, None, None, None))[7]
+        )
+        df['close920'] = df['name'].map(
+            lambda s: opening_candle_map.get(s, (False, None, None, None, None, None, None, None, None, None))[8]
+        )
+        df['inside_915'] = df['name'].map(
+            lambda s: opening_candle_map.get(s, (False, None, None, None, None, None, None, None, None, None))[9]
         )
         # Compute 200-period EMA per candidate in parallel; surface
         # in df['ema']. NOT a screener filter — the auto-buy frontend
@@ -440,6 +447,16 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False):
                 entry["candle_range_pct"] = (
                     round(float(row["candle_range_pct"]), 4)
                     if pd.notna(row.get("candle_range_pct"))
+                    else None
+                )
+                entry["close920"] = (
+                    round(float(row["close920"]), 2)
+                    if pd.notna(row.get("close920"))
+                    else None
+                )
+                entry["inside_915"] = (
+                    bool(row["inside_915"])
+                    if "inside_915" in row.index and pd.notna(row.get("inside_915"))
                     else None
                 )
 

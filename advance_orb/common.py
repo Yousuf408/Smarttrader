@@ -242,10 +242,21 @@ def batch_opening_candle(symbols: list[str]) -> dict:
             open915 = pd.to_numeric(candle["Open"], errors="coerce")
             close915 = pd.to_numeric(candle["Close"], errors="coerce")
             if pd.isna(high) or pd.isna(low) or low <= 0:
-                return (False, None, None, None, None, None, None, None)
+                return (False, None, None, None, None, None, None, None, None, None)
             candle_range_pct = ((float(high) - float(low)) / float(low)) * 100
             is_small = bool(candle_range_pct <= SMALL_CANDLE_THRESHOLD)
             open_val = float(open915) if pd.notna(open915) else None
+
+            # ── 9:20 candle (2nd 5-min candle) — check if it closed inside 9:15 range ──
+            close920 = None
+            inside_915 = False
+            if len(opening) > 1:
+                candle920 = opening.iloc[1]
+                close920_val = pd.to_numeric(candle920["Close"], errors="coerce")
+                if pd.notna(close920_val):
+                    close920 = float(close920_val)
+                    # 9:20 candle close must be inside the 9:15 candle range
+                    inside_915 = low <= close920 <= high
 
             yesterday_high = None
             all_trading_dates = sorted(set(candles.index.date))
@@ -268,9 +279,11 @@ def batch_opening_candle(symbols: list[str]) -> dict:
                 float(candle_range_pct),
                 day_low,
                 yesterday_high,
+                close920,
+                inside_915,
             )
         except Exception:
-            return (False, None, None, None, None, None, None, None)
+            return (False, None, None, None, None, None, None, None, None, None)
 
     with ThreadPoolExecutor(max_workers=YFINANCE_WORKERS) as pool:
         futures = {pool.submit(_lookup, sym): sym for sym in unique}
@@ -279,7 +292,7 @@ def batch_opening_candle(symbols: list[str]) -> dict:
             try:
                 results[sym] = fut.result(timeout=20)
             except Exception:
-                results[sym] = (False, None, None, None, None, None, None, None)
+                results[sym] = (False, None, None, None, None, None, None, None, None, None)
     return results
 
 
