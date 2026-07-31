@@ -120,17 +120,32 @@ def save_top5_strategy(
         if not symbol:
             continue
 
-        buy_price = _safe_float(row.get("Price") or row.get("price"))
-        sl = _safe_float(
-            row.get("low915") or row.get("low915") or row.get("stop_loss")
-        )
+        # Common candle anchors
+        high915 = _safe_float(row.get("high915"))
+        low915 = _safe_float(row.get("low915"))
 
-        # Compute derived fields
+        # ── Compute entry (buy) price from strategy-specific auto-buy rules ──
+        if strategy == "advanceorb":
+            # Buy when price moves 0.12% above the 9:15 high (breakout trigger)
+            buy_price = round(high915 * 1.0012, 2) if high915 and high915 > 0 else None
+        elif strategy == "bigplayers":
+            # Buy when price recovers to ≥ 75% of the 9:15 candle range above low
+            if high915 and low915 and high915 > low915 and low915 > 0:
+                range_ = high915 - low915
+                buy_price = round(low915 + range_ * 0.75, 2)
+            else:
+                buy_price = None
+        else:
+            buy_price = _safe_float(row.get("Price") or row.get("price"))
+
+        # Stop loss = 9:15 low
+        sl = low915
+
+        # Compute derived fields (1:2 risk-reward from entry price)
         target_1_2 = None
         gain_per_lakh = None
         avg_return = None
         if buy_price and sl and buy_price > 0 and buy_price > sl:
-            # 1:2 Risk-Reward
             risk = buy_price - sl
             target_1_2 = round(buy_price + 2 * risk, 2)
             # Gain per ₹1L invested
