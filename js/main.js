@@ -41,9 +41,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     // Init theme from localStorage
     applyTheme(localStorage.getItem('tradetheme') || 'light');
-    // Start market ribbon updates
-    updateMarketRibbon();
-    setInterval(updateMarketRibbon, 10000);
     // Start notification polling
     pollNotifications();
     setInterval(pollNotifications, 8000);
@@ -109,87 +106,6 @@ document.addEventListener('keydown', (e) => {
         if (key === 'Escape') closeModal();
     }
 });
-
-// ================================================================
-// MARKET RIBBON — live indices from SSE
-// ================================================================
-let marketRibbonData = { sensex: null, nifty: null, banknifty: null, vix: null };
-
-function updateMarketRibbon() {
-    // Fetch from backend proxy (avoids CORS)
-    fetch('/api/market/indices')
-    .then(r => r.json())
-    .then(data => {
-        const indices = data.data || [];
-        const find = (name) => indices.find(i => i.index === name);
-        const nifty = find('NIFTY 50');
-        const banknifty = find('NIFTY BANK');
-        const vix = find('INDIA VIX');
-
-        const setRibbon = (id, item) => {
-            const el = document.getElementById(id);
-            if (!el || !item) return;
-            const last = item.last || 0;
-            const chg = item.change;
-            const pct = item.pChange;
-            const valEl = el.querySelector('.value');
-            if (!valEl) return;
-            // Handle null/None/undefined when market is closed
-            if (chg == null || pct == null) {
-                valEl.textContent = last.toLocaleString('en-IN');
-                valEl.className = 'value';
-                return;
-            }
-            const chgNum = Number(chg);
-            const pctNum = Number(pct);
-            if (isNaN(chgNum) || isNaN(pctNum)) {
-                valEl.textContent = last.toLocaleString('en-IN');
-                valEl.className = 'value';
-                return;
-            }
-            const arrow = chgNum >= 0 ? '▲' : '▼';
-            const cls = chgNum >= 0 ? 'up' : 'down';
-            valEl.textContent = `${last.toLocaleString('en-IN')} ${arrow} ${Math.abs(pctNum).toFixed(2)}%`;
-            valEl.className = `value ${cls}`;
-        };
-
-        setRibbon('ribbon-nifty', nifty);
-        setRibbon('ribbon-banknifty', banknifty);
-        setRibbon('ribbon-vix', vix);
-
-        // Session timer
-        updateSessionTimer();
-    })
-    .catch(() => {
-        // Silently fall back — ribbon will show "—"
-    });
-}
-
-function updateSessionTimer() {
-    const el = document.getElementById('ribbonSession');
-    if (!el) return;
-    const now = new Date();
-    const hour = now.getHours();
-    const min = now.getMinutes();
-    const istHour = (hour + 5 + Math.floor((min + 30) / 60)) % 24;
-    const istMin = (min + 30) % 60;
-    // Market hours: 9:15 to 15:30 IST
-    const marketOpen = (istHour > 9 || (istHour === 9 && istMin >= 15));
-    const marketClose = (istHour < 15 || (istHour === 15 && istMin <= 30));
-    if (marketOpen && marketClose) {
-        const closeMin = (15 * 60 + 30) - (istHour * 60 + istMin);
-        const h = Math.floor(closeMin / 60);
-        const m = closeMin % 60;
-        el.textContent = `📈 ${h}h ${m}m left`;
-    } else if (istHour < 9 || (istHour === 9 && istMin < 15)) {
-        const openMin = (9 * 60 + 15) - (istHour * 60 + istMin);
-        const h = Math.floor(openMin / 60);
-        const m = openMin % 60;
-        el.textContent = `🔴 Opens in ${h}h ${m}m`;
-    } else {
-        el.textContent = '🔴 Market Closed';
-    }
-}
 
 // ================================================================
 // NOTIFICATION SYSTEM — strategy match alerts

@@ -751,43 +751,6 @@ body.dark-theme .chart-placeholder { background: var(--bg-secondary); border-col
 .theme-toggle:hover { background: rgba(108,92,231,0.12); transform: rotate(15deg); }
 
 /* ================================================================
-   MARKET RIBBON
-   ================================================================ */
-.market-ribbon {
-    background: rgba(255,255,255,0.50);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border-bottom: 1px solid rgba(0,0,0,0.04);
-    padding: 6px 32px;
-    display: flex;
-    align-items: center;
-    gap: 24px;
-    overflow-x: auto;
-    scrollbar-width: thin;
-    font-size: 13px;
-    white-space: nowrap;
-}
-body.dark-theme .market-ribbon {
-    background: rgba(22, 27, 34, 0.70);
-    border-bottom-color: rgba(255,255,255,0.06);
-}
-.market-ribbon-item {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-weight: 500;
-    color: var(--text-secondary);
-    flex-shrink: 0;
-}
-.market-ribbon-item .name { font-weight: 600; color: var(--text-primary); }
-.market-ribbon-item .value { font-weight: 700; font-variant-numeric: tabular-nums; }
-.market-ribbon-item .value.up { color: var(--color-success); }
-.market-ribbon-item .value.down { color: var(--color-danger); }
-.market-ribbon-divider { width: 1px; height: 18px; background: rgba(0,0,0,0.08); flex-shrink: 0; }
-body.dark-theme .market-ribbon-divider { background: rgba(255,255,255,0.08); }
-.ribbon-session { font-size: 11px; color: var(--text-muted); margin-left: auto; flex-shrink: 0; }
-
-/* ================================================================
    NOTIFICATION BELL
    ================================================================ */
 .notif-bell {

@@ -1,86 +1,45 @@
 // ================================================================
-// PORTFOLIO PAGE — Real data from broker API
+// PORTFOLIO PAGE
 // ================================================================
-
 function loadPortfolio() {
-    const statsEl = document.getElementById('portfolioStats');
-    const tableEl = document.getElementById('holdingsTable');
+    const holdings = [
+        { symbol: 'RELIANCE', qty: 10, avg: 2810, current: 2856, pnl: '+₹460' },
+        { symbol: 'TCS', qty: 5, avg: 3890, current: 3920, pnl: '+₹150' },
+        { symbol: 'INFY', qty: 15, avg: 1520, current: 1545, pnl: '+₹375' },
+        { symbol: 'HDFC', qty: 8, avg: 1700, current: 1680, pnl: '-₹160' }
+    ];
+    
+    const totalValue = holdings.reduce((s, h) => s + (h.current * h.qty), 0);
+    const invested = holdings.reduce((s, h) => s + (h.avg * h.qty), 0);
+    const totalPnl = totalValue - invested;
 
-    statsEl.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;"><div class="spinner"></div><p style="margin-top:12px;color:var(--text-muted);">Loading portfolio data...</p></div>';
-    tableEl.innerHTML = '';
+    // Portfolio Stats
+    document.getElementById('portfolioStats').innerHTML = `
+        <div class="stat-box"><div class="label">💰 Total Value</div><div class="value">₹${totalValue.toLocaleString()}</div><div class="sub ${totalPnl >= 0 ? 'green' : 'red'}">${totalPnl >= 0 ? '↑' : '↓'} ₹${Math.abs(totalPnl).toLocaleString()}</div></div>
+        <div class="stat-box"><div class="label">📊 Invested</div><div class="value">₹${invested.toLocaleString()}</div><div class="sub" style="color:var(--text-muted);">${Math.round((invested/totalValue)*100)}% allocated</div></div>
+        <div class="stat-box"><div class="label">💵 Available Cash</div><div class="value">₹${Math.round(totalValue * 0.32).toLocaleString()}</div><div class="sub" style="color:var(--text-muted);">32% free</div></div>
+        <div class="stat-box"><div class="label">📈 Total P&L</div><div class="value" style="color:${totalPnl >= 0 ? 'var(--color-success)' : 'var(--color-danger)'};">${totalPnl >= 0 ? '+' : ''}₹${totalPnl.toLocaleString()}</div><div class="sub ${totalPnl >= 0 ? 'green' : 'red'}">${totalPnl >= 0 ? '↑' : '↓'} ${Math.round((totalPnl/invested)*100)}%</div></div>
+    `;
 
-    fetch('/api/portfolio/holdings')
-        .then(r => r.json())
-        .then(data => {
-            const holdings = data.holdings || [];
-            const summary = data.summary || {};
-
-            // Portfolio Summary Cards
-            const totalPnl = summary.total_pnl || 0;
-            statsEl.innerHTML = `
-                <div class="stat-box">
-                    <div class="label">💰 Total Value</div>
-                    <div class="value">₹${(summary.total_value || 0).toLocaleString('en-IN')}</div>
-                    <div class="sub ${totalPnl >= 0 ? 'green' : 'red'}">${totalPnl >= 0 ? '↑' : '↓'} ₹${Math.abs(totalPnl).toLocaleString('en-IN')}</div>
-                </div>
-                <div class="stat-box">
-                    <div class="label">📊 Invested</div>
-                    <div class="value">₹${(summary.invested || 0).toLocaleString('en-IN')}</div>
-                    <div class="sub" style="color:var(--text-muted);">${summary.invested > 0 ? Math.round((summary.invested / (summary.total_value || 1)) * 100) : 0}% allocated</div>
-                </div>
-                <div class="stat-box">
-                    <div class="label">💵 Available Cash</div>
-                    <div class="value">₹${(summary.cash || 0).toLocaleString('en-IN')}</div>
-                    <div class="sub" style="color:var(--text-muted);">${summary.cash > 0 ? Math.round((summary.cash / ((summary.total_value || 0) + (summary.cash || 0))) * 100) : 0}% free</div>
-                </div>
-                <div class="stat-box">
-                    <div class="label">📈 Total P&L</div>
-                    <div class="value" style="color:${totalPnl >= 0 ? 'var(--color-success)' : 'var(--color-danger)'};">${totalPnl >= 0 ? '+' : ''}₹${Math.abs(totalPnl).toLocaleString('en-IN')}</div>
-                    <div class="sub ${totalPnl >= 0 ? 'green' : 'red'}">${totalPnl >= 0 ? '↑' : '↓'} ${Math.abs(summary.total_pnl_pct || 0)}%</div>
-                </div>
-            `;
-
-            // Holdings Table
-            if (holdings.length === 0) {
-                tableEl.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted);font-size:14px;">No holdings found. Connect a broker to see your real positions.</div>';
-                return;
-            }
-
-            tableEl.innerHTML = `
-                <table class="table-modern" id="portfolioHoldingsTable">
-                    <thead>
+    // Holdings Table
+    document.getElementById('holdingsTable').innerHTML = `
+        <table class="table-modern">
+            <thead><tr><th>Symbol</th><th>Qty</th><th>Avg Price</th><th>Current</th><th>P&L</th><th>Action</th></tr></thead>
+            <tbody>
+                ${holdings.map(h => {
+                    const pnl = (h.current - h.avg) * h.qty;
+                    return `
                         <tr>
-                            <th>Symbol</th>
-                            <th>Qty</th>
-                            <th>Avg Price</th>
-                            <th>Current</th>
-                            <th>P&L</th>
-                            <th>P&L %</th>
-                            <th>Action</th>
+                            <td><strong>${h.symbol}</strong></td>
+                            <td>${h.qty}</td>
+                            <td>₹${h.avg}</td>
+                            <td>₹${h.current}</td>
+                            <td style="color:${pnl >= 0 ? 'var(--color-success)' : 'var(--color-danger)'};font-weight:600;">${pnl >= 0 ? '+' : ''}₹${pnl}</td>
+                            <td><button class="btn btn-danger btn-sm" onclick="showToast('📤 Sold','${h.symbol} sold')">Sell</button></td>
                         </tr>
-                    </thead>
-                    <tbody>
-                        ${holdings.map(h => {
-                            const pnl = h.pnl || 0;
-                            const pnlPct = h.pnl_pct || 0;
-                            const pnlClass = pnl >= 0 ? 'var(--color-success)' : 'var(--color-danger)';
-                            return `
-                                <tr>
-                                    <td><strong>${h.symbol}</strong></td>
-                                    <td>${h.qty}</td>
-                                    <td>₹${(h.avg_price || 0).toFixed(2)}</td>
-                                    <td>₹${(h.current || 0).toFixed(2)}</td>
-                                    <td style="color:${pnlClass};font-weight:600;">${pnl >= 0 ? '+' : ''}₹${Math.abs(pnl).toFixed(2)}</td>
-                                    <td style="color:${pnlClass};font-weight:600;">${pnl >= 0 ? '+' : ''}${pnlPct.toFixed(2)}%</td>
-                                    <td><button class="btn btn-outline btn-sm" onclick="showToast('📤 ${h.symbol}','Sell order window coming soon')">Sell</button></td>
-                                </tr>
-                            `;
-                        }).join('')}
-                    </tbody>
-                </table>
-            `;
-        })
-        .catch(err => {
-            statsEl.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--color-danger);font-size:14px;">⚠️ Failed to load portfolio: ' + err.message + '</div>';
-        });
+                    `;
+                }).join('')}
+            </tbody>
+        </table>
+    `;
 }
