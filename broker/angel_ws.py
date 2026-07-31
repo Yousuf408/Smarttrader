@@ -95,6 +95,69 @@ def _load_saved_ticks():
     except Exception:
         pass
 
+def _seed_ticks_from_rest():
+    """Fallback: fetch LTP + day OHLC for all WATCHLIST tokens via
+    Angel One REST /quote API and populate latest_ticks.
+
+    This is used when the WebSocket hasn't received ticks yet (market
+    closed, slow connection, etc.) so the table has baseline prices to
+    show — even if slightly stale.
+    """
+    global latest_ticks
+    if not WATCHLIST:
+        return
+
+    try:
+        from .angel_margin_calculator import _make_smart_connect
+        from SmartApi import SmartConnect
+
+        sc = _make_smart_connect()
+        sc.setAccessToken(get_access_token())
+        sc.setFeedToken(get_feed_token())
+        sc.setUserId(_CREDS.get("client_id", ""))
+
+        # Collect all stock tokens, batch into groups of 50 (API limit)
+        stock_tokens = [str(t) for _, t, k in WATCHLIST if k == "stock"]
+        batch_size = 50
+        filled = 0
+
+        for i in range(0, len(stock_tokens), batch_size):
+            batch = stock_tokens[i:i + batch_size]
+            try:
+                resp = sc.getMarketData(2, {"NSE": batch})
+                if not resp or resp.get("status") is False:
+                    continue
+                fetched = resp.get("data", {}).get("fetched", [])
+                for item in fetched:
+                    tok = str(item.get("symbolToken", ""))
+                    if not tok:
+                        continue
+                    sym = _TOKEN_SYMBOL_MAP.get(tok, item.get("tradingSymbol", ""))
+                    if str(item.get("ltp", 0)).replace(".", "").replace("-", "") == "0":
+                        continue  # skip zero-LTP entries
+                    latest_ticks[tok] = {
+                        "ltp": item.get("ltp", 0),
+                        "open": item.get("open", 0),
+                        "high": item.get("high", 0),
+                        "low": item.get("low", 0),
+                        "close": item.get("close", 0),
+                        "volume": item.get("volume", 0),
+                        "change": item.get("netChange", 0),
+                        "change_pct": item.get("percentChange", 0),
+                        "symbol": sym,
+                        "token": tok,
+                        "timestamp": datetime.now(IST).strftime("%H:%M:%S"),
+                    }
+                    filled += 1
+            except Exception as e:
+                logger.debug(f"REST quote batch {i//batch_size} error: {e}")
+
+        if filled:
+            logger.info(f"📡 Seeded {filled}/{len(stock_tokens)} ticks from REST API")
+            _save_ticks()
+    except Exception as e:
+        logger.debug(f"REST tick seed error: {e}")
+
 # ==============================================================================
 # MARKET HOURS CHECK
 # ==============================================================================
@@ -304,13 +367,15 @@ def start_websocket(feed_token=None, watchlist=None):
     # Build token→symbol map for the on_data callback
     _build_token_map()
 
-    # Load last-known ticks from disk before resetting, so even if the
-    # WS takes time to deliver fresh ticks (or the market is closed),
-    # the endpoints have stale-but-better-than-nothing prices to show.
+    # Load last-known ticks from disk, then clear for fresh connection.
     _load_saved_ticks()
-    # Now start fresh for the new connection — new ticks will overlay
-    # the saved ones via on_data.
     latest_ticks = {}
+
+    # Immediately seed from REST API so the table has baseline prices
+    # for all watchlist stocks (WS may take time to deliver, or market
+    # may be closed). WS ticks will overlay with real-time data as they
+    # arrive.
+    _seed_ticks_from_rest()
     _connected = True
 
     logger.info("🚀 Initializing Angel One WebSocket...")
@@ -553,6 +618,9 @@ def test_websocket():
 # even before the WebSocket connects (e.g. after server restart
 # when the user hasn't re-authenticated yet).
 _load_saved_ticks()
+# Also attempt REST seed if API is already authenticated — this gives
+# baseline LTP data for all 700+ stocks without waiting for a WS tick.
+_seed_ticks_from_rest()
 
 if __name__ == "__main__":
     test_websocket()
