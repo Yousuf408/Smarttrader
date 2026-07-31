@@ -52,41 +52,45 @@ def get_big_players(budget: int = 100000, parts: int = 4):
         raise HTTPException(status_code=400, detail="parts must be between 1 and 20")
 
     try:
-        tv_columns = [
-            'name', 'close', 'change', 'gap', 'volume',
-            'relative_volume', 'market_cap_basic', 'sector',
-        ]
-        tv_query = (Query()
-            .select(*tv_columns)
-            .set_markets('india')
-            .where(
-                col('type') == 'stock',
-                col('close') > PRICE_MIN,
-                col('close') <= PRICE_MAX,
-                col('market_cap_basic') > MARKET_CAP_MIN,
-                col('exchange') == 'NSE'
-            )
-            .order_by('change', ascending=False)
-        )
-
-        body = dict(tv_query.query)
-        body['range'] = [0, MAX_TV_STOCKS]
-        response = requests.post(
-            tv_query.url,
-            json=body,
-            headers=TV_HEADERS,
-            timeout=30,
-        )
-        response.raise_for_status()
-        payload = response.json()
+        # ─── Step 1: Build candidate list from watchlist + WebSocket ───
+        # TV SCAN COMMENTED OUT for WS-only testing (Jul 31).
+        # tv_query = (Query().select(...)...)
+        #
+        # Instead: use the 727-stock watchlist directly. Gap% is computed
+        # from WebSocket LTP and cache's yesterday_close.
+        ws_ticks = angel_ws_ticks() if angel_is_connected() and angel_ws_connected() else {}
+        cache_data = candle_tracker._cache if hasattr(candle_tracker, '_cache') else {}
 
         raw_rows: list[dict] = []
-        for symbol_row in (payload.get('data') or [])[:MAX_TV_STOCKS]:
-            values = symbol_row.get('d') or []
-            ticker = symbol_row.get('s')
-            raw_rows.append(dict(zip(['ticker', *tv_columns], [ticker, *values])))
+        for sym in candle_tracker.token_by_symbol:
+            tok = candle_tracker.token_by_symbol[sym]
+            ws = ws_ticks.get(str(tok), {})
+            cached = cache_data.get(sym, {})
 
-        df = pd.DataFrame(raw_rows)
+            ltp = ws.get("ltp")
+            if ltp is None:
+                continue
+
+            yc = cached.get("yesterday_close")
+            gap_pct = ((float(ltp) - float(yc)) / float(yc) * 100) if yc and float(yc) > 0 else None
+
+            if not (PRICE_MIN < float(ltp) <= PRICE_MAX):
+                continue
+            if gap_pct is None or abs(gap_pct) >= GAP_THRESHOLD:
+                continue
+
+            raw_rows.append({
+                "name": sym,
+                "close": float(ltp),
+                "change": ws.get("change_pct", 0),
+                "gap": gap_pct,
+                "volume": ws.get("volume", 0),
+                "relative_volume": 0.0,
+                "market_cap_basic": 0,
+                "sector": "N/A",
+            })
+
+        df = pd.DataFrame(raw_rows) if raw_rows else pd.DataFrame()
 
         if df.empty:
             return {
@@ -95,30 +99,10 @@ def get_big_players(budget: int = 100000, parts: int = 4):
                 "count": 0,
                 "data": [],
                 "columns": BIG_PLAYERS_COLUMNS,
-                "message": "No stocks found"
+                "message": "No stocks found matching the conditions"
             }
 
-        # Gap filter
-        df['gap'] = pd.to_numeric(df['gap'], errors='coerce')
-        df = df[df['gap'].notna() & (abs(df['gap']) < GAP_THRESHOLD)]
-
-        if df.empty:
-            return {
-                "strategy": "bigplayers",
-                "name": "Big Players",
-                "count": 0,
-                "data": [],
-                "columns": BIG_PLAYERS_COLUMNS,
-                "message": f"No stocks with gap < {GAP_THRESHOLD}%"
-            }
-
-        # Reject non-equity symbols (bonds, NCDs, warrants, etc.)
         candidate_symbols = df['name'].dropna().astype(str).tolist()
-        candidate_symbols = [
-            s for s in candidate_symbols
-            if re.match(r'^[A-Z][A-Z0-9]{1,19}$', str(s).upper())
-        ]
-        df = df[df['name'].isin(candidate_symbols)]
 
         # Get candle + EMA data
         opening_candle_map = batch_opening_candle(candidate_symbols)
@@ -209,26 +193,13 @@ def refresh_big_players(tickers: str = ""):
         if not symbols:
             return {"refreshed": []}
 
-        tv_query = (Query()
-            .select('name', 'close', 'change', 'volume', 'relative_volume')
-            .set_markets('india')
-            .where(
-                col('type') == 'stock',
-                col('exchange') == 'NSE'
-            )
-            .set_tickers(*[f'NSE:{sym}' for sym in symbols])
-        )
-        body = dict(tv_query.query)
-        body['range'] = [0, max(50, len(symbols) + 10)]
-        response = requests.post(tv_query.url, json=body, headers=TV_HEADERS, timeout=20)
-        response.raise_for_status()
-        payload = response.json()
-
         opening_candle_map = batch_opening_candle(symbols)
         ema_map = compute_200_ema_batch(symbols)
         bp_strategy = BigPlayersStrategy()
 
-        # WebSocket tick data overlay
+        # TV SCAN COMMENTED OUT for WS-only testing (Jul 31).
+        # tv_query = (Query().select(...)...)
+        # Instead: pull data directly from WebSocket ticks.
         ws_ticks = {}
         if angel_is_connected() and angel_ws_connected():
             raw = angel_ws_ticks()
@@ -239,30 +210,15 @@ def refresh_big_players(tickers: str = ""):
                     base = sym.split("-")[0]
                     if base != sym:
                         ws_ticks[base] = d
-            ws_auto_subscribe(symbols)
 
         refreshed: list[dict] = []
-        for symbol_row in (payload.get('data') or []):
-            values = symbol_row.get('d') or []
-            if len(values) < 3:
-                continue
-            name = values[0]
-            if not name:
-                continue
-            close = pd.to_numeric(values[1], errors='coerce')
-            change = pd.to_numeric(values[2], errors='coerce')
-
-            # Overlay WS tick data
+        for name in symbols:
             ws = ws_ticks.get(name)
-            if ws:
-                ws_ltp = ws.get("ltp")
-                if ws_ltp is not None:
-                    close = float(ws_ltp)
-                ws_chg = ws.get("change_pct")
-                if ws_chg is not None:
-                    change = round(float(ws_chg), 2)
-
-            if pd.isna(close) or pd.isna(change):
+            if not ws:
+                continue
+            close = ws.get("ltp")
+            change = ws.get("change_pct", 0)
+            if close is None or float(close) <= 0:
                 continue
 
             # Red-candle rule: 9:15 close < open

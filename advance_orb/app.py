@@ -237,46 +237,50 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False):
     if parts < 1 or parts > 20:
         raise HTTPException(status_code=400, detail="parts must be between 1 and 20")
     try:
-        # ─── Step 1: Fetch from TradingView ───
-        # Single POST to TradingView's scan endpoint, capped to MAX_TV_STOCKS
-        # rows (≈4 pages of the default 50-row page size).
-        tv_columns = [
-            'name', 'close', 'change', 'gap', 'volume',
-            'relative_volume', 'market_cap_basic', 'sector',
-        ]
-        tv_query = (Query()
-            .select(*tv_columns)
-            .set_markets('india')
-            .where(
-                col('type') == 'stock',
-                col('close') > PRICE_MIN,
-                col('close') <= PRICE_MAX,
-                col('market_cap_basic') > MARKET_CAP_MIN,
-                col('exchange') == 'NSE'
-            )
-            .order_by('change', ascending=False)
-        )
-
-        body = dict(tv_query.query)
-        body['range'] = [0, MAX_TV_STOCKS]
-        response = requests.post(
-            tv_query.url,
-            json=body,
-            headers=TV_HEADERS,
-            timeout=30,
-        )
-        response.raise_for_status()
-        payload = response.json()
-        total = int(payload.get('totalCount') or 0)
+        # ─── Step 1: Build candidate list from watchlist + WebSocket ───
+        # TV SCAN COMMENTED OUT for WS-only testing (Jul 31).
+        # Re-enable if you need the market-cap / exchange / sector filters.
+        # tv_query = (Query().select(...)...)
+        # response = requests.post(tv_query.url, ...)
+        #
+        # Instead: use the 727-stock watchlist directly. Gap% is computed
+        # from WebSocket LTP and cache's yesterday_close. Price filter
+        # uses WebSocket LTP. TV-only fields (volume, relvol, sector) are
+        # set to defaults since they aren't available from the WebSocket.
+        ws_ticks = angel_ws_ticks() if angel_is_connected() and angel_ws_connected() else {}
+        cache_data = candle_tracker._cache if hasattr(candle_tracker, '_cache') else {}
 
         raw_rows: list[dict] = []
-        for symbol_row in (payload.get('data') or [])[:MAX_TV_STOCKS]:
-            values = symbol_row.get('d') or []
-            ticker = symbol_row.get('s')
-            raw_rows.append(dict(zip(['ticker', *tv_columns], [ticker, *values])))
+        for sym in candle_tracker.token_by_symbol:
+            tok = candle_tracker.token_by_symbol[sym]
+            ws = ws_ticks.get(str(tok), {})
+            cached = cache_data.get(sym, {})
 
-        df = pd.DataFrame(raw_rows)
-        count = min(total, MAX_TV_STOCKS)
+            ltp = ws.get("ltp")
+            if ltp is None:
+                continue  # skip stocks with no WS data yet
+
+            yc = cached.get("yesterday_close")
+            gap_pct = ((float(ltp) - float(yc)) / float(yc) * 100) if yc and float(yc) > 0 else None
+
+            if not (PRICE_MIN < float(ltp) <= PRICE_MAX):
+                continue
+            if gap_pct is None or abs(gap_pct) >= GAP_THRESHOLD:
+                continue
+
+            raw_rows.append({
+                "name": sym,
+                "close": float(ltp),
+                "change": ws.get("change_pct", 0),
+                "gap": gap_pct,
+                "volume": ws.get("volume", 0),
+                "relative_volume": 0.0,
+                "market_cap_basic": 0,
+                "sector": "N/A",
+            })
+
+        df = pd.DataFrame(raw_rows) if raw_rows else pd.DataFrame()
+        count = len(df)
 
         if count == 0:
             return {
@@ -288,34 +292,7 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False):
                 "message": "No stocks found matching the conditions"
             }
 
-        # ─── Step 2: Apply Gap Filter (< 2%) ───
-        df['gap'] = pd.to_numeric(df['gap'], errors='coerce')
-        df = df[df['gap'].notna() & (abs(df['gap']) < GAP_THRESHOLD)]
-
-        if df.empty:
-            return {
-                "strategy": "advanceorb",
-                "name": "Advance ORB",
-                "count": 0,
-                "data": [],
-                "columns": ADVANCE_ORB_COLUMNS,
-                "message": f"No stocks with gap < {GAP_THRESHOLD}%"
-            }
-
-        # ─── Step 3: Format Data for Frontend ───
-        # Run the Yahoo Finance candle check across every candidate in parallel.
-        # In normal mode, keep only rows whose ticker passes the ≤1.5% range check.
-        # In gap_up mode, skip the candle-range filter entirely.
         candidate_symbols = df['name'].dropna().astype(str).tolist()
-        # Reject non-equity symbols (bonds, NCDs, warrants, etc.) that
-        # slipped past the TV type='stock' filter. NSE equity symbols
-        # are plain alphanumeric; anything with hyphens, percent signs,
-        # or date patterns is not a stock we can trade.
-        candidate_symbols = [
-            s for s in candidate_symbols
-            if re.match(r'^[A-Z][A-Z0-9]{1,19}$', str(s).upper())
-        ]
-        df = df[df['name'].isin(candidate_symbols)]
 
         # Open-candle batch: pull each symbol's 9:15 IST 5-min candle in
         # parallel. Returns (is_small, high915, open915, low915,
@@ -789,28 +766,10 @@ def refresh_advance_orb(tickers: str = "", gap_up: bool = False):
                 if isinstance(candle, tuple) and candle and candle[0]
             }
 
-        tv_query = (Query()
-            .select('name', 'close', 'change', 'volume', 'relative_volume')
-            .set_markets('india')
-            .where(
-                col('type') == 'stock',
-                col('exchange') == 'NSE'
-            )
-            .set_tickers(*[f'NSE:{sym}' for sym in symbols])
-        )
-
-        body = dict(tv_query.query)
-        body['range'] = [0, max(50, len(symbols) + 10)]
-        response = requests.post(
-            tv_query.url,
-            json=body,
-            headers=TV_HEADERS,
-            timeout=20,
-        )
-        response.raise_for_status()
-        payload = response.json()
-
-        # ── P3: Overlay WebSocket tick data when Angel One is connected ──
+        # TV SCAN COMMENTED OUT for WS-only testing (Jul 31).
+        # tv_query = (Query().select(...)...)
+        #
+        # Instead: pull data directly from WebSocket ticks + cache.
         ws_ticks = {}
         if angel_is_connected() and angel_ws_connected():
             raw = angel_ws_ticks()
@@ -818,34 +777,26 @@ def refresh_advance_orb(tickers: str = "", gap_up: bool = False):
                 sym = d.get("symbol", "")
                 if sym:
                     ws_ticks[sym] = d
-            # Also subscribe any new symbols the frontend sent us
-            ws_auto_subscribe(symbols)
+
+        cache_data = candle_tracker._cache if hasattr(candle_tracker, '_cache') else {}
 
         refreshed: list[dict] = []
-        for symbol_row in (payload.get('data') or []):
-            values = symbol_row.get('d') or []
-            if len(values) < 5:
-                continue
-            name = values[0]
-            if not name or name not in valid_symbols:
+        for name in symbols:
+            if name not in valid_symbols:
                 continue
 
-            # Default values from TV data (always available)
-            close_val = pd.to_numeric(values[1], errors='coerce')
-            change_val = pd.to_numeric(values[2], errors='coerce')
-            vol_raw = pd.to_numeric(values[3], errors='coerce')
-
-            # P3 — Overlay WebSocket tick data when available (freshest)
             ws = ws_ticks.get(name)
-            if ws:
-                ltp = ws.get("ltp")
-                if ltp is not None:
-                    close_val = float(ltp)
-                chg_pct = ws.get("change_pct")
-                if chg_pct is not None:
-                    change_val = round(float(chg_pct), 2)
-                ws_vol = ws.get("volume")
-                if ws_vol is not None:
+            if not ws:
+                continue
+
+            close_val = float(ws.get("ltp", 0))
+            change_val = ws.get("change_pct", 0)
+            vol_raw = ws.get("volume", 0)
+
+            if close_val <= 0:
+                continue
+
+            if pd.notna(vol_raw) and vol_raw >= 1_000_000:
                     vol_raw = int(ws_vol)
 
             if pd.notna(vol_raw) and vol_raw >= 1_000_000:
