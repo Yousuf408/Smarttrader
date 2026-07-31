@@ -257,13 +257,24 @@ def _calc_qty_for_broker(df, budget, parts):
 
 
 def _build_ticks_by_symbol():
-    """Return dict of {symbol: tick_data} with base-symbol aliases."""
+    """Return dict of {symbol: tick_data} with base-symbol aliases.
+
+    Filters out non-EQ instruments — derivatives (PE/CE), currency pairs
+    (USDINR, EURINR, GBPINR, JPYINR) — so only equity segment stocks appear.
+    """
+    import re as _re
     from broker.angel_ws import get_latest_ticks as angel_ws_ticks
     ticks = angel_ws_ticks()
+
+    # Reject patterns: PE/CE suffix, currency pairs
+    _NON_EQ_RE = _re.compile(r"(PE|CE)$|^(USD|EUR|GBP|JPY)INR", _re.IGNORECASE)
+
     by_symbol = {}
     for token, data in ticks.items():
         sym = data.get("symbol", "") or ""
         if not sym:
+            continue
+        if _NON_EQ_RE.search(sym):
             continue
         entry = {
             "ltp": data.get("ltp"),
@@ -276,7 +287,7 @@ def _build_ticks_by_symbol():
         }
         by_symbol[sym] = entry
         base = sym.split("-")[0]
-        if base != sym:
+        if base != sym and not _NON_EQ_RE.search(base):
             by_symbol[base] = entry
     return by_symbol
 
