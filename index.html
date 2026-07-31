@@ -188,6 +188,11 @@
                         </div>
                     </div>
                 </div>
+                <!-- Candle-pending banner — shown when has_candle_data is false -->
+                <div id="candlePendingBanner" style="display:none;margin:0 0 8px;padding:10px 16px;border-radius:8px;background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.35);color:#f6c90e;font-size:13px;align-items:center;gap:8px;">
+                    <span>⏳</span>
+                    <span id="candlePendingText">Candle data pending — table will auto-refresh at 9:20 IST once the first 5-min candle closes.</span>
+                </div>
                 <div class="table-wrap">
                     <table class="table-modern">
                         <thead id="screenerHead">

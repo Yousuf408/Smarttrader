@@ -511,6 +511,7 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False):
             "data": result,
             "columns": out_columns,
             "conditions": conditions,
+            "candle_data_available": has_candle_data,
         }
 
     except Exception as e:

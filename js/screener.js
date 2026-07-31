@@ -404,6 +404,23 @@ function renderStrategyData(result) {
 
     document.getElementById('screenerCount').textContent = `Showing ${data.length} stocks`;
     updatePlaceOrderButtons();
+
+    // ── Candle-pending banner ──────────────────────────────────────
+    // Show a warm amber notice when the backend hasn't yet completed
+    // its first 5-min slot (before 9:20 IST). The banner hides itself
+    // once candle_data_available flips to true (auto-refresh below
+    // triggers a full re-fetch when that happens).
+    if (strategyId === 'advanceorb') {
+        const banner = document.getElementById('candlePendingBanner');
+        if (banner) {
+            const available = result.candle_data_available;
+            if (available === false) {
+                banner.style.display = 'flex';
+            } else {
+                banner.style.display = 'none';
+            }
+        }
+    }
 }
 
 // ================================================================
@@ -930,6 +947,35 @@ async function fetchAdvanceORBRefresh(silent = true) {
     if (!lastAdvanceOrbData || !lastAdvanceOrbData.data || lastAdvanceOrbData.data.length === 0) {
         return;
     }
+
+    // ── Candle-ready gate ────────────────────────────────────────────
+    // When candle_data_available is false the lightweight refresh
+    // endpoint can't supply 1st-candle columns. Instead, fire a full
+    // re-fetch so the table gets candle data the moment slot-0
+    // completes (at ~9:20 IST). Once the re-fetch returns with
+    // candle_data_available === true the banner hides automatically
+    // via renderStrategyData.
+    if (lastAdvanceOrbData.candle_data_available === false) {
+        try {
+            const result = await fetchAdvanceORB();
+            if (result) {
+                lastAdvanceOrbData = result;
+                const strategyId = document.getElementById('strategySelect')?.value;
+                const activePage = document.querySelector('.page.active');
+                const onScreener = activePage && activePage.id === 'page-screener';
+                if (onScreener && strategyId === 'advanceorb') {
+                    renderStrategyData(result);
+                    if (result.candle_data_available) {
+                        showToast('📊 Candle Data Ready', '9:15 candle data is now available — table updated.');
+                    }
+                }
+            }
+        } catch (e) {
+            console.warn('[candle-poller] full re-fetch failed:', e);
+        }
+        return;
+    }
+
     const symbols = lastAdvanceOrbData.data.map(r => r.Symbol).filter(Boolean);
     if (symbols.length === 0) return;
     try {
