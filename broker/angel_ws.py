@@ -33,6 +33,9 @@ from .angel_margin_calculator import (
     ANGEL_PROXIES
 )
 
+# CandleTracker — real-time 5-min OHLC from WebSocket ticks
+from server.candle_tracker import candle_tracker
+
 # ==============================================================================
 # CONSTANTS
 # ==============================================================================
@@ -132,6 +135,9 @@ def on_data(wsapp, message):
             "symbol": symbol,
             "token": token
         }
+
+        # Feed tick to CandleTracker (real-time 5-min OHLC builder)
+        candle_tracker.on_tick(token, ltp, volume, open_price, high_price, low_price, close)
 
         # Log only every 10th tick to avoid spam
         if len(latest_ticks) % 10 == 0:

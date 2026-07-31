@@ -1,0 +1,2914 @@
+{
+  "symbols": {
+    "ADANIENSOL": {
+      "token": "10217",
+      "name": "ADANIENSOL"
+    },
+    "FEDERALBNK": {
+      "token": "1023",
+      "name": "FEDERALBNK"
+    },
+    "LUPIN": {
+      "token": "10440",
+      "name": "LUPIN"
+    },
+    "IGL": {
+      "token": "11262",
+      "name": "IGL"
+    },
+    "PTC": {
+      "token": "11355",
+      "name": "PTC"
+    },
+    "ZOTA": {
+      "token": "11394",
+      "name": "ZOTA"
+    },
+    "GNFC": {
+      "token": "1174",
+      "name": "GNFC"
+    },
+    "SHOPERSTOP": {
+      "token": "11813",
+      "name": "SHOPERSTOP"
+    },
+    "KENNAMET": {
+      "token": "11841",
+      "name": "KENNAMET"
+    },
+    "KANSAINER": {
+      "token": "1196",
+      "name": "KANSAINER"
+    },
+    "FIVESTAR": {
+      "token": "12032",
+      "name": "FIVESTAR"
+    },
+    "UNITDSPR": {
+      "token": "10447",
+      "name": "UNITDSPR"
+    },
+    "POWERMECH": {
+      "token": "10473",
+      "name": "POWERMECH"
+    },
+    "UNIONBANK": {
+      "token": "10753",
+      "name": "UNIONBANK"
+    },
+    "TCS": {
+      "token": "11536",
+      "name": "TCS"
+    },
+    "NTPC": {
+      "token": "11630",
+      "name": "NTPC"
+    },
+    "SSWL": {
+      "token": "11829",
+      "name": "SSWL"
+    },
+    "63MOONS": {
+      "token": "11868",
+      "name": "63MOONS"
+    },
+    "GRANULES": {
+      "token": "11872",
+      "name": "GRANULES"
+    },
+    "CASTROLIND": {
+      "token": "1250",
+      "name": "CASTROLIND"
+    },
+    "IIFLCAPS": {
+      "token": "13072",
+      "name": "IIFLCAPS"
+    },
+    "RATNAMANI": {
+      "token": "13451",
+      "name": "RATNAMANI"
+    },
+    "HBLENGINE": {
+      "token": "13966",
+      "name": "HBLENGINE"
+    },
+    "TANLA": {
+      "token": "13976",
+      "name": "TANLA"
+    },
+    "HINDZINC": {
+      "token": "1424",
+      "name": "HINDZINC"
+    },
+    "TIIL": {
+      "token": "14223",
+      "name": "TIIL"
+    },
+    "REDINGTON": {
+      "token": "14255",
+      "name": "REDINGTON"
+    },
+    "RELIGARE": {
+      "token": "15068",
+      "name": "RELIGARE"
+    },
+    "COLPAL": {
+      "token": "15141",
+      "name": "COLPAL"
+    },
+    "ECLERX": {
+      "token": "15179",
+      "name": "ECLERX"
+    },
+    "TITAGARH": {
+      "token": "15414",
+      "name": "TITAGARH"
+    },
+    "APOLLOTYRE": {
+      "token": "163",
+      "name": "APOLLOTYRE"
+    },
+    "YATHARTH": {
+      "token": "17738",
+      "name": "YATHARTH"
+    },
+    "AEROFLEX": {
+      "token": "18268",
+      "name": "AEROFLEX"
+    },
+    "CUPID": {
+      "token": "18520",
+      "name": "CUPID"
+    },
+    "GALAXYSURF": {
+      "token": "1315",
+      "name": "GALAXYSURF"
+    },
+    "CENTURYPLY": {
+      "token": "13305",
+      "name": "CENTURYPLY"
+    },
+    "GPIL": {
+      "token": "13409",
+      "name": "GPIL"
+    },
+    "TECHM": {
+      "token": "13538",
+      "name": "TECHM"
+    },
+    "ELECON": {
+      "token": "13643",
+      "name": "ELECON"
+    },
+    "NAUKRI": {
+      "token": "13751",
+      "name": "NAUKRI"
+    },
+    "LUMAXTECH": {
+      "token": "14014",
+      "name": "LUMAXTECH"
+    },
+    "INDIANB": {
+      "token": "14309",
+      "name": "INDIANB"
+    },
+    "HSCL": {
+      "token": "14334",
+      "name": "HSCL"
+    },
+    "GODREJAGRO": {
+      "token": "144",
+      "name": "GODREJAGRO"
+    },
+    "ASTRAL": {
+      "token": "14418",
+      "name": "ASTRAL"
+    },
+    "SPARC": {
+      "token": "14788",
+      "name": "SPARC"
+    },
+    "HCG": {
+      "token": "15555",
+      "name": "HCG"
+    },
+    "ITC": {
+      "token": "1660",
+      "name": "ITC"
+    },
+    "SUMICHEM": {
+      "token": "17105",
+      "name": "SUMICHEM"
+    },
+    "REDTAPE": {
+      "token": "17859",
+      "name": "REDTAPE"
+    },
+    "CONCORDBIO": {
+      "token": "18060",
+      "name": "CONCORDBIO"
+    },
+    "ICICIPRULI": {
+      "token": "18652",
+      "name": "ICICIPRULI"
+    },
+    "PNBHOUSING": {
+      "token": "18908",
+      "name": "PNBHOUSING"
+    },
+    "KIRLOSIND": {
+      "token": "19025",
+      "name": "KIRLOSIND"
+    },
+    "SFL": {
+      "token": "19184",
+      "name": "SFL"
+    },
+    "BAJAJCON": {
+      "token": "19531",
+      "name": "BAJAJCON"
+    },
+    "CELLO": {
+      "token": "19795",
+      "name": "CELLO"
+    },
+    "MASFIN": {
+      "token": "199",
+      "name": "MASFIN"
+    },
+    "DEEPAKNTR": {
+      "token": "19943",
+      "name": "DEEPAKNTR"
+    },
+    "JWL": {
+      "token": "20224",
+      "name": "JWL"
+    },
+    "COALINDIA": {
+      "token": "20374",
+      "name": "COALINDIA"
+    },
+    "INDIASHLTR": {
+      "token": "20556",
+      "name": "INDIASHLTR"
+    },
+    "HUDCO": {
+      "token": "20825",
+      "name": "HUDCO"
+    },
+    "KIRLOSENG": {
+      "token": "20936",
+      "name": "KIRLOSENG"
+    },
+    "ERIS": {
+      "token": "21154",
+      "name": "ERIS"
+    },
+    "MASTEK": {
+      "token": "2124",
+      "name": "MASTEK"
+    },
+    "CDSL": {
+      "token": "21174",
+      "name": "CDSL"
+    },
+    "SIS": {
+      "token": "21501",
+      "name": "SIS"
+    },
+    "TSFINV": {
+      "token": "2183",
+      "name": "TSFINV"
+    },
+    "JUNIPER": {
+      "token": "22824",
+      "name": "JUNIPER"
+    },
+    "INDGN": {
+      "token": "23693",
+      "name": "INDGN"
+    },
+    "PIIND": {
+      "token": "24184",
+      "name": "PIIND"
+    },
+    "PIDILITIND": {
+      "token": "2664",
+      "name": "PIDILITIND"
+    },
+    "ACMESOLAR": {
+      "token": "27061",
+      "name": "ACMESOLAR"
+    },
+    "SWANCORP": {
+      "token": "27095",
+      "name": "SWANCORP"
+    },
+    "SIGNATURE": {
+      "token": "18743",
+      "name": "SIGNATURE"
+    },
+    "PRICOLLTD": {
+      "token": "19631",
+      "name": "PRICOLLTD"
+    },
+    "BLUEJET": {
+      "token": "19686",
+      "name": "BLUEJET"
+    },
+    "AUBANK": {
+      "token": "21238",
+      "name": "AUBANK"
+    },
+    "OPTIEMUS": {
+      "token": "21469",
+      "name": "OPTIEMUS"
+    },
+    "SBILIFE": {
+      "token": "21808",
+      "name": "SBILIFE"
+    },
+    "JSFB": {
+      "token": "22663",
+      "name": "JSFB"
+    },
+    "BHARTIHEXA": {
+      "token": "23489",
+      "name": "BHARTIHEXA"
+    },
+    "RPEL": {
+      "token": "24735",
+      "name": "RPEL"
+    },
+    "PNGJL": {
+      "token": "25312",
+      "name": "PNGJL"
+    },
+    "POLYMED": {
+      "token": "25718",
+      "name": "POLYMED"
+    },
+    "HYUNDAI": {
+      "token": "25844",
+      "name": "HYUNDAI"
+    },
+    "WAAREEENER": {
+      "token": "25907",
+      "name": "WAAREEENER"
+    },
+    "KMEW": {
+      "token": "27084",
+      "name": "KMEW"
+    },
+    "BLACKBUCK": {
+      "token": "27144",
+      "name": "BLACKBUCK"
+    },
+    "RALLIS": {
+      "token": "2816",
+      "name": "RALLIS"
+    },
+    "SETL": {
+      "token": "29075",
+      "name": "SETL"
+    },
+    "CARERATING": {
+      "token": "29113",
+      "name": "CARERATING"
+    },
+    "INDUSTOWER": {
+      "token": "29135",
+      "name": "INDUSTOWER"
+    },
+    "SAIL": {
+      "token": "2963",
+      "name": "SAIL"
+    },
+    "RHIM": {
+      "token": "31163",
+      "name": "RHIM"
+    },
+    "SCHNEIDER": {
+      "token": "31234",
+      "name": "SCHNEIDER"
+    },
+    "SKFINDIA": {
+      "token": "3186",
+      "name": "SKFINDIA"
+    },
+    "SUBROS": {
+      "token": "3324",
+      "name": "SUBROS"
+    },
+    "SUPREMEIND": {
+      "token": "3363",
+      "name": "SUPREMEIND"
+    },
+    "SWARAJENG": {
+      "token": "3384",
+      "name": "SWARAJENG"
+    },
+    "TMPV": {
+      "token": "3456",
+      "name": "TMPV"
+    },
+    "TFCILTD": {
+      "token": "3466",
+      "name": "TFCILTD"
+    },
+    "ADANIGREEN": {
+      "token": "3563",
+      "name": "ADANIGREEN"
+    },
+    "BATAINDIA": {
+      "token": "371",
+      "name": "BATAINDIA"
+    },
+    "SHYAMMETL": {
+      "token": "4693",
+      "name": "SHYAMMETL"
+    },
+    "SAREGAMA": {
+      "token": "4892",
+      "name": "SAREGAMA"
+    },
+    "IRCON": {
+      "token": "4986",
+      "name": "IRCON"
+    },
+    "MAZDOCK": {
+      "token": "509",
+      "name": "MAZDOCK"
+    },
+    "CLEAN": {
+      "token": "5049",
+      "name": "CLEAN"
+    },
+    "ASAHIINDIA": {
+      "token": "5378",
+      "name": "ASAHIINDIA"
+    },
+    "GRSE": {
+      "token": "5475",
+      "name": "GRSE"
+    },
+    "SANSERA": {
+      "token": "5751",
+      "name": "SANSERA"
+    },
+    "AXISBANK": {
+      "token": "5900",
+      "name": "AXISBANK"
+    },
+    "INTELLECT": {
+      "token": "5926",
+      "name": "INTELLECT"
+    },
+    "ABSLAMC": {
+      "token": "6018",
+      "name": "ABSLAMC"
+    },
+    "CIPLA": {
+      "token": "694",
+      "name": "CIPLA"
+    },
+    "JSWCEMENT": {
+      "token": "758460",
+      "name": "JSWCEMENT"
+    },
+    "LENSKART": {
+      "token": "759605",
+      "name": "LENSKART"
+    },
+    "TMCV": {
+      "token": "759782",
+      "name": "TMCV"
+    },
+    "GROWW": {
+      "token": "759806",
+      "name": "GROWW"
+    },
+    "STYL": {
+      "token": "759934",
+      "name": "STYL"
+    },
+    "SUDEEPPHRM": {
+      "token": "760039",
+      "name": "SUDEEPPHRM"
+    },
+    "NEPHROPLUS": {
+      "token": "760346",
+      "name": "NEPHROPLUS"
+    },
+    "AVANTIFEED": {
+      "token": "7936",
+      "name": "AVANTIFEED"
+    },
+    "EIHOTEL": {
+      "token": "919",
+      "name": "EIHOTEL"
+    },
+    "LICI": {
+      "token": "9480",
+      "name": "LICI"
+    },
+    "SENORES": {
+      "token": "28888",
+      "name": "SENORES"
+    },
+    "NAZARA": {
+      "token": "2987",
+      "name": "NAZARA"
+    },
+    "JUSTDIAL": {
+      "token": "29962",
+      "name": "JUSTDIAL"
+    },
+    "ARE&M": {
+      "token": "100",
+      "name": "ARE&M"
+    },
+    "FACT": {
+      "token": "1008",
+      "name": "FACT"
+    },
+    "GODREJCP": {
+      "token": "10099",
+      "name": "GODREJCP"
+    },
+    "SYNGENE": {
+      "token": "10243",
+      "name": "SYNGENE"
+    },
+    "FINCABLES": {
+      "token": "1038",
+      "name": "FINCABLES"
+    },
+    "VARROC": {
+      "token": "3857",
+      "name": "VARROC"
+    },
+    "RAMRAT": {
+      "token": "10485",
+      "name": "RAMRAT"
+    },
+    "BERGEPAINT": {
+      "token": "404",
+      "name": "BERGEPAINT"
+    },
+    "BHARATFORG": {
+      "token": "422",
+      "name": "BHARATFORG"
+    },
+    "SHRIRAMFIN": {
+      "token": "4306",
+      "name": "SHRIRAMFIN"
+    },
+    "PNB": {
+      "token": "10666",
+      "name": "PNB"
+    },
+    "BANKINDIA": {
+      "token": "4745",
+      "name": "BANKINDIA"
+    },
+    "DODLA": {
+      "token": "4822",
+      "name": "DODLA"
+    },
+    "FDC": {
+      "token": "4898",
+      "name": "FDC"
+    },
+    "SHARDACROP": {
+      "token": "4992",
+      "name": "SHARDACROP"
+    },
+    "STYLAMIND": {
+      "token": "5186",
+      "name": "STYLAMIND"
+    },
+    "INDUSINDBK": {
+      "token": "5258",
+      "name": "INDUSINDBK"
+    },
+    "EPIGRAL": {
+      "token": "5382",
+      "name": "EPIGRAL"
+    },
+    "CARTRADE": {
+      "token": "5407",
+      "name": "CARTRADE"
+    },
+    "VIJAYA": {
+      "token": "5585",
+      "name": "VIJAYA"
+    },
+    "CEMPRO": {
+      "token": "5622",
+      "name": "CEMPRO"
+    },
+    "CYIENT": {
+      "token": "5748",
+      "name": "CYIENT"
+    },
+    "PARAS": {
+      "token": "5911",
+      "name": "PARAS"
+    },
+    "JINDALSTEL": {
+      "token": "6733",
+      "name": "JINDALSTEL"
+    },
+    "BSOFT": {
+      "token": "6994",
+      "name": "BSOFT"
+    },
+    "ANANDRATHI": {
+      "token": "7145",
+      "name": "ANANDRATHI"
+    },
+    "GLENMARK": {
+      "token": "7406",
+      "name": "GLENMARK"
+    },
+    "ATHERENERG": {
+      "token": "757645",
+      "name": "ATHERENERG"
+    },
+    "HDBFS": {
+      "token": "757772",
+      "name": "HDBFS"
+    },
+    "RAYMONDREL": {
+      "token": "758551",
+      "name": "RAYMONDREL"
+    },
+    "JAINREC": {
+      "token": "759244",
+      "name": "JAINREC"
+    },
+    "BLUESTONE": {
+      "token": "759291",
+      "name": "BLUESTONE"
+    },
+    "WEWORK": {
+      "token": "759434",
+      "name": "WEWORK"
+    },
+    "ORKLAINDIA": {
+      "token": "759569",
+      "name": "ORKLAINDIA"
+    },
+    "CGPOWER": {
+      "token": "760",
+      "name": "CGPOWER"
+    },
+    "MEESHO": {
+      "token": "760229",
+      "name": "MEESHO"
+    },
+    "KSHINTL": {
+      "token": "760433",
+      "name": "KSHINTL"
+    },
+    "FRACTAL": {
+      "token": "760961",
+      "name": "FRACTAL"
+    },
+    "SEDEMAC": {
+      "token": "761153",
+      "name": "SEDEMAC"
+    },
+    "KISSHT": {
+      "token": "763294",
+      "name": "KISSHT"
+    },
+    "SBIFUNDS": {
+      "token": "764173",
+      "name": "SBIFUNDS"
+    },
+    "ZYDUSLIFE": {
+      "token": "7929",
+      "name": "ZYDUSLIFE"
+    },
+    "AWL": {
+      "token": "8110",
+      "name": "AWL"
+    },
+    "SKIPPER": {
+      "token": "9428",
+      "name": "SKIPPER"
+    },
+    "EPL": {
+      "token": "981",
+      "name": "EPL"
+    },
+    "HAVELLS": {
+      "token": "9819",
+      "name": "HAVELLS"
+    },
+    "TCI": {
+      "token": "10580",
+      "name": "TCI"
+    },
+    "VAIBHAVGBL": {
+      "token": "11364",
+      "name": "VAIBHAVGBL"
+    },
+    "POONAWALLA": {
+      "token": "11403",
+      "name": "POONAWALLA"
+    },
+    "DATAMATICS": {
+      "token": "11423",
+      "name": "DATAMATICS"
+    },
+    "GLAXO": {
+      "token": "1153",
+      "name": "GLAXO"
+    },
+    "PPLPHARMA": {
+      "token": "11571",
+      "name": "PPLPHARMA"
+    },
+    "ICIL": {
+      "token": "11987",
+      "name": "ICIL"
+    },
+    "HNDFDS": {
+      "token": "12173",
+      "name": "HNDFDS"
+    },
+    "GRASIM": {
+      "token": "1232",
+      "name": "GRASIM"
+    },
+    "MBAPL": {
+      "token": "12686",
+      "name": "MBAPL"
+    },
+    "SYRMA": {
+      "token": "10793",
+      "name": "SYRMA"
+    },
+    "PETRONET": {
+      "token": "11351",
+      "name": "PETRONET"
+    },
+    "EMIL": {
+      "token": "11530",
+      "name": "EMIL"
+    },
+    "ASTRAMICRO": {
+      "token": "11618",
+      "name": "ASTRAMICRO"
+    },
+    "GODFRYPHLP": {
+      "token": "1181",
+      "name": "GODFRYPHLP"
+    },
+    "GREAVESCOT": {
+      "token": "1235",
+      "name": "GREAVESCOT"
+    },
+    "GUJALKALI": {
+      "token": "1267",
+      "name": "GUJALKALI"
+    },
+    "AMBUJACEM": {
+      "token": "1270",
+      "name": "AMBUJACEM"
+    },
+    "PVRINOX": {
+      "token": "13147",
+      "name": "PVRINOX"
+    },
+    "GALLANTT": {
+      "token": "13337",
+      "name": "GALLANTT"
+    },
+    "FIEMIND": {
+      "token": "13710",
+      "name": "FIEMIND"
+    },
+    "GESHIP": {
+      "token": "13776",
+      "name": "GESHIP"
+    },
+    "SOBHA": {
+      "token": "13826",
+      "name": "SOBHA"
+    },
+    "AGI": {
+      "token": "1412",
+      "name": "AGI"
+    },
+    "KIRLFER": {
+      "token": "14466",
+      "name": "KIRLFER"
+    },
+    "GOKULAGRO": {
+      "token": "14480",
+      "name": "GOKULAGRO"
+    },
+    "MOTILALOFS": {
+      "token": "14947",
+      "name": "MOTILALOFS"
+    },
+    "INDHOTEL": {
+      "token": "1512",
+      "name": "INDHOTEL"
+    },
+    "RAIN": {
+      "token": "15337",
+      "name": "RAIN"
+    },
+    "TATAINVEST": {
+      "token": "1621",
+      "name": "TATAINVEST"
+    },
+    "BECTORFOOD": {
+      "token": "1628",
+      "name": "BECTORFOOD"
+    },
+    "IPCALAB": {
+      "token": "1633",
+      "name": "IPCALAB"
+    },
+    "PATANJALI": {
+      "token": "17029",
+      "name": "PATANJALI"
+    },
+    "LLOYDSME": {
+      "token": "17313",
+      "name": "LLOYDSME"
+    },
+    "OIL": {
+      "token": "17438",
+      "name": "OIL"
+    },
+    "COHANCE": {
+      "token": "17945",
+      "name": "COHANCE"
+    },
+    "WHIRLPOOL": {
+      "token": "18011",
+      "name": "WHIRLPOOL"
+    },
+    "KAJARIACER": {
+      "token": "1808",
+      "name": "KAJARIACER"
+    },
+    "KARURVYSYA": {
+      "token": "1838",
+      "name": "KARURVYSYA"
+    },
+    "KRISHANA": {
+      "token": "12847",
+      "name": "KRISHANA"
+    },
+    "HINDPETRO": {
+      "token": "1406",
+      "name": "HINDPETRO"
+    },
+    "TIMKEN": {
+      "token": "14198",
+      "name": "TIMKEN"
+    },
+    "DLF": {
+      "token": "14732",
+      "name": "DLF"
+    },
+    "AVALON": {
+      "token": "15058",
+      "name": "AVALON"
+    },
+    "KIRLPNU": {
+      "token": "15180",
+      "name": "KIRLPNU"
+    },
+    "MANKIND": {
+      "token": "15380",
+      "name": "MANKIND"
+    },
+    "PRUDENT": {
+      "token": "9553",
+      "name": "PRUDENT"
+    },
+    "IONEXCHANG": {
+      "token": "1630",
+      "name": "IONEXCHANG"
+    },
+    "PARADEEP": {
+      "token": "9741",
+      "name": "PARADEEP"
+    },
+    "BAJAJFINSV": {
+      "token": "16675",
+      "name": "BAJAJFINSV"
+    },
+    "NEOGEN": {
+      "token": "9917",
+      "name": "NEOGEN"
+    },
+    "MHRIL": {
+      "token": "17333",
+      "name": "MHRIL"
+    },
+    "ADANIPOWER": {
+      "token": "17388",
+      "name": "ADANIPOWER"
+    },
+    "SARDAEN": {
+      "token": "17758",
+      "name": "SARDAEN"
+    },
+    "SBICARD": {
+      "token": "17971",
+      "name": "SBICARD"
+    },
+    "DBL": {
+      "token": "18086",
+      "name": "DBL"
+    },
+    "TVSSCS": {
+      "token": "18151",
+      "name": "TVSSCS"
+    },
+    "SANDUMA": {
+      "token": "18359",
+      "name": "SANDUMA"
+    },
+    "RRKABEL": {
+      "token": "18566",
+      "name": "RRKABEL"
+    },
+    "STYRENIX": {
+      "token": "19",
+      "name": "STYRENIX"
+    },
+    "MAXESTATES": {
+      "token": "19646",
+      "name": "MAXESTATES"
+    },
+    "HONASA": {
+      "token": "19813",
+      "name": "HONASA"
+    },
+    "GRAVITA": {
+      "token": "20534",
+      "name": "GRAVITA"
+    },
+    "MAHSEAMLES": {
+      "token": "2088",
+      "name": "MAHSEAMLES"
+    },
+    "BDL": {
+      "token": "2144",
+      "name": "BDL"
+    },
+    "ABCAPITAL": {
+      "token": "21614",
+      "name": "ABCAPITAL"
+    },
+    "ICICIGI": {
+      "token": "21770",
+      "name": "ICICIGI"
+    },
+    "GODIGIT": {
+      "token": "23799",
+      "name": "GODIGIT"
+    },
+    "BANSALWIRE": {
+      "token": "24386",
+      "name": "BANSALWIRE"
+    },
+    "JSWINFRA": {
+      "token": "19020",
+      "name": "JSWINFRA"
+    },
+    "KIOCL": {
+      "token": "19126",
+      "name": "KIOCL"
+    },
+    "TI": {
+      "token": "19196",
+      "name": "TI"
+    },
+    "KSB": {
+      "token": "1949",
+      "name": "KSB"
+    },
+    "ASKAUTOLTD": {
+      "token": "20152",
+      "name": "ASKAUTOLTD"
+    },
+    "PRESTIGE": {
+      "token": "20302",
+      "name": "PRESTIGE"
+    },
+    "CGCL": {
+      "token": "20329",
+      "name": "CGCL"
+    },
+    "IOLCP": {
+      "token": "20413",
+      "name": "IOLCP"
+    },
+    "MUTHOOTMF": {
+      "token": "20831",
+      "name": "MUTHOOTMF"
+    },
+    "HAPPYFORGE": {
+      "token": "20854",
+      "name": "HAPPYFORGE"
+    },
+    "ACC": {
+      "token": "22",
+      "name": "ACC"
+    },
+    "ENTERO": {
+      "token": "22717",
+      "name": "ENTERO"
+    },
+    "MPSLTD": {
+      "token": "10578",
+      "name": "MPSLTD"
+    },
+    "INDIAMART": {
+      "token": "10726",
+      "name": "INDIAMART"
+    },
+    "JSL": {
+      "token": "11236",
+      "name": "JSL"
+    },
+    "AFFLE": {
+      "token": "11343",
+      "name": "AFFLE"
+    },
+    "SUPRAJIT": {
+      "token": "11689",
+      "name": "SUPRAJIT"
+    },
+    "GENUSPOWER": {
+      "token": "11905",
+      "name": "GENUSPOWER"
+    },
+    "MEDANTA": {
+      "token": "11956",
+      "name": "MEDANTA"
+    },
+    "BIKAJI": {
+      "token": "11966",
+      "name": "BIKAJI"
+    },
+    "ADANIENT": {
+      "token": "25",
+      "name": "ADANIENT"
+    },
+    "RAYMONDLSL": {
+      "token": "25073",
+      "name": "RAYMONDLSL"
+    },
+    "TDPOWERSYS": {
+      "token": "25178",
+      "name": "TDPOWERSYS"
+    },
+    "SHAKTIPUMP": {
+      "token": "25574",
+      "name": "SHAKTIPUMP"
+    },
+    "PCBL": {
+      "token": "2649",
+      "name": "PCBL"
+    },
+    "PRSMJOHNSN": {
+      "token": "2739",
+      "name": "PRSMJOHNSN"
+    },
+    "PGEL": {
+      "token": "25358",
+      "name": "PGEL"
+    },
+    "GICRE": {
+      "token": "277",
+      "name": "GICRE"
+    },
+    "SAILIFE": {
+      "token": "27839",
+      "name": "SAILIFE"
+    },
+    "RELIANCE": {
+      "token": "2885",
+      "name": "RELIANCE"
+    },
+    "VENTIVE": {
+      "token": "28847",
+      "name": "VENTIVE"
+    },
+    "ONESOURCE": {
+      "token": "29224",
+      "name": "ONESOURCE"
+    },
+    "SIEMENS": {
+      "token": "3150",
+      "name": "SIEMENS"
+    },
+    "SUDARSCHEM": {
+      "token": "3327",
+      "name": "SUDARSCHEM"
+    },
+    "SUNDRMFAST": {
+      "token": "3345",
+      "name": "SUNDRMFAST"
+    },
+    "TATASTEEL": {
+      "token": "3499",
+      "name": "TATASTEEL"
+    },
+    "BASF": {
+      "token": "368",
+      "name": "BASF"
+    },
+    "RITES": {
+      "token": "3761",
+      "name": "RITES"
+    },
+    "AEGISLOG": {
+      "token": "40",
+      "name": "AEGISLOG"
+    },
+    "ZEEL": {
+      "token": "3812",
+      "name": "ZEEL"
+    },
+    "MOTHERSON": {
+      "token": "4204",
+      "name": "MOTHERSON"
+    },
+    "HDFCAMC": {
+      "token": "4244",
+      "name": "HDFCAMC"
+    },
+    "BHEL": {
+      "token": "438",
+      "name": "BHEL"
+    },
+    "MPHASIS": {
+      "token": "4503",
+      "name": "MPHASIS"
+    },
+    "HDFCLIFE": {
+      "token": "467",
+      "name": "HDFCLIFE"
+    },
+    "ENGINERSIN": {
+      "token": "4907",
+      "name": "ENGINERSIN"
+    },
+    "ICICIBANK": {
+      "token": "4963",
+      "name": "ICICIBANK"
+    },
+    "PDSL": {
+      "token": "5264",
+      "name": "PDSL"
+    },
+    "NUVOCO": {
+      "token": "5426",
+      "name": "NUVOCO"
+    },
+    "ABREL": {
+      "token": "625",
+      "name": "ABREL"
+    },
+    "VISHNU": {
+      "token": "6908",
+      "name": "VISHNU"
+    },
+    "VAML": {
+      "token": "750174",
+      "name": "VAML"
+    },
+    "JSLL": {
+      "token": "758115",
+      "name": "JSLL"
+    },
+    "ATLANTAELE": {
+      "token": "759007",
+      "name": "ATLANTAELE"
+    },
+    "URBANCO": {
+      "token": "759084",
+      "name": "URBANCO"
+    },
+    "SHREEJISPG": {
+      "token": "759448",
+      "name": "SHREEJISPG"
+    },
+    "SKFINDUS": {
+      "token": "760101",
+      "name": "SKFINDUS"
+    },
+    "FINPIPE": {
+      "token": "1041",
+      "name": "FINPIPE"
+    },
+    "OLECTRA": {
+      "token": "10637",
+      "name": "OLECTRA"
+    },
+    "GODREJIND": {
+      "token": "10925",
+      "name": "GODREJIND"
+    },
+    "GARFIBRES": {
+      "token": "1100",
+      "name": "GARFIBRES"
+    },
+    "OMNI": {
+      "token": "760865",
+      "name": "OMNI"
+    },
+    "LT": {
+      "token": "11483",
+      "name": "LT"
+    },
+    "SHADOWFAX": {
+      "token": "761469",
+      "name": "SHADOWFAX"
+    },
+    "WESTLIFE": {
+      "token": "11580",
+      "name": "WESTLIFE"
+    },
+    "NEWGEN": {
+      "token": "1164",
+      "name": "NEWGEN"
+    },
+    "CMPDI": {
+      "token": "761581",
+      "name": "CMPDI"
+    },
+    "GOKEX": {
+      "token": "11778",
+      "name": "GOKEX"
+    },
+    "IIFL": {
+      "token": "11809",
+      "name": "IIFL"
+    },
+    "NH": {
+      "token": "11840",
+      "name": "NH"
+    },
+    "GLAND": {
+      "token": "1186",
+      "name": "GLAND"
+    },
+    "TIMEX": {
+      "token": "762954",
+      "name": "TIMEX"
+    },
+    "KAYNES": {
+      "token": "12092",
+      "name": "KAYNES"
+    },
+    "LASERPOWER": {
+      "token": "764126",
+      "name": "LASERPOWER"
+    },
+    "SWSOLAR": {
+      "token": "12489",
+      "name": "SWSOLAR"
+    },
+    "KTKBANK": {
+      "token": "8054",
+      "name": "KTKBANK"
+    },
+    "DEEPAKFERT": {
+      "token": "827",
+      "name": "DEEPAKFERT"
+    },
+    "NLCINDIA": {
+      "token": "8585",
+      "name": "NLCINDIA"
+    },
+    "CHOICEIN": {
+      "token": "8866",
+      "name": "CHOICEIN"
+    },
+    "TIPSMUSIC": {
+      "token": "9117",
+      "name": "TIPSMUSIC"
+    },
+    "ACE": {
+      "token": "13587",
+      "name": "ACE"
+    },
+    "HINDALCO": {
+      "token": "1363",
+      "name": "HINDALCO"
+    },
+    "PNCINFRA": {
+      "token": "9385",
+      "name": "PNCINFRA"
+    },
+    "IRCTC": {
+      "token": "13611",
+      "name": "IRCTC"
+    },
+    "SKYGOLD": {
+      "token": "13631",
+      "name": "SKYGOLD"
+    },
+    "JMFINANCIL": {
+      "token": "13637",
+      "name": "JMFINANCIL"
+    },
+    "IKS": {
+      "token": "28125",
+      "name": "IKS"
+    },
+    "DCBBANK": {
+      "token": "13725",
+      "name": "DCBBANK"
+    },
+    "UNIMECH": {
+      "token": "28960",
+      "name": "UNIMECH"
+    },
+    "CIEINDIA": {
+      "token": "14937",
+      "name": "CIEINDIA"
+    },
+    "CSBBANK": {
+      "token": "14966",
+      "name": "CSBBANK"
+    },
+    "POWERGRID": {
+      "token": "14977",
+      "name": "POWERGRID"
+    },
+    "BALRAMCHIN": {
+      "token": "341",
+      "name": "BALRAMCHIN"
+    },
+    "ASTERDM": {
+      "token": "1508",
+      "name": "ASTERDM"
+    },
+    "INDIACEM": {
+      "token": "1515",
+      "name": "INDIACEM"
+    },
+    "WIPRO": {
+      "token": "3787",
+      "name": "WIPRO"
+    },
+    "MARICO": {
+      "token": "4067",
+      "name": "MARICO"
+    },
+    "ALKYLAMINE": {
+      "token": "4487",
+      "name": "ALKYLAMINE"
+    },
+    "SBCL": {
+      "token": "4656",
+      "name": "SBCL"
+    },
+    "ETERNAL": {
+      "token": "5097",
+      "name": "ETERNAL"
+    },
+    "APTUS": {
+      "token": "5435",
+      "name": "APTUS"
+    },
+    "ARTEMISMED": {
+      "token": "16913",
+      "name": "ARTEMISMED"
+    },
+    "CUB": {
+      "token": "5701",
+      "name": "CUB"
+    },
+    "BLS": {
+      "token": "17279",
+      "name": "BLS"
+    },
+    "GOODLUCK": {
+      "token": "6125",
+      "name": "GOODLUCK"
+    },
+    "CESC": {
+      "token": "628",
+      "name": "CESC"
+    },
+    "PAYTM": {
+      "token": "6705",
+      "name": "PAYTM"
+    },
+    "GODREJPROP": {
+      "token": "17875",
+      "name": "GODREJPROP"
+    },
+    "MEDPLUS": {
+      "token": "7254",
+      "name": "MEDPLUS"
+    },
+    "LGBBROSLTD": {
+      "token": "18321",
+      "name": "LGBBROSLTD"
+    },
+    "KIRLOSBROS": {
+      "token": "18581",
+      "name": "KIRLOSBROS"
+    },
+    "NUVAMA": {
+      "token": "18721",
+      "name": "NUVAMA"
+    },
+    "VBL": {
+      "token": "18921",
+      "name": "VBL"
+    },
+    "WAAREERTL": {
+      "token": "756038",
+      "name": "WAAREERTL"
+    },
+    "KEC": {
+      "token": "13260",
+      "name": "KEC"
+    },
+    "TRAVELFOOD": {
+      "token": "757545",
+      "name": "TRAVELFOOD"
+    },
+    "HEG": {
+      "token": "1336",
+      "name": "HEG"
+    },
+    "PICCADIL": {
+      "token": "757754",
+      "name": "PICCADIL"
+    },
+    "SUNTV": {
+      "token": "13404",
+      "name": "SUNTV"
+    },
+    "PFOCUS": {
+      "token": "13496",
+      "name": "PFOCUS"
+    },
+    "GMRAIRPORT": {
+      "token": "13528",
+      "name": "GMRAIRPORT"
+    },
+    "TORNTPOWER": {
+      "token": "13786",
+      "name": "TORNTPOWER"
+    },
+    "CPPLUS": {
+      "token": "758858",
+      "name": "CPPLUS"
+    },
+    "BANCOINDIA": {
+      "token": "13880",
+      "name": "BANCOINDIA"
+    },
+    "SGMART": {
+      "token": "758889",
+      "name": "SGMART"
+    },
+    "UNOMINDA": {
+      "token": "14154",
+      "name": "UNOMINDA"
+    },
+    "CANHLIFE": {
+      "token": "759477",
+      "name": "CANHLIFE"
+    },
+    "PGIL": {
+      "token": "14260",
+      "name": "PGIL"
+    },
+    "PFC": {
+      "token": "14299",
+      "name": "PFC"
+    },
+    "SANOFI": {
+      "token": "1442",
+      "name": "SANOFI"
+    },
+    "AEQUS": {
+      "token": "760234",
+      "name": "AEQUS"
+    },
+    "CMSINFO": {
+      "token": "7603",
+      "name": "CMSINFO"
+    },
+    "PARKHOSPS": {
+      "token": "760351",
+      "name": "PARKHOSPS"
+    },
+    "EDELWEISS": {
+      "token": "15119",
+      "name": "EDELWEISS"
+    },
+    "RECLTD": {
+      "token": "15355",
+      "name": "RECLTD"
+    },
+    "IOC": {
+      "token": "1624",
+      "name": "IOC"
+    },
+    "RPGLIFE": {
+      "token": "16725",
+      "name": "RPGLIFE"
+    },
+    "MGL": {
+      "token": "17534",
+      "name": "MGL"
+    },
+    "SUNTECK": {
+      "token": "17641",
+      "name": "SUNTECK"
+    },
+    "REFEX": {
+      "token": "17764",
+      "name": "REFEX"
+    },
+    "NESTLEIND": {
+      "token": "17963",
+      "name": "NESTLEIND"
+    },
+    "GVPIL": {
+      "token": "7862",
+      "name": "GVPIL"
+    },
+    "MAHLIFE": {
+      "token": "8050",
+      "name": "MAHLIFE"
+    },
+    "M&M": {
+      "token": "2031",
+      "name": "M&M"
+    },
+    "JAMNAAUTO": {
+      "token": "20778",
+      "name": "JAMNAAUTO"
+    },
+    "CAMPUS": {
+      "token": "9362",
+      "name": "CAMPUS"
+    },
+    "SPLPETRO": {
+      "token": "9617",
+      "name": "SPLPETRO"
+    },
+    "ASHOKLEY": {
+      "token": "212",
+      "name": "ASHOKLEY"
+    },
+    "CHOLAHLDNG": {
+      "token": "21740",
+      "name": "CHOLAHLDNG"
+    },
+    "HFCL": {
+      "token": "21951",
+      "name": "HFCL"
+    },
+    "NCC": {
+      "token": "2319",
+      "name": "NCC"
+    },
+    "MUTHOOTFIN": {
+      "token": "23650",
+      "name": "MUTHOOTFIN"
+    },
+    "AVANTEL": {
+      "token": "24610",
+      "name": "AVANTEL"
+    },
+    "ONGC": {
+      "token": "2475",
+      "name": "ONGC"
+    },
+    "CEIGALL": {
+      "token": "24742",
+      "name": "CEIGALL"
+    },
+    "PREMIERENE": {
+      "token": "25049",
+      "name": "PREMIERENE"
+    },
+    "TRITURBINE": {
+      "token": "25584",
+      "name": "TRITURBINE"
+    },
+    "LEMONTREE": {
+      "token": "2606",
+      "name": "LEMONTREE"
+    },
+    "PRAJIND": {
+      "token": "2705",
+      "name": "PRAJIND"
+    },
+    "BSE": {
+      "token": "19585",
+      "name": "BSE"
+    },
+    "FEDFINA": {
+      "token": "20322",
+      "name": "FEDFINA"
+    },
+    "AZAD": {
+      "token": "20905",
+      "name": "AZAD"
+    },
+    "INNOVACAP": {
+      "token": "21062",
+      "name": "INNOVACAP"
+    },
+    "STARCEMENT": {
+      "token": "21091",
+      "name": "STARCEMENT"
+    },
+    "AIIL": {
+      "token": "23553",
+      "name": "AIIL"
+    },
+    "TBOTEK": {
+      "token": "23740",
+      "name": "TBOTEK"
+    },
+    "DELHIVERY": {
+      "token": "9599",
+      "name": "DELHIVERY"
+    },
+    "SYMPHONY": {
+      "token": "24190",
+      "name": "SYMPHONY"
+    },
+    "MIDHANI": {
+      "token": "2463",
+      "name": "MIDHANI"
+    },
+    "APLAPOLLO": {
+      "token": "25780",
+      "name": "APLAPOLLO"
+    },
+    "KALYANKJIL": {
+      "token": "2955",
+      "name": "KALYANKJIL"
+    },
+    "BORORENEW": {
+      "token": "3149",
+      "name": "BORORENEW"
+    },
+    "ISGEC": {
+      "token": "3329",
+      "name": "ISGEC"
+    },
+    "VESUVIUS": {
+      "token": "3676",
+      "name": "VESUVIUS"
+    },
+    "HATSUN": {
+      "token": "3892",
+      "name": "HATSUN"
+    },
+    "BANKBARODA": {
+      "token": "4668",
+      "name": "BANKBARODA"
+    },
+    "SONACOMS": {
+      "token": "4684",
+      "name": "SONACOMS"
+    },
+    "BIRLACORPN": {
+      "token": "480",
+      "name": "BIRLACORPN"
+    },
+    "GRINFRA": {
+      "token": "5054",
+      "name": "GRINFRA"
+    },
+    "KPIGREEN": {
+      "token": "5108",
+      "name": "KPIGREEN"
+    },
+    "GMDCLTD": {
+      "token": "5204",
+      "name": "GMDCLTD"
+    },
+    "GRAPHITE": {
+      "token": "592",
+      "name": "GRAPHITE"
+    },
+    "GREENLAM": {
+      "token": "6848",
+      "name": "GREENLAM"
+    },
+    "WOCKPHARMA": {
+      "token": "7506",
+      "name": "WOCKPHARMA"
+    },
+    "TRANSRAILL": {
+      "token": "28714",
+      "name": "TRANSRAILL"
+    },
+    "ITCHOTELS": {
+      "token": "29251",
+      "name": "ITCHOTELS"
+    },
+    "VMART": {
+      "token": "29284",
+      "name": "VMART"
+    },
+    "HEXT": {
+      "token": "29666",
+      "name": "HEXT"
+    },
+    "JINDALSAW": {
+      "token": "3024",
+      "name": "JINDALSAW"
+    },
+    "CMRGREEN": {
+      "token": "30893",
+      "name": "CMRGREEN"
+    },
+    "TIINDIA": {
+      "token": "312",
+      "name": "TIINDIA"
+    },
+    "BANARISUG": {
+      "token": "350",
+      "name": "BANARISUG"
+    },
+    "VIPIND": {
+      "token": "3703",
+      "name": "VIPIND"
+    },
+    "VOLTAS": {
+      "token": "3718",
+      "name": "VOLTAS"
+    },
+    "BEML": {
+      "token": "395",
+      "name": "BEML"
+    },
+    "NATCOPHARM": {
+      "token": "3918",
+      "name": "NATCOPHARM"
+    },
+    "GAIL": {
+      "token": "4717",
+      "name": "GAIL"
+    },
+    "CANFINHOME": {
+      "token": "583",
+      "name": "CANFINHOME"
+    },
+    "TECHNOE": {
+      "token": "6445",
+      "name": "TECHNOE"
+    },
+    "SONATSOFTW": {
+      "token": "6596",
+      "name": "SONATSOFTW"
+    },
+    "SMARTWORKS": {
+      "token": "757965",
+      "name": "SMARTWORKS"
+    },
+    "LOTUSDEV": {
+      "token": "758145",
+      "name": "LOTUSDEV"
+    },
+    "KALPATARU": {
+      "token": "758558",
+      "name": "KALPATARU"
+    },
+    "TATACAP": {
+      "token": "759265",
+      "name": "TATACAP"
+    },
+    "VIKRAMSOLR": {
+      "token": "759453",
+      "name": "VIKRAMSOLR"
+    },
+    "PIRAMALFIN": {
+      "token": "759551",
+      "name": "PIRAMALFIN"
+    },
+    "EMMVEE": {
+      "token": "759728",
+      "name": "EMMVEE"
+    },
+    "AJANTPHARM": {
+      "token": "8124",
+      "name": "AJANTPHARM"
+    },
+    "VRLLOG": {
+      "token": "8696",
+      "name": "VRLLOG"
+    },
+    "DRREDDY": {
+      "token": "881",
+      "name": "DRREDDY"
+    },
+    "RAINBOW": {
+      "token": "9408",
+      "name": "RAINBOW"
+    },
+    "AXISCADES": {
+      "token": "9436",
+      "name": "AXISCADES"
+    },
+    "AEGISVOPAK": {
+      "token": "757336",
+      "name": "AEGISVOPAK"
+    },
+    "UTLSOLAR": {
+      "token": "759876",
+      "name": "UTLSOLAR"
+    },
+    "LGEINDIA": {
+      "token": "760213",
+      "name": "LGEINDIA"
+    },
+    "POWERICA": {
+      "token": "761680",
+      "name": "POWERICA"
+    },
+    "PRIVISCL": {
+      "token": "8825",
+      "name": "PRIVISCL"
+    },
+    "ANUP": {
+      "token": "9014",
+      "name": "ANUP"
+    },
+    "ARVINDFASN": {
+      "token": "9111",
+      "name": "ARVINDFASN"
+    },
+    "RVNL": {
+      "token": "9552",
+      "name": "RVNL"
+    },
+    "METROPOLIS": {
+      "token": "9581",
+      "name": "METROPOLIS"
+    },
+    "SHARDAMOTR": {
+      "token": "10530",
+      "name": "SHARDAMOTR"
+    },
+    "KRBL": {
+      "token": "10577",
+      "name": "KRBL"
+    },
+    "MARKSANS": {
+      "token": "10579",
+      "name": "MARKSANS"
+    },
+    "BHARTIARTL": {
+      "token": "10604",
+      "name": "BHARTIARTL"
+    },
+    "ZENSARTECH": {
+      "token": "1076",
+      "name": "ZENSARTECH"
+    },
+    "GABRIEL": {
+      "token": "1085",
+      "name": "GABRIEL"
+    },
+    "TMB": {
+      "token": "10945",
+      "name": "TMB"
+    },
+    "UPL": {
+      "token": "11287",
+      "name": "UPL"
+    },
+    "LALPATHLAB": {
+      "token": "11654",
+      "name": "LALPATHLAB"
+    },
+    "JSWSTEEL": {
+      "token": "11723",
+      "name": "JSWSTEEL"
+    },
+    "GSFC": {
+      "token": "1247",
+      "name": "GSFC"
+    },
+    "MANORAMA": {
+      "token": "10227",
+      "name": "MANORAMA"
+    },
+    "BIOCON": {
+      "token": "11373",
+      "name": "BIOCON"
+    },
+    "RKFORGE": {
+      "token": "11411",
+      "name": "RKFORGE"
+    },
+    "WELENT": {
+      "token": "11626",
+      "name": "WELENT"
+    },
+    "WELCORP": {
+      "token": "11821",
+      "name": "WELCORP"
+    },
+    "ACI": {
+      "token": "12024",
+      "name": "ACI"
+    },
+    "KPITTECH": {
+      "token": "9683",
+      "name": "KPITTECH"
+    },
+    "ETHOSLTD": {
+      "token": "9750",
+      "name": "ETHOSLTD"
+    },
+    "GUJENERGY": {
+      "token": "10599",
+      "name": "GUJENERGY"
+    },
+    "CANBK": {
+      "token": "10794",
+      "name": "CANBK"
+    },
+    "WELSPUNLIV": {
+      "token": "11253",
+      "name": "WELSPUNLIV"
+    },
+    "SUVEN": {
+      "token": "11233",
+      "name": "SUVEN"
+    },
+    "APOLLO": {
+      "token": "1134",
+      "name": "APOLLO"
+    },
+    "CCL": {
+      "token": "11452",
+      "name": "CCL"
+    },
+    "COFORGE": {
+      "token": "11543",
+      "name": "COFORGE"
+    },
+    "JBMA": {
+      "token": "11655",
+      "name": "JBMA"
+    },
+    "JKPAPER": {
+      "token": "11860",
+      "name": "JKPAPER"
+    },
+    "GOLDIAM": {
+      "token": "11971",
+      "name": "GOLDIAM"
+    },
+    "RUSTOMJEE": {
+      "token": "12219",
+      "name": "RUSTOMJEE"
+    },
+    "M&MFIN": {
+      "token": "13285",
+      "name": "M&MFIN"
+    },
+    "HDFCBANK": {
+      "token": "1333",
+      "name": "HDFCBANK"
+    },
+    "JKLAKSHMI": {
+      "token": "13491",
+      "name": "JKLAKSHMI"
+    },
+    "EMAMILTD": {
+      "token": "13517",
+      "name": "EMAMILTD"
+    },
+    "ANANTRAJ": {
+      "token": "13620",
+      "name": "ANANTRAJ"
+    },
+    "AARTIPHARM": {
+      "token": "13868",
+      "name": "AARTIPHARM"
+    },
+    "HINDUNILVR": {
+      "token": "1394",
+      "name": "HINDUNILVR"
+    },
+    "HIRECT": {
+      "token": "13890",
+      "name": "HIRECT"
+    },
+    "GANESHHOU": {
+      "token": "14339",
+      "name": "GANESHHOU"
+    },
+    "JSWDULUX": {
+      "token": "1467",
+      "name": "JSWDULUX"
+    },
+    "CENTUM": {
+      "token": "14982",
+      "name": "CENTUM"
+    },
+    "ADANIPORTS": {
+      "token": "15083",
+      "name": "ADANIPORTS"
+    },
+    "JYOTHYLAB": {
+      "token": "15146",
+      "name": "JYOTHYLAB"
+    },
+    "TARIL": {
+      "token": "15174",
+      "name": "TARIL"
+    },
+    "BRIGADE": {
+      "token": "15184",
+      "name": "BRIGADE"
+    },
+    "CEATLTD": {
+      "token": "15254",
+      "name": "CEATLTD"
+    },
+    "NESCO": {
+      "token": "15409",
+      "name": "NESCO"
+    },
+    "UBL": {
+      "token": "16713",
+      "name": "UBL"
+    },
+    "THYROCARE": {
+      "token": "17032",
+      "name": "THYROCARE"
+    },
+    "ZYDUSWELL": {
+      "token": "17635",
+      "name": "ZYDUSWELL"
+    },
+    "SHILPAMED": {
+      "token": "17752",
+      "name": "SHILPAMED"
+    },
+    "AHLUCONT": {
+      "token": "17833",
+      "name": "AHLUCONT"
+    },
+    "RBLBANK": {
+      "token": "18391",
+      "name": "RBLBANK"
+    },
+    "DIACABS": {
+      "token": "18543",
+      "name": "DIACABS"
+    },
+    "LTTS": {
+      "token": "18564",
+      "name": "LTTS"
+    },
+    "360ONE": {
+      "token": "13061",
+      "name": "360ONE"
+    },
+    "KFINTECH": {
+      "token": "13359",
+      "name": "KFINTECH"
+    },
+    "GRINDWELL": {
+      "token": "13560",
+      "name": "GRINDWELL"
+    },
+    "LTFOODS": {
+      "token": "13816",
+      "name": "LTFOODS"
+    },
+    "VIYASH": {
+      "token": "14296",
+      "name": "VIYASH"
+    },
+    "JKTYRE": {
+      "token": "14435",
+      "name": "JKTYRE"
+    },
+    "BALAMINES": {
+      "token": "14501",
+      "name": "BALAMINES"
+    },
+    "FORTIS": {
+      "token": "14592",
+      "name": "FORTIS"
+    },
+    "V2RETAIL": {
+      "token": "14766",
+      "name": "V2RETAIL"
+    },
+    "IFBIND": {
+      "token": "1485",
+      "name": "IFBIND"
+    },
+    "VGUARD": {
+      "token": "15362",
+      "name": "VGUARD"
+    },
+    "ZFCVINDIA": {
+      "token": "16915",
+      "name": "ZFCVINDIA"
+    },
+    "QUESS": {
+      "token": "17704",
+      "name": "QUESS"
+    },
+    "HINDCOPPER": {
+      "token": "17939",
+      "name": "HINDCOPPER"
+    },
+    "JIOFIN": {
+      "token": "18143",
+      "name": "JIOFIN"
+    },
+    "JLHL": {
+      "token": "18553",
+      "name": "JLHL"
+    },
+    "KOTAKBANK": {
+      "token": "1922",
+      "name": "KOTAKBANK"
+    },
+    "ARVIND": {
+      "token": "193",
+      "name": "ARVIND"
+    },
+    "OBEROIRLTY": {
+      "token": "20242",
+      "name": "OBEROIRLTY"
+    },
+    "NACLIND": {
+      "token": "20425",
+      "name": "NACLIND"
+    },
+    "DOMS": {
+      "token": "20551",
+      "name": "DOMS"
+    },
+    "MOIL": {
+      "token": "20830",
+      "name": "MOIL"
+    },
+    "IXIGO": {
+      "token": "24067",
+      "name": "IXIGO"
+    },
+    "NIRLON": {
+      "token": "2433",
+      "name": "NIRLON"
+    },
+    "AKUMS": {
+      "token": "24715",
+      "name": "AKUMS"
+    },
+    "LTF": {
+      "token": "24948",
+      "name": "LTF"
+    },
+    "APLLTD": {
+      "token": "25328",
+      "name": "APLLTD"
+    },
+    "NORTHARC": {
+      "token": "25426",
+      "name": "NORTHARC"
+    },
+    "AVL": {
+      "token": "25984",
+      "name": "AVL"
+    },
+    "IMFA": {
+      "token": "19235",
+      "name": "IMFA"
+    },
+    "TRENT": {
+      "token": "1964",
+      "name": "TRENT"
+    },
+    "LICHSGFIN": {
+      "token": "1997",
+      "name": "LICHSGFIN"
+    },
+    "WABAG": {
+      "token": "20188",
+      "name": "WABAG"
+    },
+    "ASHAPURMIN": {
+      "token": "203",
+      "name": "ASHAPURMIN"
+    },
+    "TATATECH": {
+      "token": "20293",
+      "name": "TATATECH"
+    },
+    "RESPONIND": {
+      "token": "20323",
+      "name": "RESPONIND"
+    },
+    "CHENNPETRO": {
+      "token": "2049",
+      "name": "CHENNPETRO"
+    },
+    "HOMEFIRST": {
+      "token": "2056",
+      "name": "HOMEFIRST"
+    },
+    "TEJASNET": {
+      "token": "21131",
+      "name": "TEJASNET"
+    },
+    "JYOTICNC": {
+      "token": "21334",
+      "name": "JYOTICNC"
+    },
+    "IEX": {
+      "token": "220",
+      "name": "IEX"
+    },
+    "MAXHEALTH": {
+      "token": "22377",
+      "name": "MAXHEALTH"
+    },
+    "BANDHANBNK": {
+      "token": "2263",
+      "name": "BANDHANBNK"
+    },
+    "RPTECH": {
+      "token": "22670",
+      "name": "RPTECH"
+    },
+    "ASIANPAINT": {
+      "token": "236",
+      "name": "ASIANPAINT"
+    },
+    "AADHARHFC": {
+      "token": "23729",
+      "name": "AADHARHFC"
+    },
+    "EMCURE": {
+      "token": "24398",
+      "name": "EMCURE"
+    },
+    "DHANUKA": {
+      "token": "24409",
+      "name": "DHANUKA"
+    },
+    "FIRSTCRY": {
+      "token": "24814",
+      "name": "FIRSTCRY"
+    },
+    "EUREKAFORB": {
+      "token": "25162",
+      "name": "EUREKAFORB"
+    },
+    "PRECWIRE": {
+      "token": "2717",
+      "name": "PRECWIRE"
+    },
+    "AUROPHARMA": {
+      "token": "275",
+      "name": "AUROPHARMA"
+    },
+    "SAFARI": {
+      "token": "13035",
+      "name": "SAFARI"
+    },
+    "FSL": {
+      "token": "14304",
+      "name": "FSL"
+    },
+    "PHOENIXLTD": {
+      "token": "14552",
+      "name": "PHOENIXLTD"
+    },
+    "TIMETECHNO": {
+      "token": "14707",
+      "name": "TIMETECHNO"
+    },
+    "KPRMILL": {
+      "token": "14912",
+      "name": "KPRMILL"
+    },
+    "PURVA": {
+      "token": "14922",
+      "name": "PURVA"
+    },
+    "INDIAGLYCO": {
+      "token": "1521",
+      "name": "INDIAGLYCO"
+    },
+    "INFY": {
+      "token": "1594",
+      "name": "INFY"
+    },
+    "ITI": {
+      "token": "1675",
+      "name": "ITI"
+    },
+    "CROMPTON": {
+      "token": "17094",
+      "name": "CROMPTON"
+    },
+    "CYIENTDLM": {
+      "token": "17187",
+      "name": "CYIENTDLM"
+    },
+    "SENCO": {
+      "token": "17271",
+      "name": "SENCO"
+    },
+    "VINATIORGA": {
+      "token": "17364",
+      "name": "VINATIORGA"
+    },
+    "JSWENERGY": {
+      "token": "17869",
+      "name": "JSWENERGY"
+    },
+    "JUBLFOOD": {
+      "token": "18096",
+      "name": "JUBLFOOD"
+    },
+    "KPIL": {
+      "token": "1814",
+      "name": "KPIL"
+    },
+    "YASHO": {
+      "token": "18131",
+      "name": "YASHO"
+    },
+    "ENDURANCE": {
+      "token": "18822",
+      "name": "ENDURANCE"
+    },
+    "MANAPPURAM": {
+      "token": "19061",
+      "name": "MANAPPURAM"
+    },
+    "LAURUSLABS": {
+      "token": "19234",
+      "name": "LAURUSLABS"
+    },
+    "ITDC": {
+      "token": "19299",
+      "name": "ITDC"
+    },
+    "GPPL": {
+      "token": "19731",
+      "name": "GPPL"
+    },
+    "DMART": {
+      "token": "19913",
+      "name": "DMART"
+    },
+    "IREDA": {
+      "token": "20261",
+      "name": "IREDA"
+    },
+    "RAMCOCEM": {
+      "token": "2043",
+      "name": "RAMCOCEM"
+    },
+    "INDIGOPNTS": {
+      "token": "2048",
+      "name": "INDIGOPNTS"
+    },
+    "INOXINDIA": {
+      "token": "20607",
+      "name": "INOXINDIA"
+    },
+    "VTL": {
+      "token": "2073",
+      "name": "VTL"
+    },
+    "MFSL": {
+      "token": "2142",
+      "name": "MFSL"
+    },
+    "COCHINSHIP": {
+      "token": "21508",
+      "name": "COCHINSHIP"
+    },
+    "TEXRAIL": {
+      "token": "21828",
+      "name": "TEXRAIL"
+    },
+    "MRPL": {
+      "token": "2283",
+      "name": "MRPL"
+    },
+    "BALUFORGE": {
+      "token": "23607",
+      "name": "BALUFORGE"
+    },
+    "RELAXO": {
+      "token": "24225",
+      "name": "RELAXO"
+    },
+    "RAILTEL": {
+      "token": "2431",
+      "name": "RAILTEL"
+    },
+    "ABDL": {
+      "token": "24308",
+      "name": "ABDL"
+    },
+    "MINDACORP": {
+      "token": "25897",
+      "name": "MINDACORP"
+    },
+    "AFCONS": {
+      "token": "25977",
+      "name": "AFCONS"
+    },
+    "SWIGGY": {
+      "token": "27066",
+      "name": "SWIGGY"
+    },
+    "JUBLINGREA": {
+      "token": "2783",
+      "name": "JUBLINGREA"
+    },
+    "VMM": {
+      "token": "27969",
+      "name": "VMM"
+    },
+    "IGIL": {
+      "token": "28378",
+      "name": "IGIL"
+    },
+    "AGARWALEYE": {
+      "token": "29452",
+      "name": "AGARWALEYE"
+    },
+    "AJAXENGG": {
+      "token": "29624",
+      "name": "AJAXENGG"
+    },
+    "SOTL": {
+      "token": "3021",
+      "name": "SOTL"
+    },
+    "VEDL": {
+      "token": "3063",
+      "name": "VEDL"
+    },
+    "BALKRISIND": {
+      "token": "335",
+      "name": "BALKRISIND"
+    },
+    "SUNFLAG": {
+      "token": "3348",
+      "name": "SUNFLAG"
+    },
+    "SURYAROSNI": {
+      "token": "3375",
+      "name": "SURYAROSNI"
+    },
+    "TATAELXSI": {
+      "token": "3411",
+      "name": "TATAELXSI"
+    },
+    "TATACONSUM": {
+      "token": "3432",
+      "name": "TATACONSUM"
+    },
+    "BBOX": {
+      "token": "3435",
+      "name": "BBOX"
+    },
+    "TTKPRESTIG": {
+      "token": "3546",
+      "name": "TTKPRESTIG"
+    },
+    "NAM-INDIA": {
+      "token": "357",
+      "name": "NAM-INDIA"
+    },
+    "JUBLPHARMA": {
+      "token": "3637",
+      "name": "JUBLPHARMA"
+    },
+    "BEL": {
+      "token": "383",
+      "name": "BEL"
+    },
+    "CAPLIPOINT": {
+      "token": "3906",
+      "name": "CAPLIPOINT"
+    },
+    "GULFOILLUB": {
+      "token": "4391",
+      "name": "GULFOILLUB"
+    },
+    "CREDITACC": {
+      "token": "4421",
+      "name": "CREDITACC"
+    },
+    "TATVA": {
+      "token": "5162",
+      "name": "TATVA"
+    },
+    "ALIVUS": {
+      "token": "5265",
+      "name": "ALIVUS"
+    },
+    "AAVAS": {
+      "token": "5385",
+      "name": "AAVAS"
+    },
+    "ATGL": {
+      "token": "6066",
+      "name": "ATGL"
+    },
+    "CHAMBLFERT": {
+      "token": "637",
+      "name": "CHAMBLFERT"
+    },
+    "SUPRIYA": {
+      "token": "7390",
+      "name": "SUPRIYA"
+    },
+    "SBIN": {
+      "token": "3045",
+      "name": "SBIN"
+    },
+    "INDOSTAR": {
+      "token": "3088",
+      "name": "INDOSTAR"
+    },
+    "MCX": {
+      "token": "31181",
+      "name": "MCX"
+    },
+    "LODHA": {
+      "token": "3220",
+      "name": "LODHA"
+    },
+    "CAMS": {
+      "token": "342",
+      "name": "CAMS"
+    },
+    "TATACHEM": {
+      "token": "3405",
+      "name": "TATACHEM"
+    },
+    "THOMASCOOK": {
+      "token": "3481",
+      "name": "THOMASCOOK"
+    },
+    "UNIVCABLES": {
+      "token": "3607",
+      "name": "UNIVCABLES"
+    },
+    "BBTC": {
+      "token": "380",
+      "name": "BBTC"
+    },
+    "NIACL": {
+      "token": "399",
+      "name": "NIACL"
+    },
+    "NAVA": {
+      "token": "4014",
+      "name": "NAVA"
+    },
+    "HAPPSTMNDS": {
+      "token": "48",
+      "name": "HAPPSTMNDS"
+    },
+    "UTIAMC": {
+      "token": "527",
+      "name": "UTIAMC"
+    },
+    "DEVYANI": {
+      "token": "5373",
+      "name": "DEVYANI"
+    },
+    "CARBORUNIV": {
+      "token": "595",
+      "name": "CARBORUNIV"
+    },
+    "SJS": {
+      "token": "6643",
+      "name": "SJS"
+    },
+    "SAPPHIRE": {
+      "token": "6718",
+      "name": "SAPPHIRE"
+    },
+    "CHOLAFIN": {
+      "token": "685",
+      "name": "CHOLAFIN"
+    },
+    "AARTIIND": {
+      "token": "7",
+      "name": "AARTIIND"
+    },
+    "STARHEALTH": {
+      "token": "7083",
+      "name": "STARHEALTH"
+    },
+    "MAPMYINDIA": {
+      "token": "7227",
+      "name": "MAPMYINDIA"
+    },
+    "HCLTECH": {
+      "token": "7229",
+      "name": "HCLTECH"
+    },
+    "METROBRAND": {
+      "token": "7242",
+      "name": "METROBRAND"
+    },
+    "COROMANDEL": {
+      "token": "739",
+      "name": "COROMANDEL"
+    },
+    "ZENTEC": {
+      "token": "7508",
+      "name": "ZENTEC"
+    },
+    "ENRIN": {
+      "token": "756871",
+      "name": "ENRIN"
+    },
+    "ANTHEM": {
+      "token": "757885",
+      "name": "ANTHEM"
+    },
+    "SGFIN": {
+      "token": "758853",
+      "name": "SGFIN"
+    },
+    "SAATVIKGL": {
+      "token": "759057",
+      "name": "SAATVIKGL"
+    },
+    "PACEDIGITK": {
+      "token": "759342",
+      "name": "PACEDIGITK"
+    },
+    "PINELABS": {
+      "token": "759820",
+      "name": "PINELABS"
+    },
+    "TENNIND": {
+      "token": "759880",
+      "name": "TENNIND"
+    },
+    "CORONA": {
+      "token": "760254",
+      "name": "CORONA"
+    },
+    "ICICIAMC": {
+      "token": "760407",
+      "name": "ICICIAMC"
+    },
+    "CORDELIA": {
+      "token": "762163",
+      "name": "CORDELIA"
+    },
+    "KAMAHOLD": {
+      "token": "762732",
+      "name": "KAMAHOLD"
+    },
+    "KUSUMGAR": {
+      "token": "764116",
+      "name": "KUSUMGAR"
+    },
+    "DABUR": {
+      "token": "772",
+      "name": "DABUR"
+    },
+    "BELRISE": {
+      "token": "757102",
+      "name": "BELRISE"
+    },
+    "EBGNG": {
+      "token": "757862",
+      "name": "EBGNG"
+    },
+    "MIDWESTLTD": {
+      "token": "759517",
+      "name": "MIDWESTLTD"
+    },
+    "PWL": {
+      "token": "759723",
+      "name": "PWL"
+    },
+    "CLEANMAX": {
+      "token": "760183",
+      "name": "CLEANMAX"
+    },
+    "AMAGI": {
+      "token": "760740",
+      "name": "AMAGI"
+    },
+    "AYE": {
+      "token": "760981",
+      "name": "AYE"
+    },
+    "WPIL": {
+      "token": "762978",
+      "name": "WPIL"
+    },
+    "DCMSHRIRAM": {
+      "token": "811",
+      "name": "DCMSHRIRAM"
+    },
+    "MANYAVAR": {
+      "token": "8167",
+      "name": "MANYAVAR"
+    },
+    "BLUESTARCO": {
+      "token": "8311",
+      "name": "BLUESTARCO"
+    },
+    "GAEL": {
+      "token": "8828",
+      "name": "GAEL"
+    },
+    "EIDPARRY": {
+      "token": "916",
+      "name": "EIDPARRY"
+    },
+    "ORCHPHARMA": {
+      "token": "926",
+      "name": "ORCHPHARMA"
+    },
+    "ELGIEQUIP": {
+      "token": "937",
+      "name": "ELGIEQUIP"
+    },
+    "ANURAS": {
+      "token": "2829",
+      "name": "ANURAS"
+    },
+    "LXCHEM": {
+      "token": "2841",
+      "name": "LXCHEM"
+    },
+    "RCF": {
+      "token": "2866",
+      "name": "RCF"
+    },
+    "SAMMAANCAP": {
+      "token": "30125",
+      "name": "SAMMAANCAP"
+    },
+    "SCI": {
+      "token": "3048",
+      "name": "SCI"
+    },
+    "BAJFINANCE": {
+      "token": "317",
+      "name": "BAJFINANCE"
+    },
+    "SRF": {
+      "token": "3273",
+      "name": "SRF"
+    },
+    "SUNPHARMA": {
+      "token": "3351",
+      "name": "SUNPHARMA"
+    },
+    "TATAPOWER": {
+      "token": "3426",
+      "name": "TATAPOWER"
+    },
+    "TATACOMM": {
+      "token": "3721",
+      "name": "TATACOMM"
+    },
+    "CONCOR": {
+      "token": "4749",
+      "name": "CONCOR"
+    },
+    "KIMS": {
+      "token": "4847",
+      "name": "KIMS"
+    },
+    "BPCL": {
+      "token": "526",
+      "name": "BPCL"
+    },
+    "ACUTAAS": {
+      "token": "5578",
+      "name": "ACUTAAS"
+    },
+    "J&KBANK": {
+      "token": "5633",
+      "name": "J&KBANK"
+    },
+    "NATIONALUM": {
+      "token": "6364",
+      "name": "NATIONALUM"
+    },
+    "NYKAA": {
+      "token": "6545",
+      "name": "NYKAA"
+    },
+    "POLICYBZR": {
+      "token": "6656",
+      "name": "POLICYBZR"
+    },
+    "EXIDEIND": {
+      "token": "676",
+      "name": "EXIDEIND"
+    },
+    "LATENTVIEW": {
+      "token": "6818",
+      "name": "LATENTVIEW"
+    },
+    "TEGA": {
+      "token": "7105",
+      "name": "TEGA"
+    },
+    "RATEGAIN": {
+      "token": "7177",
+      "name": "RATEGAIN"
+    },
+    "STAR": {
+      "token": "7374",
+      "name": "STAR"
+    },
+    "THELEELA": {
+      "token": "757014",
+      "name": "THELEELA"
+    },
+    "CRAMC": {
+      "token": "759311",
+      "name": "CRAMC"
+    },
+    "RUBICON": {
+      "token": "759316",
+      "name": "RUBICON"
+    },
+    "WAKEFIT": {
+      "token": "760259",
+      "name": "WAKEFIT"
+    },
+    "DALBHARAT": {
+      "token": "8075",
+      "name": "DALBHARAT"
+    },
+    "CHALET": {
+      "token": "8546",
+      "name": "CHALET"
+    },
+    "SHAILY": {
+      "token": "8727",
+      "name": "SHAILY"
+    },
+    "USHAMART": {
+      "token": "8840",
+      "name": "USHAMART"
+    },
+    "E2E": {
+      "token": "8937",
+      "name": "E2E"
+    },
+    "MSTCLTD": {
+      "token": "9356",
+      "name": "MSTCLTD"
+    },
+    "ESCORTS": {
+      "token": "958",
+      "name": "ESCORTS"
+    },
+    "AETHER": {
+      "token": "9810",
+      "name": "AETHER"
+    }
+  },
+  "total": 727,
+  "generated": "2026-07-31"
+}

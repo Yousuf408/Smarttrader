@@ -9,6 +9,8 @@ import pandas as pd
 import yfinance as yf
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+from server.candle_tracker import candle_tracker
+
 from broker.quantity_calculator import (
     calculate_max_quantity_column,
     _cred as _broker_cred,
@@ -100,46 +102,22 @@ def has_small_opening_candle(symbol: str) -> bool:
 
 
 def compute_200_ema(symbol: str):
-    """200-period EMA on 5-min closes over the previous EMA_LOOKBACK_DAYS days."""
+    """200-period EMA on 5-min closes.  Tries CandleTracker first."""
     if not symbol or not symbol.strip():
         return None
-    ticker = symbol.strip() if symbol.strip().endswith(".NS") else f"{symbol.strip()}.NS"
-    try:
-        df = yf.download(ticker, period=f"{EMA_LOOKBACK_DAYS}d",
-                         interval="5m", progress=False, auto_adjust=False)
-        if df is None or df.empty:
-            return None
-        if isinstance(df.columns, pd.MultiIndex):
-            try:
-                df = df.xs(ticker, axis=1, level=-1)
-            except (KeyError, IndexError):
-                try:
-                    df = df.xs(ticker, axis=1, level=0)
-                except (KeyError, IndexError):
-                    return None
-        closes = pd.to_numeric(df["Close"], errors="coerce").dropna()
-        if closes.empty or len(closes) < EMA_SPAN:
-            return None
-        ema = closes.ewm(span=EMA_SPAN, adjust=False).mean().iloc[-1]
-        return float(ema) if pd.notna(ema) else None
-    except Exception:
-        return None
+    # Try tracker first (may fall back to yfinance internally)
+    return candle_tracker.get_200_ema(symbol.upper().replace(".NS", ""))
 
 
 def compute_200_ema_batch(symbols: list[str]) -> dict:
-    """Parallel EMA fetch for an entire list of symbols."""
+    """Batch EMA via CandleTracker (fast path) + yfinance fallback."""
     results: dict = {}
     unique = list({s for s in symbols if s})
     if not unique:
         return results
-    with ThreadPoolExecutor(max_workers=YFINANCE_WORKERS) as pool:
-        futures = {pool.submit(compute_200_ema, sym): sym for sym in unique}
-        for fut in as_completed(futures):
-            sym = futures[fut]
-            try:
-                results[sym] = fut.result(timeout=20)
-            except Exception:
-                results[sym] = None
+    # Tracker handles caching and fallback per-symbol
+    for sym in unique:
+        results[sym] = candle_tracker.get_200_ema(sym.upper().replace(".NS", ""))
     return results
 
 
@@ -181,15 +159,30 @@ def _detect_trading_date() -> datetime.date | None:
 
 
 def batch_opening_candle(symbols: list[str]) -> dict:
-    """For each symbol, fetch yfinance 5-min candles and return 9:15 IST candle data.
+    """Return 9:15 IST candle data per symbol.
 
-    Returns:
-        {symbol: (is_small, high915, open915, low915, close915, range_pct, day_low, yesterday_high)}
+    Priority:
+      1. CandleTracker (real-time WebSocket data) if today's 9:15 slot exists.
+      2. yfinance fallback (legacy path) when tracker data is unavailable.
     """
+    unique = [s for s in {s for s in symbols if s}]
+    if not unique:
+        return {}
+
+    # ── Try CandleTracker first ──────────────────────────────────────
+    today_str = datetime.datetime.now(IST).strftime("%Y-%m-%d")
+    tracker = candle_tracker
+    has_today_data = (
+        today_str in tracker.completed
+        and 0 in tracker.completed[today_str]
+    )
+    if has_today_data:
+        return tracker.get_candle_data_batch(unique)
+
+    # ── yfinance fallback (unchanged) ────────────────────────────────
     target_date = _detect_trading_date()
     results: dict = {}
-    unique = [s for s in {s for s in symbols if s}]
-    if not unique or target_date is None:
+    if target_date is None:
         return results
 
     def _lookup(symbol: str):
@@ -247,7 +240,7 @@ def batch_opening_candle(symbols: list[str]) -> dict:
             is_small = bool(candle_range_pct <= SMALL_CANDLE_THRESHOLD)
             open_val = float(open915) if pd.notna(open915) else None
 
-            # ── 9:20 candle (2nd 5-min candle) — check if it closed inside 9:15 range ──
+            # ── 9:20 candle ──
             close920 = None
             inside_915 = False
             if len(opening) > 1:
@@ -255,7 +248,6 @@ def batch_opening_candle(symbols: list[str]) -> dict:
                 close920_val = pd.to_numeric(candle920["Close"], errors="coerce")
                 if pd.notna(close920_val):
                     close920 = float(close920_val)
-                    # 9:20 candle close must be inside the 9:15 candle range
                     inside_915 = low <= close920 <= high
 
             yesterday_high = None
@@ -270,18 +262,10 @@ def batch_opening_candle(symbols: list[str]) -> dict:
             except (ValueError, IndexError):
                 pass
 
-            return (
-                is_small,
-                float(high),
-                open_val,
-                float(low),
-                float(close915) if pd.notna(close915) else None,
-                float(candle_range_pct),
-                day_low,
-                yesterday_high,
-                close920,
-                inside_915,
-            )
+            return (is_small, float(high), open_val, float(low),
+                    float(close915) if pd.notna(close915) else None,
+                    float(candle_range_pct), day_low, yesterday_high,
+                    close920, inside_915)
         except Exception:
             return (False, None, None, None, None, None, None, None, None, None)
 
