@@ -13,6 +13,7 @@ from tradingview_screener.query import HEADERS as TV_HEADERS
 
 from bigplayers.strategy import BigPlayersStrategy
 from advance_orb.supabase_db import save_top5_strategy
+from server.candle_tracker import candle_tracker
 from advance_orb.common import (
     PRICE_MIN, PRICE_MAX, GAP_THRESHOLD, MARKET_CAP_MIN,
     SMALL_CANDLE_THRESHOLD, MAX_TV_STOCKS,

@@ -161,15 +161,17 @@ def _detect_trading_date() -> datetime.date | None:
 def batch_opening_candle(symbols: list[str]) -> dict:
     """Return 9:15 IST candle data per symbol.
 
-    Priority:
-      1. CandleTracker (real-time WebSocket data) if today's 9:15 slot exists.
-      2. yfinance fallback (legacy path) when tracker data is unavailable.
+    Reads from CandleTracker (WebSocket-built) only.  No yfinance
+    fallback — it's too slow for 700+ stocks and its high/low values
+    are inaccurate, which was the whole reason for switching to WS.
+    If CandleTracker hasn't completed a 9:15 slot yet, all symbols
+    return None candle data (table shows price/gap%, candle fields
+    fill in once the first 5-min boundary triggers).
     """
     unique = [s for s in {s for s in symbols if s}]
     if not unique:
         return {}
 
-    # ── Try CandleTracker first ──────────────────────────────────────
     today_str = datetime.datetime.now(IST).strftime("%Y-%m-%d")
     tracker = candle_tracker
     has_today_data = (
@@ -179,105 +181,12 @@ def batch_opening_candle(symbols: list[str]) -> dict:
     if has_today_data:
         return tracker.get_candle_data_batch(unique)
 
-    # ── yfinance fallback (unchanged) ────────────────────────────────
-    target_date = _detect_trading_date()
-    results: dict = {}
-    if target_date is None:
-        return results
-
-    def _lookup(symbol: str):
-        try:
-            ticker = f"{str(symbol).strip().upper()}.NS"
-            candles = yf.download(
-                tickers=ticker,
-                period="4d",
-                interval="5m",
-                progress=False,
-                auto_adjust=False,
-                prepost=False,
-                threads=False,
-            )
-            if candles is None or candles.empty:
-                return (False, None, None, None, None, None, None, None)
-            if isinstance(candles.columns, pd.MultiIndex):
-                try:
-                    candles = candles.xs(ticker, axis=1, level=-1)
-                except (KeyError, IndexError):
-                    try:
-                        candles = candles.xs(ticker, axis=1, level=0)
-                    except (KeyError, IndexError):
-                        return (False, None, None, None, None, None, None, None)
-            if "High" not in candles or "Low" not in candles:
-                return (False, None, None, None, None, None, None, None)
-            local_index = pd.DatetimeIndex(candles.index)
-            if local_index.tz is None:
-                local_index = local_index.tz_localize('UTC').tz_convert(IST)
-            else:
-                local_index = local_index.tz_convert(IST)
-            candles = candles.copy()
-            candles.index = local_index
-
-            day_mask = candles.index.date == target_date
-            day_data = candles[day_mask]
-            if day_data.empty:
-                return (False, None, None, None, None, None, None, None)
-            day_low = float(day_data["Low"].min())
-
-            opening = day_data[
-                (day_data.index.hour == 9) & (day_data.index.minute >= 15)
-            ]
-            if opening.empty:
-                return (False, None, None, None, None, None, None, None)
-
-            candle = opening.iloc[0]
-            high = pd.to_numeric(candle["High"], errors="coerce")
-            low = pd.to_numeric(candle["Low"], errors="coerce")
-            open915 = pd.to_numeric(candle["Open"], errors="coerce")
-            close915 = pd.to_numeric(candle["Close"], errors="coerce")
-            if pd.isna(high) or pd.isna(low) or low <= 0:
-                return (False, None, None, None, None, None, None, None, None, None)
-            candle_range_pct = ((float(high) - float(low)) / float(low)) * 100
-            is_small = bool(candle_range_pct <= SMALL_CANDLE_THRESHOLD)
-            open_val = float(open915) if pd.notna(open915) else None
-
-            # ── 9:20 candle ──
-            close920 = None
-            inside_915 = False
-            if len(opening) > 1:
-                candle920 = opening.iloc[1]
-                close920_val = pd.to_numeric(candle920["Close"], errors="coerce")
-                if pd.notna(close920_val):
-                    close920 = float(close920_val)
-                    inside_915 = low <= close920 <= high
-
-            yesterday_high = None
-            all_trading_dates = sorted(set(candles.index.date))
-            try:
-                prev_idx = all_trading_dates.index(target_date) - 1
-                if prev_idx >= 0:
-                    prev_date = all_trading_dates[prev_idx]
-                    prev_data = candles[candles.index.date == prev_date]
-                    if not prev_data.empty:
-                        yesterday_high = float(prev_data["High"].max())
-            except (ValueError, IndexError):
-                pass
-
-            return (is_small, float(high), open_val, float(low),
-                    float(close915) if pd.notna(close915) else None,
-                    float(candle_range_pct), day_low, yesterday_high,
-                    close920, inside_915)
-        except Exception:
-            return (False, None, None, None, None, None, None, None, None, None)
-
-    with ThreadPoolExecutor(max_workers=YFINANCE_WORKERS) as pool:
-        futures = {pool.submit(_lookup, sym): sym for sym in unique}
-        for fut in as_completed(futures):
-            sym = futures[fut]
-            try:
-                results[sym] = fut.result(timeout=20)
-            except Exception:
-                results[sym] = (False, None, None, None, None, None, None, None, None, None)
-    return results
+    # No CandleTracker data yet — return empty candles for all symbols.
+    # Candle data (9:15 high/low, 9:20 close) will populate once the
+    # first 5-min boundary completes.  The table can still show
+    # Price/GAP%/EMA from WS + cache.
+    empty = (False, None, None, None, None, None, None, None, None, None)
+    return {s: empty for s in unique}
 
 
 def filter_small_opening_candles(symbols: list[str]) -> set[str]:
