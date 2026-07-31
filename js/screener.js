@@ -968,6 +968,26 @@ async function fetchAdvanceORBRefresh(silent = true) {
             const isAdvanceOrb = strategyId === 'advanceorb';
             if (onScreener && isAdvanceOrb) {
                 renderStrategyData(lastAdvanceOrbData);
+                // Flash Price cells briefly so the user can see the
+                // refresh actually updated prices on screen.
+                setTimeout(() => {
+                    const rows = document.querySelectorAll('#screenerBody tr');
+                    const headers = document.querySelectorAll('#screenerHead th');
+                    let priceIdx = -1;
+                    for (let i = 0; i < headers.length; i++) {
+                        if (headers[i].textContent.trim() === 'Price') { priceIdx = i; break; }
+                    }
+                    if (priceIdx >= 0) {
+                        for (const tr of rows) {
+                            const cell = tr.querySelectorAll('td')[priceIdx];
+                            if (cell) {
+                                cell.style.transition = 'background 0.15s';
+                                cell.style.background = 'rgba(34,197,94,0.2)';
+                                setTimeout(() => { cell.style.background = ''; }, 400);
+                            }
+                        }
+                    }
+                }, 10);
                 if (!silent) showToast('🔄 Refreshed', `${touched} stocks updated`);
             }
         }
