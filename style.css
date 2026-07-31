@@ -689,6 +689,174 @@ body {
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* ================================================================
+   DARK THEME
+   ================================================================ */
+body.dark-theme {
+    --bg-primary: #0d1117;
+    --bg-secondary: #161b22;
+    --bg-glass: rgba(22, 27, 34, 0.82);
+    --text-primary: #e6edf3;
+    --text-secondary: #8b949e;
+    --text-muted: #6e7681;
+    --shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 8px 28px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 18px 50px rgba(0, 0, 0, 0.5);
+    color-scheme: dark;
+}
+body.dark-theme .navbar {
+    border-bottom-color: rgba(255,255,255,0.06);
+    background: rgba(22, 27, 34, 0.85);
+}
+body.dark-theme .nav-links a { color: var(--text-secondary); }
+body.dark-theme .nav-links a:hover { background: rgba(108,92,231,0.15); color: #b3aaff; }
+body.dark-theme .nav-links a.active { color: #fff; }
+body.dark-theme .panel-glass { border-color: rgba(255,255,255,0.06); }
+body.dark-theme .panel-glass:hover { box-shadow: var(--shadow-md); }
+body.dark-theme .stat-box,
+body.dark-theme .strategy-card { background: var(--bg-secondary); border-color: rgba(255,255,255,0.06); }
+body.dark-theme .table-modern th { color: var(--text-muted); }
+body.dark-theme .table-modern td { border-bottom-color: rgba(255,255,255,0.05); }
+body.dark-theme .table-modern tr:hover td { background: rgba(108,92,231,0.08); }
+body.dark-theme .toast { background: var(--bg-secondary); border-color: rgba(255,255,255,0.08); }
+body.dark-theme .modal { background: var(--bg-secondary); }
+body.dark-theme .modal .form-group input,
+body.dark-theme .modal .form-group select { background: var(--bg-primary); }
+body.dark-theme .screener-controls select,
+body.dark-theme .screener-controls input { background: var(--bg-secondary); color: var(--text-primary); }
+body.dark-theme .broker-fields { background: rgba(108,92,231,0.08); }
+body.dark-theme .auth-body { background: var(--bg-primary); }
+body.dark-theme .auth-card { background: rgba(22, 27, 34, 0.88); border-color: rgba(255,255,255,0.08); }
+body.dark-theme .settings-group input,
+body.dark-theme .settings-group select { background: var(--bg-primary); color: var(--text-primary); }
+body.dark-theme .toggle-item { background: var(--bg-primary); border-color: rgba(255,255,255,0.08); }
+body.dark-theme .stepper { background: var(--bg-primary); border-color: rgba(255,255,255,0.08); }
+body.dark-theme .budget-control { background: var(--bg-primary); border-color: rgba(255,255,255,0.08); }
+body.dark-theme .confirm-modal { background: var(--bg-secondary); }
+body.dark-theme .modal-overlay { background: rgba(0,0,0,0.6); }
+body.dark-theme .nav-right .balance { background: rgba(108,92,231,0.15); }
+body.dark-theme .chart-placeholder { background: var(--bg-secondary); border-color: rgba(255,255,255,0.06); }
+
+/* Theme toggle button */
+.theme-toggle {
+    background: transparent;
+    border: none;
+    font-size: 18px;
+    cursor: pointer;
+    padding: 6px;
+    border-radius: 50%;
+    transition: var(--transition);
+    line-height: 1;
+    color: var(--text-secondary);
+}
+.theme-toggle:hover { background: rgba(108,92,231,0.12); transform: rotate(15deg); }
+
+/* ================================================================
+   MARKET RIBBON
+   ================================================================ */
+.market-ribbon {
+    background: rgba(255,255,255,0.50);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(0,0,0,0.04);
+    padding: 6px 32px;
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    overflow-x: auto;
+    scrollbar-width: thin;
+    font-size: 13px;
+    white-space: nowrap;
+}
+body.dark-theme .market-ribbon {
+    background: rgba(22, 27, 34, 0.70);
+    border-bottom-color: rgba(255,255,255,0.06);
+}
+.market-ribbon-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    flex-shrink: 0;
+}
+.market-ribbon-item .name { font-weight: 600; color: var(--text-primary); }
+.market-ribbon-item .value { font-weight: 700; font-variant-numeric: tabular-nums; }
+.market-ribbon-item .value.up { color: var(--color-success); }
+.market-ribbon-item .value.down { color: var(--color-danger); }
+.market-ribbon-divider { width: 1px; height: 18px; background: rgba(0,0,0,0.08); flex-shrink: 0; }
+body.dark-theme .market-ribbon-divider { background: rgba(255,255,255,0.08); }
+.ribbon-session { font-size: 11px; color: var(--text-muted); margin-left: auto; flex-shrink: 0; }
+
+/* ================================================================
+   NOTIFICATION BELL
+   ================================================================ */
+.notif-bell {
+    position: relative;
+    background: transparent;
+    border: none;
+    font-size: 18px;
+    cursor: pointer;
+    padding: 6px;
+    border-radius: 50%;
+    transition: var(--transition);
+    color: var(--text-secondary);
+}
+.notif-bell:hover { background: rgba(108,92,231,0.10); }
+.notif-badge {
+    position: absolute;
+    top: 0;
+    right: 0;
+    background: var(--color-danger);
+    color: #fff;
+    font-size: 9px;
+    font-weight: 700;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transform: translate(4px, -4px);
+}
+.notif-panel {
+    position: fixed;
+    top: 72px;
+    right: 16px;
+    width: 360px;
+    max-height: 400px;
+    overflow-y: auto;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+    border: 1px solid rgba(0,0,0,0.06);
+    z-index: 300;
+    display: none;
+    padding: 12px;
+}
+body.dark-theme .notif-panel { border-color: rgba(255,255,255,0.08); }
+.notif-panel.open { display: block; }
+.notif-panel h4 { font-size: 13px; font-weight: 700; margin-bottom: 8px; color: var(--text-primary); }
+.notif-item {
+    padding: 10px 12px;
+    border-radius: var(--radius-sm);
+    margin-bottom: 6px;
+    background: rgba(108,92,231,0.04);
+    border-left: 3px solid var(--brand-start);
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--text-primary);
+}
+.notif-item .notif-strategy { font-weight: 700; color: var(--brand-start); }
+.notif-item .notif-stock { font-weight: 600; }
+.notif-item .notif-meta { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+.notif-empty {
+    text-align: center;
+    padding: 24px;
+    color: var(--text-muted);
+    font-size: 13px;
+}
+
+/* ================================================================
    HAMBURGER MENU
    ================================================================ */
 .hamburger {

@@ -28,18 +28,276 @@ document.addEventListener('DOMContentLoaded', () => {
             e.stopPropagation();
             navLinks.classList.toggle('open');
         });
-        // Close menu on nav link click
         navLinks.querySelectorAll('a').forEach(a => {
             a.addEventListener('click', () => {
                 navLinks.classList.remove('open');
             });
         });
-        // Close menu on outside click
         document.addEventListener('click', (e) => {
             if (!navLinks.contains(e.target) && !btn.contains(e.target)) {
                 navLinks.classList.remove('open');
             }
         });
+    }
+    // Init theme from localStorage
+    applyTheme(localStorage.getItem('tradetheme') || 'light');
+    // Start market ribbon updates
+    updateMarketRibbon();
+    setInterval(updateMarketRibbon, 10000);
+    // Start notification polling
+    pollNotifications();
+    setInterval(pollNotifications, 8000);
+});
+
+// ================================================================
+// DARK MODE TOGGLE
+// ================================================================
+function toggleTheme() {
+    const current = localStorage.getItem('tradetheme') || 'light';
+    const next = current === 'dark' ? 'light' : 'dark';
+    applyTheme(next);
+    localStorage.setItem('tradetheme', next);
+}
+function applyTheme(theme) {
+    const btn = document.getElementById('themeToggle');
+    if (theme === 'dark') {
+        document.body.classList.add('dark-theme');
+        if (btn) btn.textContent = '☀️';
+    } else {
+        document.body.classList.remove('dark-theme');
+        if (btn) btn.textContent = '🌙';
+    }
+}
+
+// ================================================================
+// KEYBOARD SHORTCUTS — Alt + Key
+// ================================================================
+document.addEventListener('keydown', (e) => {
+    if (e.altKey) {
+        const map = {
+            'h': 'home',
+            's': 'screener',
+            'p': 'portfolio',
+            't': 'testing',
+            'g': 'strategies',
+            'b': 'backtest',
+            'c': 'settings',
+        };
+        const key = e.key.toLowerCase();
+        if (map[key]) {
+            e.preventDefault();
+            navigateTo(map[key]);
+        }
+        // Alt+R = Refresh
+        if (key === 'r') {
+            e.preventDefault();
+            const active = document.querySelector('.page.active');
+            if (active) {
+                const id = active.id.replace('page-', '');
+                if (id === 'testing') loadTestingData();
+                else if (id === 'screener') refreshScreener();
+                else if (id === 'portfolio') loadPortfolio();
+                else if (id === 'home') loadHome();
+            }
+        }
+        // Alt+N = New strategy (strategies page)
+        if (key === 'n') {
+            e.preventDefault();
+            openModal('new');
+        }
+        // Alt+Esc = close modal
+        if (key === 'Escape') closeModal();
+    }
+});
+
+// ================================================================
+// MARKET RIBBON — live indices from SSE
+// ================================================================
+let marketRibbonData = { sensex: null, nifty: null, banknifty: null, vix: null };
+
+function updateMarketRibbon() {
+    // Fetch from backend proxy (avoids CORS)
+    fetch('/api/market/indices')
+    .then(r => r.json())
+    .then(data => {
+        const indices = data.data || [];
+        const find = (name) => indices.find(i => i.index === name);
+        const nifty = find('NIFTY 50');
+        const banknifty = find('NIFTY BANK');
+        const vix = find('INDIA VIX');
+
+        const setRibbon = (id, item) => {
+            const el = document.getElementById(id);
+            if (!el || !item) return;
+            const last = item.last || 0;
+            const chg = item.change;
+            const pct = item.pChange;
+            const valEl = el.querySelector('.value');
+            if (!valEl) return;
+            // Handle null/None/undefined when market is closed
+            if (chg == null || pct == null) {
+                valEl.textContent = last.toLocaleString('en-IN');
+                valEl.className = 'value';
+                return;
+            }
+            const chgNum = Number(chg);
+            const pctNum = Number(pct);
+            if (isNaN(chgNum) || isNaN(pctNum)) {
+                valEl.textContent = last.toLocaleString('en-IN');
+                valEl.className = 'value';
+                return;
+            }
+            const arrow = chgNum >= 0 ? '▲' : '▼';
+            const cls = chgNum >= 0 ? 'up' : 'down';
+            valEl.textContent = `${last.toLocaleString('en-IN')} ${arrow} ${Math.abs(pctNum).toFixed(2)}%`;
+            valEl.className = `value ${cls}`;
+        };
+
+        setRibbon('ribbon-nifty', nifty);
+        setRibbon('ribbon-banknifty', banknifty);
+        setRibbon('ribbon-vix', vix);
+
+        // Session timer
+        updateSessionTimer();
+    })
+    .catch(() => {
+        // Silently fall back — ribbon will show "—"
+    });
+}
+
+function updateSessionTimer() {
+    const el = document.getElementById('ribbonSession');
+    if (!el) return;
+    const now = new Date();
+    const hour = now.getHours();
+    const min = now.getMinutes();
+    const istHour = (hour + 5 + Math.floor((min + 30) / 60)) % 24;
+    const istMin = (min + 30) % 60;
+    // Market hours: 9:15 to 15:30 IST
+    const marketOpen = (istHour > 9 || (istHour === 9 && istMin >= 15));
+    const marketClose = (istHour < 15 || (istHour === 15 && istMin <= 30));
+    if (marketOpen && marketClose) {
+        const closeMin = (15 * 60 + 30) - (istHour * 60 + istMin);
+        const h = Math.floor(closeMin / 60);
+        const m = closeMin % 60;
+        el.textContent = `📈 ${h}h ${m}m left`;
+    } else if (istHour < 9 || (istHour === 9 && istMin < 15)) {
+        const openMin = (9 * 60 + 15) - (istHour * 60 + istMin);
+        const h = Math.floor(openMin / 60);
+        const m = openMin % 60;
+        el.textContent = `🔴 Opens in ${h}h ${m}m`;
+    } else {
+        el.textContent = '🔴 Market Closed';
+    }
+}
+
+// ================================================================
+// NOTIFICATION SYSTEM — strategy match alerts
+// ================================================================
+let notificationHistory = [];
+let notifPollCount = 0;
+
+function pollNotifications() {
+    notifPollCount++;
+    // Check if the screener has any stocks with breakout signals
+    const screenerRows = document.querySelectorAll('#screenerBody tr');
+    if (screenerRows.length > 0) {
+        const breakoutStocks = [];
+        screenerRows.forEach((row, idx) => {
+            const cells = row.querySelectorAll('td');
+            if (cells.length >= 2) {
+                const symbol = cells[0]?.textContent?.trim() || '';
+                const price = cells[1]?.textContent?.trim() || '';
+                const change = cells[2]?.textContent?.trim() || '';
+                // Check for breakout indicators (positive change, volume)
+                if (change && !change.startsWith('▼') && cells[3]?.textContent?.includes('Yes') || cells[3]?.textContent?.includes('✅')) {
+                    breakoutStocks.push({ symbol, price, change });
+                }
+            }
+        });
+
+        // Check active strategy
+        const stratSelect = document.getElementById('strategySelect');
+        const stratName = stratSelect ? stratSelect.options[stratSelect.selectedIndex]?.text || 'Advance ORB' : 'Advance ORB';
+
+        // Generate notifications for breakout stocks
+        breakoutStocks.forEach(stock => {
+            const key = `${stratName}-${stock.symbol}`;
+            if (!notificationHistory.includes(key)) {
+                notificationHistory.push(key);
+                addNotification(stratName, stock.symbol, stock.price, stock.change);
+            }
+        });
+    }
+
+    // Also check Big Players strategy table
+    const bpRows = document.querySelectorAll('#bpTableBody tr');
+    if (bpRows.length > 0) {
+        bpRows.forEach(row => {
+            const cells = row.querySelectorAll('td');
+            if (cells.length >= 3) {
+                const symbol = cells[0]?.textContent?.trim() || '';
+                const price = cells[1]?.textContent?.trim() || '';
+                const change = cells[2]?.textContent?.trim() || '';
+                const key = `Big Players-${symbol}`;
+                if (!notificationHistory.includes(key)) {
+                    notificationHistory.push(key);
+                    addNotification('Big Players', symbol, price, change);
+                }
+            }
+        });
+    }
+
+    updateNotifBadge();
+}
+
+function addNotification(strategy, symbol, price, change) {
+    const list = document.getElementById('notifList');
+    if (!list) return;
+    // Remove empty state
+    const empty = list.querySelector('.notif-empty');
+    if (empty) empty.remove();
+
+    const div = document.createElement('div');
+    div.className = 'notif-item';
+    div.innerHTML = `
+        <div><span class="notif-strategy">${strategy}</span> · <span class="notif-stock">${symbol}</span></div>
+        <div class="notif-meta">Price: ${price} · Change: ${change}</div>
+    `;
+    list.prepend(div);
+
+    // Limit to 20 items
+    while (list.children.length > 20) {
+        list.lastChild.remove();
+    }
+}
+
+function toggleNotifPanel() {
+    const panel = document.getElementById('notifPanel');
+    if (panel) panel.classList.toggle('open');
+}
+
+function updateNotifBadge() {
+    const badge = document.getElementById('notifBadge');
+    if (!badge) return;
+    const list = document.getElementById('notifList');
+    const count = list ? list.querySelectorAll('.notif-item:not(.notif-empty)').length : 0;
+    if (count > 0) {
+        badge.style.display = 'flex';
+        badge.textContent = count > 99 ? '99+' : count;
+    } else {
+        badge.style.display = 'none';
+    }
+}
+
+// Close notification panel on outside click
+document.addEventListener('click', (e) => {
+    const panel = document.getElementById('notifPanel');
+    const bell = document.getElementById('notifBell');
+    if (panel && panel.classList.contains('open')) {
+        if (!panel.contains(e.target) && !bell?.contains(e.target)) {
+            panel.classList.remove('open');
+        }
     }
 });
 

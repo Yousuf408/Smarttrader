@@ -28,11 +28,25 @@
             <li><a data-page="settings">⚙️ Settings</a></li>
         </ul>
         <div class="nav-right">
+            <button class="notif-bell" id="notifBell" onclick="toggleNotifPanel()" aria-label="Notifications">🔔<span class="notif-badge" id="notifBadge" style="display:none;">0</span></button>
+            <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" aria-label="Toggle theme">🌙</button>
             <span class="status"><span class="dot"></span> Live</span>
             <span class="balance">₹1,24,500</span>
             <div class="avatar">JD</div>
         </div>
     </nav>
+
+    <!-- ================================================================ -->
+    <!-- MARKET RIBBON -->
+    <!-- ================================================================ -->
+    <div class="market-ribbon" id="marketRibbon">
+        <span class="market-ribbon-item" id="ribbon-nifty"><span class="name">NIFTY 50</span><span class="value">—</span></span>
+        <span class="market-ribbon-divider"></span>
+        <span class="market-ribbon-item" id="ribbon-banknifty"><span class="name">BANK NIFTY</span><span class="value">—</span></span>
+        <span class="market-ribbon-divider"></span>
+        <span class="market-ribbon-item" id="ribbon-vix"><span class="name">INDIA VIX</span><span class="value">—</span></span>
+        <span class="ribbon-session" id="ribbonSession"></span>
+    </div>
 
     <!-- ================================================================ -->
     <!-- MAIN CONTENT -->
@@ -400,6 +414,14 @@
                 </div>
             </div>
         </div>
+    </div>
+
+    <!-- ================================================================ -->
+    <!-- NOTIFICATION PANEL -->
+    <!-- ================================================================ -->
+    <div class="notif-panel" id="notifPanel">
+        <h4>🔔 Strategy Alerts</h4>
+        <div id="notifList"><div class="notif-empty">No new alerts</div></div>
     </div>
 
     <!-- ================================================================ -->
