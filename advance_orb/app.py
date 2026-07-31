@@ -50,6 +50,7 @@ from broker.angel_ws import (
     get_subscription_status as angel_ws_status,
 )
 from advance_orb.supabase_db import save_top5_strategy, ensure_table
+from server.candle_tracker import candle_tracker
 
 # Ensure the strategy_trades table exists (run once at startup)
 ensure_table()
@@ -1030,10 +1031,17 @@ def broker_connect(payload: dict):
             try:
                 feed_token = _angel_creds.get("feed_token", "")
                 from broker.angel_margin_calculator import resolve_symbol_token as _resolve
-                # Add NIFTY 50 index as a default subscriber (always useful)
+                # Subscribe ALL 727 stocks at WebSocket startup so the CandleTracker
+                # receives ticks for every symbol in the watchlist.
+                # Build the list from the candle_tracker's token→symbol map.
                 initial_ws = [
                     ("NIFTY", 26000, "index"),
                 ]
+                _all_stocks = [
+                    (sym, int(tok), "stock")
+                    for sym, tok in candle_tracker.token_by_symbol.items()
+                ]
+                initial_ws.extend(_all_stocks)
                 ws_res = angel_ws_start(feed_token=feed_token, watchlist=initial_ws)
                 if ws_res.get("success"):
                     print("✅ WebSocket connected successfully")

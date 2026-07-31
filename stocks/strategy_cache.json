@@ -4351,5 +4351,11 @@
     "yesterday_high": 3032.89990234375,
     "yesterday_low": 2986.0,
     "yesterday_close": 3010.39990234375
+  },
+  "BLISSGVS": {
+    "ema": 461.528469761449
+  },
+  "SIGMAADV": {
+    "ema": 609.614625984423
   }
 }
