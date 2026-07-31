@@ -950,6 +950,12 @@ async function fetchAdvanceORBRefresh(silent = true) {
             if (typeof updated['CHG%'] === 'number') row['CHG%'] = updated['CHG%'];
             if (typeof updated.Volume === 'string') row.Volume = updated.Volume;
             if (typeof updated.RELVOL === 'string') row.RELVOL = updated.RELVOL;
+            // 9:20 candle confirmation — auto-updates every 30 seconds
+            // without a full page reload. Once the 9:20 candle closes
+            // inside the 9:15 range, inside_915 flips to true and
+            // auto-buy can proceed.
+            if (typeof updated.inside_915 === 'boolean') row.inside_915 = updated.inside_915;
+            if (typeof updated.close920 === 'number') row.close920 = updated.close920;
             touched++;
         }
         // Always update in-memory data so it stays fresh for when the user returns,

@@ -766,6 +766,7 @@ def refresh_advance_orb(tickers: str = "", gap_up: bool = False):
         if not symbols:
             return {"refreshed": []}
 
+        opening_candle_map: dict | None = None
         if gap_up:
             # Gap-up mode: skip the candle-range check, keep all symbols valid
             valid_symbols = set(symbols)
@@ -843,12 +844,22 @@ def refresh_advance_orb(tickers: str = "", gap_up: bool = False):
                 volume_str = "0"
             relvol_str = f"{values[4]:.2f}x" if len(values) > 4 and pd.notna(values[4]) else "0x"
 
+            # Pull live 9:20 candle data from yfinance (re-fetched above)
+            candle = (opening_candle_map or {}).get(name)
+            inside_915_val = False
+            close920_val = None
+            if isinstance(candle, tuple) and len(candle) >= 10:
+                inside_915_val = bool(candle[9])
+                close920_val = round(float(candle[8]), 2) if candle[8] is not None else None
+
             refreshed.append({
                 "Symbol": name,
                 "Price": round(float(close_val), 2) if pd.notna(close_val) else None,
                 "CHG%": round(float(change_val), 2) if pd.notna(change_val) else None,
                 "Volume": volume_str,
                 "RELVOL": relvol_str,
+                "inside_915": inside_915_val,
+                "close920": close920_val,
             })
 
         return {"refreshed": refreshed}
