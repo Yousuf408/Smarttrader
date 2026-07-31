@@ -12,7 +12,7 @@ from tradingview_screener import Query, col
 from tradingview_screener.query import HEADERS as TV_HEADERS
 
 from bigplayers.strategy import BigPlayersStrategy
-from advance_orb.supabase_db import save_trades
+from advance_orb.supabase_db import save_top5_strategy
 from advance_orb.common import (
     PRICE_MIN, PRICE_MAX, GAP_THRESHOLD, MARKET_CAP_MIN,
     SMALL_CANDLE_THRESHOLD, MAX_TV_STOCKS,
@@ -170,34 +170,7 @@ def get_big_players(budget: int = 100000, parts: int = 4):
 
         # Save top 5 to Supabase for historical tracking
         try:
-            trades = []
-            for row in result[:5]:
-                high915 = float(row.get("high915") or 0)
-                low915 = float(row.get("low915") or 0)
-                if not high915 or not low915 or high915 <= low915:
-                    continue
-                # Entry: 75% of candle range above low
-                range_ = high915 - low915
-                buy_price = round(low915 + range_ * 0.75, 2)
-                # SL: 9:15 low
-                sl = low915
-                # Target: 2% above entry price
-                target = round(buy_price * 1.02, 2)
-                # Gain per ₹1L
-                qty = int(100000 / buy_price)
-                gain_per_lakh = round(qty * (target - buy_price), 2)
-                avg_return = 2.0  # fixed 2% for Big Players
-                trades.append({
-                    "symbol": row.get("Symbol") or row.get("symbol"),
-                    "buy_price": buy_price,
-                    "stop_loss": sl,
-                    "target": target,
-                    "max_qty": int(row.get("MaxQty", 0)),
-                    "gain_per_lakh": gain_per_lakh,
-                    "avg_return": avg_return,
-                })
-            if trades:
-                save_trades("bigplayers", trades)
+            save_top5_strategy("bigplayers", result[:5])
         except Exception:
             pass  # never break the screener over a DB hiccup
 

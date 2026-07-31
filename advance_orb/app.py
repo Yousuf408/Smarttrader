@@ -49,7 +49,7 @@ from broker.angel_ws import (
     add_to_watchlist as angel_ws_add,
     get_subscription_status as angel_ws_status,
 )
-from advance_orb.supabase_db import save_trades, ensure_table
+from advance_orb.supabase_db import save_top5_strategy, ensure_table
 
 # Ensure the strategy_trades table exists (run once at startup)
 ensure_table()
@@ -459,34 +459,7 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False):
 
         # Save top 5 to Supabase for historical tracking
         try:
-            trades = []
-            for row in result[:5]:
-                high915 = float(row.get("high915") or 0)
-                low915 = float(row.get("low915") or 0)
-                if not high915 or not low915:
-                    continue
-                # Entry: 0.12% above 9:15 high
-                buy_price = round(high915 * 1.0012, 2)
-                # SL: 9:15 low
-                sl = low915
-                # Target: 1:2 risk-reward
-                risk = buy_price - sl
-                target = round(buy_price + 2 * risk, 2) if risk > 0 else None
-                # Gain per ₹1L
-                qty = int(100000 / buy_price)
-                gain_per_lakh = round(qty * (target - buy_price), 2) if target and target > buy_price else 0
-                avg_return = round(((target - buy_price) / buy_price) * 100, 2) if target and target > buy_price else 0
-                trades.append({
-                    "symbol": row.get("Symbol") or row.get("symbol"),
-                    "buy_price": buy_price,
-                    "stop_loss": sl,
-                    "target": target,
-                    "max_qty": int(row.get("MaxQty", 0)),
-                    "gain_per_lakh": gain_per_lakh,
-                    "avg_return": avg_return,
-                })
-            if trades:
-                save_trades("advanceorb", trades)
+            save_top5_strategy("advanceorb", result[:5])
         except Exception:
             pass  # never break the screener over a DB hiccup
 
