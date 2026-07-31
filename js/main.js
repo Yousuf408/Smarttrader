@@ -18,6 +18,32 @@ const DOM = {
 let autoBuyEnabled = false;
 
 // ================================================================
+// HAMBURGER TOGGLE — mobile responsive menu
+// ================================================================
+document.addEventListener('DOMContentLoaded', () => {
+    const btn = document.getElementById('hamburgerBtn');
+    const navLinks = document.getElementById('navLinks');
+    if (btn && navLinks) {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            navLinks.classList.toggle('open');
+        });
+        // Close menu on nav link click
+        navLinks.querySelectorAll('a').forEach(a => {
+            a.addEventListener('click', () => {
+                navLinks.classList.remove('open');
+            });
+        });
+        // Close menu on outside click
+        document.addEventListener('click', (e) => {
+            if (!navLinks.contains(e.target) && !btn.contains(e.target)) {
+                navLinks.classList.remove('open');
+            }
+        });
+    }
+});
+
+// ================================================================
 // STRATEGY CONFIGURATIONS
 // ================================================================
 const STRATEGIES = {

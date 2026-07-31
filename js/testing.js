@@ -12,7 +12,7 @@ function loadTestingData() {
     const connEl = document.getElementById('testingConnectionStatus');
 
     fetch('/api/market/live-ticks')
-        .then(r => r.json())
+        .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
         .then(data => {
             testingData = data;
             const ticks = data.ticks || {};
@@ -75,16 +75,16 @@ function loadTestingData() {
                 const displaySym = sym.replace(/-EQ$/i, '');
 
                 html += `<tr>
-                    <td style="opacity:0.4;font-size:12px;">${idx + 1}</td>
-                    <td><strong>${displaySym}</strong></td>
-                    <td style="font-weight:600;">${ltp.toFixed(2)}</td>
-                    <td style="color:${chgColor};font-weight:600;">${chgIcon} ${chg.toFixed(2)}%</td>
-                    <td>${open.toFixed(2)}</td>
-                    <td style="color:var(--color-success);">${high.toFixed(2)}</td>
-                    <td style="color:var(--color-danger);">${low.toFixed(2)}</td>
-                    <td>${volStr}</td>
-                    <td>${gap.toFixed(2)}%</td>
-                    <td style="font-size:11px;opacity:0.6;">${ts}</td>
+                    <td data-label="#" style="opacity:0.4;font-size:12px;">${idx + 1}</td>
+                    <td data-label="Symbol"><strong>${displaySym}</strong></td>
+                    <td data-label="LTP" style="font-weight:600;">${ltp.toFixed(2)}</td>
+                    <td data-label="Change" style="color:${chgColor};font-weight:600;">${chgIcon} ${chg.toFixed(2)}%</td>
+                    <td data-label="Open">${open.toFixed(2)}</td>
+                    <td data-label="High" style="color:var(--color-success);">${high.toFixed(2)}</td>
+                    <td data-label="Low" style="color:var(--color-danger);">${low.toFixed(2)}</td>
+                    <td data-label="Volume">${volStr}</td>
+                    <td data-label="Gap">${gap.toFixed(2)}%</td>
+                    <td data-label="Time" style="font-size:11px;opacity:0.6;">${ts}</td>
                 </tr>`;
             });
 
