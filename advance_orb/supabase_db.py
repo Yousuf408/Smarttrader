@@ -141,17 +141,25 @@ def save_top5_strategy(
         # Stop loss = 9:15 low
         sl = low915
 
-        # Compute derived fields (1:2 risk-reward from entry price)
+        # Compute target and returns (differs per strategy)
         target_1_2 = None
         gain_per_lakh = None
         avg_return = None
-        if buy_price and sl and buy_price > 0 and buy_price > sl:
-            risk = buy_price - sl
-            target_1_2 = round(buy_price + 2 * risk, 2)
-            # Gain per ₹1L invested
-            qty = int(100000 / buy_price)
-            gain_per_lakh = round(qty * (target_1_2 - buy_price), 2)
-            avg_return = round(((target_1_2 - buy_price) / buy_price) * 100, 2)
+        if buy_price and buy_price > 0:
+            if strategy == "bigplayers":
+                # Big Players: target is 2% above entry price
+                target_1_2 = round(buy_price * 1.02, 2)
+            else:
+                # Advance ORB: target = 1:2 risk-reward from entry
+                if sl and buy_price > sl:
+                    risk = buy_price - sl
+                    target_1_2 = round(buy_price + 2 * risk, 2)
+
+            if target_1_2 and target_1_2 > buy_price:
+                # Gain per ₹1L invested
+                qty = int(100000 / buy_price)
+                gain_per_lakh = round(qty * (target_1_2 - buy_price), 2)
+                avg_return = round(((target_1_2 - buy_price) / buy_price) * 100, 2)
 
         max_qty = row.get("MaxQty") or row.get("max_qty") or 0
         try:
