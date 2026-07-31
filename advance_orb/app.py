@@ -358,9 +358,18 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False):
         df['candle_range_pct'] = df['name'].map(
             lambda s: opening_candle_map.get(s, (False, None, None, None, None, None, None, None))[5]
         )
-        df['yesterday_high'] = df['name'].map(
-            lambda s: opening_candle_map.get(s, (False, None, None, None, None, None, None, None, None, None))[7]
-        )
+        if has_candle_data:
+            df['yesterday_high'] = df['name'].map(
+                lambda s: opening_candle_map.get(s, (False, None, None, None, None, None, None, None, None, None))[7]
+            )
+        else:
+            # No slot-0 candle data yet — read yesterday_high directly from
+            # the strategy cache (pre-populated from yfinance at startup,
+            # independent of slot-0 completion). This lets gap-up mode
+            # evaluate open > prev_high even after a fresh server restart.
+            df['yesterday_high'] = df['name'].map(
+                lambda s: cache_data.get(s, {}).get("yesterday_high")
+            )
         df['close920'] = df['name'].map(
             lambda s: opening_candle_map.get(s, (False, None, None, None, None, None, None, None, None, None))[8]
         )
