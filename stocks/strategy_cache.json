@@ -1,251 +1,4355 @@
 {
-  "INDOMIM": {
-    "ema": null
+  "FEDERALBNK": {
+    "ema": 356.9783659511063,
+    "yesterday_high": 359.25,
+    "yesterday_low": 353.0,
+    "yesterday_close": 354.3999938964844
   },
-  "RPTECH": {
-    "ema": 815.832549503457
+  "IGL": {
+    "ema": 152.11898043516683,
+    "yesterday_high": 153.3800048828125,
+    "yesterday_low": 151.50999450683594,
+    "yesterday_close": 151.89999389648438
   },
-  "BRIGADE": {
-    "ema": 567.4069945551009
+  "ADANIENSOL": {
+    "ema": 1655.6154955125087,
+    "yesterday_high": 1674.4000244140625,
+    "yesterday_low": 1633.0,
+    "yesterday_close": 1655.800048828125
+  },
+  "LUPIN": {
+    "ema": 2421.7461712971954,
+    "yesterday_high": 2474.10009765625,
+    "yesterday_low": 2418.0,
+    "yesterday_close": 2421.199951171875
+  },
+  "SHOPERSTOP": {
+    "ema": 390.7339250311877,
+    "yesterday_high": 394.5,
+    "yesterday_low": 384.1000061035156,
+    "yesterday_close": 390.1000061035156
+  },
+  "PTC": {
+    "ema": 170.3897196239753,
+    "yesterday_high": 169.49000549316406,
+    "yesterday_low": 166.41000366210938,
+    "yesterday_close": 169.1300048828125
+  },
+  "GNFC": {
+    "ema": 518.7903205088614,
+    "yesterday_high": 530.1500244140625,
+    "yesterday_low": 520.7000122070312,
+    "yesterday_close": 527.5499877929688
+  },
+  "ZOTA": {
+    "ema": 1249.941440589636,
+    "yesterday_high": 1249.9000244140625,
+    "yesterday_low": 1213.0,
+    "yesterday_close": 1225.4000244140625
+  },
+  "KENNAMET": {
+    "ema": 2839.585376753803,
+    "yesterday_high": 2884.0,
+    "yesterday_low": 2790.0,
+    "yesterday_close": 2818.699951171875
+  },
+  "FIVESTAR": {
+    "ema": 556.2353506741763,
+    "yesterday_high": 565.25,
+    "yesterday_low": 548.4500122070312,
+    "yesterday_close": 551.7000122070312
+  },
+  "UNITDSPR": {
+    "ema": 1516.171776993949,
+    "yesterday_high": 1535.0999755859375,
+    "yesterday_low": 1510.0,
+    "yesterday_close": 1533.0
+  },
+  "KANSAINER": {
+    "ema": 198.96072640526984,
+    "yesterday_high": 200.99000549316406,
+    "yesterday_low": 198.22000122070312,
+    "yesterday_close": 199.0500030517578
+  },
+  "POWERMECH": {
+    "ema": 2615.1782266467903,
+    "yesterday_high": 2687.300048828125,
+    "yesterday_low": 2624.300048828125,
+    "yesterday_close": 2633.0
+  },
+  "GRANULES": {
+    "ema": 836.3679094365208,
+    "yesterday_high": 851.9000244140625,
+    "yesterday_low": 832.2999877929688,
+    "yesterday_close": 833.9500122070312
+  },
+  "UNIONBANK": {
+    "ema": 170.6494858399739,
+    "yesterday_high": 170.75999450683594,
+    "yesterday_low": 167.9199981689453,
+    "yesterday_close": 170.64999389648438
+  },
+  "63MOONS": {
+    "ema": 862.4087532152124,
+    "yesterday_high": 873.2999877929688,
+    "yesterday_low": 772.4500122070312,
+    "yesterday_close": 847.3499755859375
+  },
+  "TCS": {
+    "ema": 2400.808461017641,
+    "yesterday_high": 2493.60009765625,
+    "yesterday_low": 2423.300048828125,
+    "yesterday_close": 2434.0
+  },
+  "SSWL": {
+    "ema": 303.70121375243957,
+    "yesterday_high": 304.20001220703125,
+    "yesterday_low": 296.0,
+    "yesterday_close": 297.19000244140625
+  },
+  "NTPC": {
+    "ema": 345.01997223767023,
+    "yesterday_high": 347.29998779296875,
+    "yesterday_low": 342.1000061035156,
+    "yesterday_close": 345.1499938964844
+  },
+  "TANLA": {
+    "ema": 597.3245444688379,
+    "yesterday_high": 625.7000122070312,
+    "yesterday_low": 591.2000122070312,
+    "yesterday_close": 594.0
+  },
+  "RATNAMANI": {
+    "ema": 2380.1967877809684,
+    "yesterday_high": 2420.89990234375,
+    "yesterday_low": 2356.10009765625,
+    "yesterday_close": 2388.0
+  },
+  "HBLENGINE": {
+    "ema": 715.8596487743209,
+    "yesterday_high": 705.5499877929688,
+    "yesterday_low": 697.0,
+    "yesterday_close": 698.9500122070312
+  },
+  "IIFLCAPS": {
+    "ema": 336.37889660540486,
+    "yesterday_high": 336.3999938964844,
+    "yesterday_low": 334.54998779296875,
+    "yesterday_close": 335.6000061035156
+  },
+  "CASTROLIND": {
+    "ema": 185.07819273186132,
+    "yesterday_high": 185.74000549316406,
+    "yesterday_low": 184.49000549316406,
+    "yesterday_close": 185.0
+  },
+  "HINDZINC": {
+    "ema": 536.3861331272329,
+    "yesterday_high": 541.5999755859375,
+    "yesterday_low": 531.2999877929688,
+    "yesterday_close": 536.9500122070312
+  },
+  "TIIL": {
+    "ema": 2571.1063912825684,
+    "yesterday_high": 2580.0,
+    "yesterday_low": 2522.0,
+    "yesterday_close": 2556.300048828125
+  },
+  "RELIGARE": {
+    "ema": 252.67833240004904,
+    "yesterday_high": 253.8000030517578,
+    "yesterday_low": 247.5500030517578,
+    "yesterday_close": 252.39999389648438
+  },
+  "ECLERX": {
+    "ema": 1899.6629707702882,
+    "yesterday_high": 1994.5999755859375,
+    "yesterday_low": 1905.0999755859375,
+    "yesterday_close": 1912.0
+  },
+  "COLPAL": {
+    "ema": 2095.991911608551,
+    "yesterday_high": 2176.60009765625,
+    "yesterday_low": 2080.5,
+    "yesterday_close": 2085.0
+  },
+  "APOLLOTYRE": {
+    "ema": 427.2030357089394,
+    "yesterday_high": 431.04998779296875,
+    "yesterday_low": 422.3999938964844,
+    "yesterday_close": 425.0
+  },
+  "TITAGARH": {
+    "ema": 826.105071530888,
+    "yesterday_high": 833.0,
+    "yesterday_low": 822.5,
+    "yesterday_close": 824.5999755859375
+  },
+  "YATHARTH": {
+    "ema": 828.4559554771423,
+    "yesterday_high": 836.5999755859375,
+    "yesterday_low": 823.2000122070312,
+    "yesterday_close": 828.2000122070312
+  },
+  "AEROFLEX": {
+    "ema": 438.7011903986393,
+    "yesterday_high": 451.70001220703125,
+    "yesterday_low": 422.6000061035156,
+    "yesterday_close": 424.8500061035156
+  },
+  "GALAXYSURF": {
+    "ema": 1948.2409807973438,
+    "yesterday_high": 1961.0,
+    "yesterday_low": 1933.0,
+    "yesterday_close": 1950.0
+  },
+  "REDINGTON": {
+    "ema": 311.57367426934377,
+    "yesterday_high": 336.3999938964844,
+    "yesterday_low": 308.45001220703125,
+    "yesterday_close": 310.20001220703125
+  },
+  "GPIL": {
+    "ema": 246.7966110109276,
+    "yesterday_high": 252.8000030517578,
+    "yesterday_low": 244.0500030517578,
+    "yesterday_close": 248.0
+  },
+  "CENTURYPLY": {
+    "ema": 799.0654232100886,
+    "yesterday_high": 796.0,
+    "yesterday_low": 776.2999877929688,
+    "yesterday_close": 793.75
+  },
+  "TECHM": {
+    "ema": 1653.9294174818137,
+    "yesterday_high": 1685.5,
+    "yesterday_low": 1656.5999755859375,
+    "yesterday_close": 1669.0
+  },
+  "ELECON": {
+    "ema": 420.38068672772744,
+    "yesterday_high": 426.04998779296875,
+    "yesterday_low": 415.3500061035156,
+    "yesterday_close": 417.25
+  },
+  "CUPID": {
+    "ema": 231.19539777372515,
+    "yesterday_high": 234.47000122070312,
+    "yesterday_low": 226.47000122070312,
+    "yesterday_close": 230.0500030517578
+  },
+  "NAUKRI": {
+    "ema": 1233.9914229701228,
+    "yesterday_high": 1265.0,
+    "yesterday_low": 1236.699951171875,
+    "yesterday_close": 1244.050048828125
+  },
+  "LUMAXTECH": {
+    "ema": 1535.2980271696028,
+    "yesterday_high": 1521.0,
+    "yesterday_low": 1484.0,
+    "yesterday_close": 1516.5
+  },
+  "INDIANB": {
+    "ema": 832.1001951228786,
+    "yesterday_high": 832.5,
+    "yesterday_low": 820.75,
+    "yesterday_close": 827.25
+  },
+  "HSCL": {
+    "ema": 766.3543986398778,
+    "yesterday_high": 771.9500122070312,
+    "yesterday_low": 753.2999877929688,
+    "yesterday_close": 762.4000244140625
+  },
+  "ASTRAL": {
+    "ema": 1461.1542874176118,
+    "yesterday_high": 1502.9000244140625,
+    "yesterday_low": 1467.300048828125,
+    "yesterday_close": 1471.9000244140625
+  },
+  "GODREJAGRO": {
+    "ema": 560.3053182026894,
+    "yesterday_high": 564.0499877929688,
+    "yesterday_low": 557.9000244140625,
+    "yesterday_close": 559.25
+  },
+  "SPARC": {
+    "ema": 210.1987783408544,
+    "yesterday_high": 215.1999969482422,
+    "yesterday_low": 207.67999267578125,
+    "yesterday_close": 208.42999267578125
+  },
+  "HCG": {
+    "ema": 673.0361684645728,
+    "yesterday_high": 679.9000244140625,
+    "yesterday_low": 667.0499877929688,
+    "yesterday_close": 669.6500244140625
+  },
+  "SUMICHEM": {
+    "ema": 508.0101854839144,
+    "yesterday_high": 510.20001220703125,
+    "yesterday_low": 488.75,
+    "yesterday_close": 507.95001220703125
+  },
+  "ITC": {
+    "ema": 283.742557333059,
+    "yesterday_high": 288.29998779296875,
+    "yesterday_low": 283.75,
+    "yesterday_close": 285.54998779296875
+  },
+  "CONCORDBIO": {
+    "ema": 1353.0790940140946,
+    "yesterday_high": 1362.9000244140625,
+    "yesterday_low": 1321.5,
+    "yesterday_close": 1330.0
+  },
+  "REDTAPE": {
+    "ema": 131.2265315054951,
+    "yesterday_high": 135.4499969482422,
+    "yesterday_low": 130.89999389648438,
+    "yesterday_close": 133.05999755859375
+  },
+  "PNBHOUSING": {
+    "ema": 1048.7211059414053,
+    "yesterday_high": 1055.4000244140625,
+    "yesterday_low": 1024.9000244140625,
+    "yesterday_close": 1031.300048828125
+  },
+  "SFL": {
+    "ema": 783.3351429308899,
+    "yesterday_high": 797.8499755859375,
+    "yesterday_low": 770.0,
+    "yesterday_close": 776.2999877929688
+  },
+  "KIRLOSIND": {
+    "ema": 3852.1324827783574,
+    "yesterday_high": 3795.0,
+    "yesterday_low": 3742.300048828125,
+    "yesterday_close": 3759.300048828125
+  },
+  "ICICIPRULI": {
+    "ema": 511.6697417667379,
+    "yesterday_high": 513.5999755859375,
+    "yesterday_low": 506.70001220703125,
+    "yesterday_close": 510.6000061035156
+  },
+  "BAJAJCON": {
+    "ema": 532.4358620582423,
+    "yesterday_high": 546.4500122070312,
+    "yesterday_low": 531.8499755859375,
+    "yesterday_close": 543.0
+  },
+  "CELLO": {
+    "ema": 343.34745450287704,
+    "yesterday_high": 348.3999938964844,
+    "yesterday_low": 339.0,
+    "yesterday_close": 340.29998779296875
+  },
+  "DEEPAKNTR": {
+    "ema": 1660.0295755318223,
+    "yesterday_high": 1678.199951171875,
+    "yesterday_low": 1635.0,
+    "yesterday_close": 1641.0999755859375
+  },
+  "MASFIN": {
+    "ema": 320.2086799992854,
+    "yesterday_high": 327.3999938964844,
+    "yesterday_low": 317.0,
+    "yesterday_close": 319.5
+  },
+  "JWL": {
+    "ema": 258.428219873341,
+    "yesterday_high": 261.3500061035156,
+    "yesterday_low": 255.0,
+    "yesterday_close": 261.0
+  },
+  "COALINDIA": {
+    "ema": 413.8820475987002,
+    "yesterday_high": 418.20001220703125,
+    "yesterday_low": 410.1499938964844,
+    "yesterday_close": 417.20001220703125
+  },
+  "HUDCO": {
+    "ema": 196.5260974261015,
+    "yesterday_high": 198.0500030517578,
+    "yesterday_low": 194.2100067138672,
+    "yesterday_close": 197.0
+  },
+  "KIRLOSENG": {
+    "ema": 2195.2886726451993,
+    "yesterday_high": 2173.89990234375,
+    "yesterday_low": 2111.800048828125,
+    "yesterday_close": 2132.89990234375
+  },
+  "INDIASHLTR": {
+    "ema": 722.6116106457062,
+    "yesterday_high": 727.9000244140625,
+    "yesterday_low": 709.8499755859375,
+    "yesterday_close": 719.2999877929688
+  },
+  "TSFINV": {
+    "ema": 447.59729903157034,
+    "yesterday_high": 449.8999938964844,
+    "yesterday_low": 436.20001220703125,
+    "yesterday_close": 442.95001220703125
+  },
+  "SIS": {
+    "ema": 425.4751409294416,
+    "yesterday_high": 430.6499938964844,
+    "yesterday_low": 421.79998779296875,
+    "yesterday_close": 424.25
+  },
+  "CDSL": {
+    "ema": 1338.293431662098,
+    "yesterday_high": 1349.9000244140625,
+    "yesterday_low": 1325.0,
+    "yesterday_close": 1336.9000244140625
+  },
+  "ERIS": {
+    "ema": 1369.8537399982124,
+    "yesterday_high": 1411.0,
+    "yesterday_low": 1346.0,
+    "yesterday_close": 1380.0
+  },
+  "MASTEK": {
+    "ema": 1888.8134506524193,
+    "yesterday_high": 1944.0,
+    "yesterday_low": 1894.699951171875,
+    "yesterday_close": 1915.0
+  },
+  "JUNIPER": {
+    "ema": 195.64126937438994,
+    "yesterday_high": 197.5,
+    "yesterday_low": 194.0,
+    "yesterday_close": 195.6999969482422
+  },
+  "PIIND": {
+    "ema": 2748.4846393331286,
+    "yesterday_high": 2782.699951171875,
+    "yesterday_low": 2718.0,
+    "yesterday_close": 2781.5
+  },
+  "INDGN": {
+    "ema": 518.0950802515944,
+    "yesterday_high": 538.5,
+    "yesterday_low": 510.29998779296875,
+    "yesterday_close": 512.0
+  },
+  "PIDILITIND": {
+    "ema": 1621.34326869597,
+    "yesterday_high": 1634.699951171875,
+    "yesterday_low": 1619.0999755859375,
+    "yesterday_close": 1629.9000244140625
+  },
+  "ACMESOLAR": {
+    "ema": 362.35361904336867,
+    "yesterday_high": 366.70001220703125,
+    "yesterday_low": 347.79998779296875,
+    "yesterday_close": 361.1499938964844
+  },
+  "SIGNATURE": {
+    "ema": 814.1851395626277,
+    "yesterday_high": 823.75,
+    "yesterday_low": 804.2000122070312,
+    "yesterday_close": 813.4500122070312
+  },
+  "BLUEJET": {
+    "ema": 609.7018616752806,
+    "yesterday_high": 615.4000244140625,
+    "yesterday_low": 600.0999755859375,
+    "yesterday_close": 614.9000244140625
+  },
+  "SWANCORP": {
+    "ema": 307.64487755671087,
+    "yesterday_high": 310.20001220703125,
+    "yesterday_low": 305.45001220703125,
+    "yesterday_close": 305.79998779296875
+  },
+  "PRICOLLTD": {
+    "ema": 687.9100520325337,
+    "yesterday_high": 699.7000122070312,
+    "yesterday_low": 655.0499877929688,
+    "yesterday_close": 684.2000122070312
+  },
+  "OPTIEMUS": {
+    "ema": 626.0546588879474,
+    "yesterday_high": 627.5,
+    "yesterday_low": 606.75,
+    "yesterday_close": 618.8499755859375
+  },
+  "AUBANK": {
+    "ema": 1041.243672836355,
+    "yesterday_high": 1040.300048828125,
+    "yesterday_low": 1023.0,
+    "yesterday_close": 1031.0
+  },
+  "SBILIFE": {
+    "ema": 1883.5308920523685,
+    "yesterday_high": 1910.0,
+    "yesterday_low": 1864.699951171875,
+    "yesterday_close": 1872.199951171875
+  },
+  "JSFB": {
+    "ema": 566.3475313457437,
+    "yesterday_high": 579.0999755859375,
+    "yesterday_low": 561.2000122070312,
+    "yesterday_close": 562.4000244140625
+  },
+  "RPEL": {
+    "ema": 1268.9523751736194,
+    "yesterday_high": 1299.199951171875,
+    "yesterday_low": 1270.0,
+    "yesterday_close": 1274.800048828125
+  },
+  "BHARTIHEXA": {
+    "ema": 1629.67810439861,
+    "yesterday_high": 1676.800048828125,
+    "yesterday_low": 1636.0999755859375,
+    "yesterday_close": 1644.0
+  },
+  "POLYMED": {
+    "ema": 1687.4143311428277,
+    "yesterday_high": 1682.800048828125,
+    "yesterday_low": 1660.0,
+    "yesterday_close": 1667.199951171875
+  },
+  "HYUNDAI": {
+    "ema": 2095.4975804877777,
+    "yesterday_high": 2047.5,
+    "yesterday_low": 1980.0999755859375,
+    "yesterday_close": 2041.0
+  },
+  "KMEW": {
+    "ema": 2523.312672405435,
+    "yesterday_high": 2623.5,
+    "yesterday_low": 2508.0,
+    "yesterday_close": 2529.0
+  },
+  "WAAREEENER": {
+    "ema": 2672.9218851780765,
+    "yesterday_high": 2650.0,
+    "yesterday_low": 2561.699951171875,
+    "yesterday_close": 2632.0
+  },
+  "BLACKBUCK": {
+    "ema": 549.9319927531809,
+    "yesterday_high": 574.9000244140625,
+    "yesterday_low": 523.5499877929688,
+    "yesterday_close": 540.9500122070312
+  },
+  "RALLIS": {
+    "ema": 217.2715346589114,
+    "yesterday_high": 218.24000549316406,
+    "yesterday_low": 215.72999572753906,
+    "yesterday_close": 217.0
+  },
+  "SETL": {
+    "ema": 272.5783064421649,
+    "yesterday_high": 273.70001220703125,
+    "yesterday_low": 260.29998779296875,
+    "yesterday_close": 270.25
+  },
+  "CARERATING": {
+    "ema": 1700.3296890479812,
+    "yesterday_high": 1725.4000244140625,
+    "yesterday_low": 1687.0999755859375,
+    "yesterday_close": 1707.5999755859375
+  },
+  "INDUSTOWER": {
+    "ema": 389.92374859043906,
+    "yesterday_high": 396.79998779296875,
+    "yesterday_low": 386.5,
+    "yesterday_close": 392.45001220703125
+  },
+  "SAIL": {
+    "ema": 168.86380661047428,
+    "yesterday_high": 171.3000030517578,
+    "yesterday_low": 167.60000610351562,
+    "yesterday_close": 169.0800018310547
+  },
+  "RHIM": {
+    "ema": 391.33993741841476,
+    "yesterday_high": 395.6499938964844,
+    "yesterday_low": 383.29998779296875,
+    "yesterday_close": 390.54998779296875
+  },
+  "PNGJL": {
+    "ema": 673.0425251830715,
+    "yesterday_high": 683.9500122070312,
+    "yesterday_low": 662.5999755859375,
+    "yesterday_close": 663.2999877929688
+  },
+  "SCHNEIDER": {
+    "ema": 1331.846344863899,
+    "yesterday_high": 1305.0,
+    "yesterday_low": 1243.0,
+    "yesterday_close": 1302.0
+  },
+  "SKFINDIA": {
+    "ema": 1478.5479265404454,
+    "yesterday_high": 1493.800048828125,
+    "yesterday_low": 1461.0,
+    "yesterday_close": 1472.4000244140625
+  },
+  "SUBROS": {
+    "ema": 804.7962045565346,
+    "yesterday_high": 788.0,
+    "yesterday_low": 777.0999755859375,
+    "yesterday_close": 783.2999877929688
+  },
+  "SUPREMEIND": {
+    "ema": 3446.5375804258333,
+    "yesterday_high": 3534.0,
+    "yesterday_low": 3430.0,
+    "yesterday_close": 3451.39990234375
+  },
+  "TFCILTD": {
+    "ema": 100.70541701848276,
+    "yesterday_high": 101.88999938964844,
+    "yesterday_low": 99.26000213623047,
+    "yesterday_close": 101.0
+  },
+  "TMPV": {
+    "ema": 334.3309998856481,
+    "yesterday_high": 335.0,
+    "yesterday_low": 328.20001220703125,
+    "yesterday_close": 335.0
+  },
+  "SWARAJENG": {
+    "ema": 3619.0308471352837,
+    "yesterday_high": 3670.0,
+    "yesterday_low": 3562.0,
+    "yesterday_close": 3607.5
+  },
+  "ADANIGREEN": {
+    "ema": 1372.3308149592137,
+    "yesterday_high": 1374.0,
+    "yesterday_low": 1350.0999755859375,
+    "yesterday_close": 1358.0
+  },
+  "SAREGAMA": {
+    "ema": 524.7430886378279,
+    "yesterday_high": 535.9000244140625,
+    "yesterday_low": 520.0,
+    "yesterday_close": 522.75
+  },
+  "BATAINDIA": {
+    "ema": 698.7802017275149,
+    "yesterday_high": 704.9500122070312,
+    "yesterday_low": 696.9500122070312,
+    "yesterday_close": 699.9000244140625
+  },
+  "SHYAMMETL": {
+    "ema": 1028.7013420372045,
+    "yesterday_high": 1031.9000244140625,
+    "yesterday_low": 1013.9500122070312,
+    "yesterday_close": 1020.0
+  },
+  "IRCON": {
+    "ema": 125.97134019149634,
+    "yesterday_high": 126.19000244140625,
+    "yesterday_low": 125.30999755859375,
+    "yesterday_close": 125.75
+  },
+  "ASAHIINDIA": {
+    "ema": 876.4568106921631,
+    "yesterday_high": 878.75,
+    "yesterday_low": 866.5,
+    "yesterday_close": 871.75
+  },
+  "MAZDOCK": {
+    "ema": 2345.058260817958,
+    "yesterday_high": 2339.89990234375,
+    "yesterday_low": 2271.0,
+    "yesterday_close": 2319.10009765625
+  },
+  "GRSE": {
+    "ema": 2607.5088499881895,
+    "yesterday_high": 2605.89990234375,
+    "yesterday_low": 2572.699951171875,
+    "yesterday_close": 2580.0
+  },
+  "CLEAN": {
+    "ema": 733.8907236088195,
+    "yesterday_high": 740.0,
+    "yesterday_low": 723.9500122070312,
+    "yesterday_close": 727.0999755859375
+  },
+  "AXISBANK": {
+    "ema": 1227.9550229851955,
+    "yesterday_high": 1231.699951171875,
+    "yesterday_low": 1220.5,
+    "yesterday_close": 1229.9000244140625
+  },
+  "SANSERA": {
+    "ema": 3281.1355596509416,
+    "yesterday_high": 3252.0,
+    "yesterday_low": 3177.0,
+    "yesterday_close": 3245.0
+  },
+  "SUDEEPPHRM": {
+    "ema": 880.0826395193986,
+    "yesterday_high": 878.0,
+    "yesterday_low": 853.0,
+    "yesterday_close": 856.25
+  },
+  "INTELLECT": {
+    "ema": 713.9506663211499,
+    "yesterday_high": 725.9500122070312,
+    "yesterday_low": 702.0999755859375,
+    "yesterday_close": 704.5
+  },
+  "CIPLA": {
+    "ema": 1468.7047522938108,
+    "yesterday_high": 1483.5,
+    "yesterday_low": 1464.199951171875,
+    "yesterday_close": 1465.0
+  },
+  "ABSLAMC": {
+    "ema": 1012.5558475555439,
+    "yesterday_high": 1022.0,
+    "yesterday_low": 1006.4000244140625,
+    "yesterday_close": 1013.0
+  },
+  "LENSKART": {
+    "ema": 563.6544399158862,
+    "yesterday_high": 566.9500122070312,
+    "yesterday_low": 560.2000122070312,
+    "yesterday_close": 562.0
+  },
+  "JSWCEMENT": {
+    "ema": 132.64677526713976,
+    "yesterday_high": 133.22000122070312,
+    "yesterday_low": 130.72000122070312,
+    "yesterday_close": 131.5
+  },
+  "GROWW": {
+    "ema": 194.59357038562362,
+    "yesterday_high": 194.97999572753906,
+    "yesterday_low": 190.5399932861328,
+    "yesterday_close": 193.0500030517578
+  },
+  "TMCV": {
+    "ema": 424.0261957029808,
+    "yesterday_high": 416.95001220703125,
+    "yesterday_low": 409.20001220703125,
+    "yesterday_close": 415.5
+  },
+  "HINDCOPPER": {
+    "ema": 486.4021052135184,
+    "yesterday_high": 488.54998779296875,
+    "yesterday_low": 477.5,
+    "yesterday_close": 479.95001220703125
+  },
+  "NEPHROPLUS": {
+    "ema": 685.7766377954509,
+    "yesterday_high": 700.0,
+    "yesterday_low": 681.5499877929688,
+    "yesterday_close": 681.5499877929688
+  },
+  "SENORES": {
+    "ema": 1311.7191320230877,
+    "yesterday_high": 1320.9000244140625,
+    "yesterday_low": 1279.699951171875,
+    "yesterday_close": 1292.4000244140625
+  },
+  "STYL": {
+    "ema": 349.8983190694243,
+    "yesterday_high": 362.0,
+    "yesterday_low": 343.0,
+    "yesterday_close": 345.0
+  },
+  "AVANTIFEED": {
+    "ema": 929.5558677769396,
+    "yesterday_high": 962.9000244140625,
+    "yesterday_low": 927.9000244140625,
+    "yesterday_close": 930.0
+  },
+  "EIHOTEL": {
+    "ema": 330.3987274057475,
+    "yesterday_high": 334.3500061035156,
+    "yesterday_low": 330.04998779296875,
+    "yesterday_close": 332.04998779296875
+  },
+  "NAZARA": {
+    "ema": 318.92579684500936,
+    "yesterday_high": 311.70001220703125,
+    "yesterday_low": 303.75,
+    "yesterday_close": 307.6499938964844
+  },
+  "AVALON": {
+    "ema": 1774.4209387090182,
+    "yesterday_high": 1801.300048828125,
+    "yesterday_low": 1669.5999755859375,
+    "yesterday_close": 1759.0
+  },
+  "ARE&M": {
+    "ema": 899.321685309968,
+    "yesterday_high": 921.0499877929688,
+    "yesterday_low": 876.7999877929688,
+    "yesterday_close": 913.0499877929688
+  },
+  "LICI": {
+    "ema": 423.81046669948614,
+    "yesterday_high": 426.6499938964844,
+    "yesterday_low": 419.45001220703125,
+    "yesterday_close": 422.8500061035156
+  },
+  "JUSTDIAL": {
+    "ema": 729.7536109746437,
+    "yesterday_high": 751.4000244140625,
+    "yesterday_low": 731.5499877929688,
+    "yesterday_close": 741.6500244140625
+  },
+  "GODREJCP": {
+    "ema": 1071.2802317034132,
+    "yesterday_high": 1078.9000244140625,
+    "yesterday_low": 1066.0999755859375,
+    "yesterday_close": 1072.0999755859375
+  },
+  "FACT": {
+    "ema": 823.7954803514463,
+    "yesterday_high": 825.0,
+    "yesterday_low": 811.2000122070312,
+    "yesterday_close": 811.2000122070312
+  },
+  "SYNGENE": {
+    "ema": 393.92941957533543,
+    "yesterday_high": 401.8999938964844,
+    "yesterday_low": 375.70001220703125,
+    "yesterday_close": 400.0
+  },
+  "FINCABLES": {
+    "ema": 986.0454838878451,
+    "yesterday_high": 983.4000244140625,
+    "yesterday_low": 968.5999755859375,
+    "yesterday_close": 976.5
   },
   "GABRIEL": {
-    "ema": 1418.3039118389918
+    "ema": 1418.3039118389918,
+    "yesterday_high": 1444.800048828125,
+    "yesterday_low": 1384.5,
+    "yesterday_close": 1399.0
   },
-  "RATEGAIN": {
-    "ema": 913.9412095985509
+  "BERGEPAINT": {
+    "ema": 517.9240462209134,
+    "yesterday_high": 525.7000122070312,
+    "yesterday_low": 512.5499877929688,
+    "yesterday_close": 523.0
   },
-  "WOCKPHARMA": {
-    "ema": 1910.3217625626257
+  "VARROC": {
+    "ema": 672.3011028333051,
+    "yesterday_high": 677.7999877929688,
+    "yesterday_low": 656.7000122070312,
+    "yesterday_close": 664.5999755859375
   },
-  "UTLSOLAR": {
-    "ema": 374.78029900953254
+  "SHRIRAMFIN": {
+    "ema": 1039.1209178017903,
+    "yesterday_high": 1046.9000244140625,
+    "yesterday_low": 1019.5999755859375,
+    "yesterday_close": 1028.800048828125
   },
-  "CGCL": {
-    "ema": 227.46769231699307
+  "BHARATFORG": {
+    "ema": 2179.010538787295,
+    "yesterday_high": 2174.0,
+    "yesterday_low": 2141.5,
+    "yesterday_close": 2164.699951171875
   },
-  "PDSL": {
-    "ema": 356.60857109275884
+  "RAMRAT": {
+    "ema": 448.953068519666,
+    "yesterday_high": 462.3500061035156,
+    "yesterday_low": 450.1000061035156,
+    "yesterday_close": 458.04998779296875
+  },
+  "PRECWIRE": {
+    "ema": 364.9295195007576,
+    "yesterday_high": 365.54998779296875,
+    "yesterday_low": 352.5,
+    "yesterday_close": 354.29998779296875
+  },
+  "BANKINDIA": {
+    "ema": 137.50008712638106,
+    "yesterday_high": 137.69000244140625,
+    "yesterday_low": 136.47999572753906,
+    "yesterday_close": 137.49000549316406
+  },
+  "PNB": {
+    "ema": 111.96172505780218,
+    "yesterday_high": 111.9000015258789,
+    "yesterday_low": 110.47000122070312,
+    "yesterday_close": 111.9000015258789
+  },
+  "DODLA": {
+    "ema": 1043.4321332567577,
+    "yesterday_high": 1048.4000244140625,
+    "yesterday_low": 1037.0999755859375,
+    "yesterday_close": 1042.0
+  },
+  "SHARDACROP": {
+    "ema": 830.7279827090125,
+    "yesterday_high": 839.7000122070312,
+    "yesterday_low": 815.6500244140625,
+    "yesterday_close": 820.0
+  },
+  "FDC": {
+    "ema": 410.93858113064505,
+    "yesterday_high": 415.0,
+    "yesterday_low": 405.6499938964844,
+    "yesterday_close": 408.95001220703125
+  },
+  "INDUSINDBK": {
+    "ema": 1006.4860811848339,
+    "yesterday_high": 1013.5999755859375,
+    "yesterday_low": 999.0,
+    "yesterday_close": 1011.5
+  },
+  "CYIENT": {
+    "ema": 852.830385776336,
+    "yesterday_high": 875.4500122070312,
+    "yesterday_low": 842.9000244140625,
+    "yesterday_close": 848.0
+  },
+  "STYLAMIND": {
+    "ema": 3380.536804918846,
+    "yesterday_high": 3379.699951171875,
+    "yesterday_low": 3292.0,
+    "yesterday_close": 3359.39990234375
+  },
+  "EPIGRAL": {
+    "ema": 1113.929264618207,
+    "yesterday_high": 1125.0,
+    "yesterday_low": 1102.0,
+    "yesterday_close": 1105.800048828125
+  },
+  "CARTRADE": {
+    "ema": 2792.7918431471835,
+    "yesterday_high": 2853.800048828125,
+    "yesterday_low": 2707.699951171875,
+    "yesterday_close": 2765.0
+  },
+  "VIJAYA": {
+    "ema": 1352.7749016835085,
+    "yesterday_high": 1374.699951171875,
+    "yesterday_low": 1351.0999755859375,
+    "yesterday_close": 1352.5999755859375
+  },
+  "CEMPRO": {
+    "ema": 1330.0467082696496,
+    "yesterday_high": 1382.199951171875,
+    "yesterday_low": 1274.5999755859375,
+    "yesterday_close": 1367.0
+  },
+  "CHOICEIN": {
+    "ema": 806.8680928916591,
+    "yesterday_high": 803.0,
+    "yesterday_low": 796.0,
+    "yesterday_close": 796.0
+  },
+  "JINDALSTEL": {
+    "ema": 1095.5233183676867,
+    "yesterday_high": 1102.800048828125,
+    "yesterday_low": 1087.0,
+    "yesterday_close": 1094.0999755859375
+  },
+  "PARAS": {
+    "ema": 1233.510846973733,
+    "yesterday_high": 1221.699951171875,
+    "yesterday_low": 1192.300048828125,
+    "yesterday_close": 1211.0999755859375
+  },
+  "ANANDRATHI": {
+    "ema": 2055.552235230571,
+    "yesterday_high": 2064.800048828125,
+    "yesterday_low": 2031.199951171875,
+    "yesterday_close": 2039.300048828125
+  },
+  "BSOFT": {
+    "ema": 305.52522812850657,
+    "yesterday_high": 318.70001220703125,
+    "yesterday_low": 305.5,
+    "yesterday_close": 307.0
+  },
+  "GLENMARK": {
+    "ema": 2226.432061028802,
+    "yesterday_high": 2268.0,
+    "yesterday_low": 2183.39990234375,
+    "yesterday_close": 2206.800048828125
+  },
+  "ATHERENERG": {
+    "ema": 1248.7010391427566,
+    "yesterday_high": 1264.800048828125,
+    "yesterday_low": 1233.4000244140625,
+    "yesterday_close": 1240.699951171875
+  },
+  "RAYMONDREL": {
+    "ema": 650.7264704717974,
+    "yesterday_high": 656.0,
+    "yesterday_low": 642.1500244140625,
+    "yesterday_close": 644.5999755859375
+  },
+  "HDBFS": {
+    "ema": 680.5002178184961,
+    "yesterday_high": 688.0,
+    "yesterday_low": 673.0,
+    "yesterday_close": 679.25
+  },
+  "JAINREC": {
+    "ema": 343.21854429350947,
+    "yesterday_high": 344.5,
+    "yesterday_low": 333.0,
+    "yesterday_close": 343.0
+  },
+  "WEWORK": {
+    "ema": 719.2271077542974,
+    "yesterday_high": 712.9500122070312,
+    "yesterday_low": 697.0499877929688,
+    "yesterday_close": 710.5499877929688
+  },
+  "BLUESTONE": {
+    "ema": 780.4385219611968,
+    "yesterday_high": 784.2999877929688,
+    "yesterday_low": 755.0499877929688,
+    "yesterday_close": 764.0
+  },
+  "ORKLAINDIA": {
+    "ema": 564.0705794364795,
+    "yesterday_high": 573.0,
+    "yesterday_low": 557.7999877929688,
+    "yesterday_close": 560.8499755859375
+  },
+  "CGPOWER": {
+    "ema": 850.8711815759146,
+    "yesterday_high": 835.5,
+    "yesterday_low": 815.0499877929688,
+    "yesterday_close": 831.8499755859375
+  },
+  "SCI": {
+    "ema": 282.6343865017392,
+    "yesterday_high": 281.0,
+    "yesterday_low": 275.3500061035156,
+    "yesterday_close": 278.20001220703125
+  },
+  "MEESHO": {
+    "ema": 181.23947971410269,
+    "yesterday_high": 182.8800048828125,
+    "yesterday_low": 173.5,
+    "yesterday_close": 182.25
+  },
+  "KSHINTL": {
+    "ema": 842.3065084844809,
+    "yesterday_high": 839.3499755859375,
+    "yesterday_low": 813.7000122070312,
+    "yesterday_close": 830.9500122070312
+  },
+  "SEDEMAC": {
+    "ema": 2696.6001635142147,
+    "yesterday_high": 2706.89990234375,
+    "yesterday_low": 2626.300048828125,
+    "yesterday_close": 2650.0
+  },
+  "KISSHT": {
+    "ema": 326.2908255274682,
+    "yesterday_high": 340.8999938964844,
+    "yesterday_low": 309.3999938964844,
+    "yesterday_close": 317.54998779296875
+  },
+  "SBIFUNDS": {
+    "ema": 577.2646929074242,
+    "yesterday_high": 579.4500122070312,
+    "yesterday_low": 565.1500244140625,
+    "yesterday_close": 571.0
+  },
+  "FRACTAL": {
+    "ema": 796.9674583234836,
+    "yesterday_high": 799.2000122070312,
+    "yesterday_low": 770.0,
+    "yesterday_close": 773.0
+  },
+  "AWL": {
+    "ema": 189.70939841423063,
+    "yesterday_high": 189.8300018310547,
+    "yesterday_low": 187.0,
+    "yesterday_close": 187.57000732421875
+  },
+  "ZYDUSLIFE": {
+    "ema": 1120.9305619366385,
+    "yesterday_high": 1131.0,
+    "yesterday_low": 1112.4000244140625,
+    "yesterday_close": 1115.0
+  },
+  "SKIPPER": {
+    "ema": 525.7740099243604,
+    "yesterday_high": 535.6500244140625,
+    "yesterday_low": 518.2000122070312,
+    "yesterday_close": 526.5
+  },
+  "RKFORGE": {
+    "ema": 635.238254850096,
+    "yesterday_high": 642.0,
+    "yesterday_low": 623.2999877929688,
+    "yesterday_close": 626.0499877929688
+  },
+  "EPL": {
+    "ema": 230.1492011996961,
+    "yesterday_high": 235.7100067138672,
+    "yesterday_low": 229.8000030517578,
+    "yesterday_close": 230.72000122070312
+  },
+  "VAIBHAVGBL": {
+    "ema": 266.9977090939968,
+    "yesterday_high": 272.0,
+    "yesterday_low": 263.0,
+    "yesterday_close": 264.0
+  },
+  "TCI": {
+    "ema": 929.3817270732376,
+    "yesterday_high": 943.0499877929688,
+    "yesterday_low": 910.0,
+    "yesterday_close": 931.1500244140625
+  },
+  "HAVELLS": {
+    "ema": 1251.9595720641055,
+    "yesterday_high": 1264.199951171875,
+    "yesterday_low": 1227.9000244140625,
+    "yesterday_close": 1263.0
+  },
+  "DATAMATICS": {
+    "ema": 837.0440871746822,
+    "yesterday_high": 854.9500122070312,
+    "yesterday_low": 819.4000244140625,
+    "yesterday_close": 821.5999755859375
+  },
+  "POONAWALLA": {
+    "ema": 471.5575907620012,
+    "yesterday_high": 482.95001220703125,
+    "yesterday_low": 472.04998779296875,
+    "yesterday_close": 476.8999938964844
+  },
+  "GLAXO": {
+    "ema": 2612.89354810575,
+    "yesterday_high": 2639.39990234375,
+    "yesterday_low": 2592.60009765625,
+    "yesterday_close": 2609.0
+  },
+  "PPLPHARMA": {
+    "ema": 197.3209634614237,
+    "yesterday_high": 202.2100067138672,
+    "yesterday_low": 192.77999877929688,
+    "yesterday_close": 196.72000122070312
   },
   "DEEDEV": {
     "ema": 667.8416741095755
   },
-  "SUDEEPPHRM": {
-    "ema": 880.0826395193986
+  "ICIL": {
+    "ema": 404.31594951442804,
+    "yesterday_high": 413.20001220703125,
+    "yesterday_low": 398.1499938964844,
+    "yesterday_close": 402.6000061035156
+  },
+  "HNDFDS": {
+    "ema": 573.8262665015359,
+    "yesterday_high": 580.0,
+    "yesterday_low": 565.0999755859375,
+    "yesterday_close": 574.0499877929688
+  },
+  "GRASIM": {
+    "ema": 3110.931824669155,
+    "yesterday_high": 3115.39990234375,
+    "yesterday_low": 3085.5,
+    "yesterday_close": 3104.800048828125
+  },
+  "SYRMA": {
+    "ema": 1371.057557483655,
+    "yesterday_high": 1468.0,
+    "yesterday_low": 1361.9000244140625,
+    "yesterday_close": 1377.800048828125
+  },
+  "MBAPL": {
+    "ema": 162.96541426353355,
+    "yesterday_high": 167.9499969482422,
+    "yesterday_low": 162.5,
+    "yesterday_close": 167.0
+  },
+  "GUJALKALI": {
+    "ema": 672.3244663399109,
+    "yesterday_high": 688.9000244140625,
+    "yesterday_low": 666.2000122070312,
+    "yesterday_close": 668.2999877929688
+  },
+  "PETRONET": {
+    "ema": 278.3739244789005,
+    "yesterday_high": 281.1000061035156,
+    "yesterday_low": 275.3500061035156,
+    "yesterday_close": 279.0
   },
   "EMCURE": {
-    "ema": 1937.0380291985791
+    "ema": 1937.0380291985791,
+    "yesterday_high": 1935.0,
+    "yesterday_low": 1900.699951171875,
+    "yesterday_close": 1911.199951171875
   },
-  "LOTUSDEV": {
-    "ema": 194.575181105033
+  "ASTRAMICRO": {
+    "ema": 1824.7028791781242,
+    "yesterday_high": 1769.800048828125,
+    "yesterday_low": 1717.5,
+    "yesterday_close": 1728.0999755859375
   },
-  "PRECWIRE": {
-    "ema": 364.9295195007576
+  "EMIL": {
+    "ema": 130.58326615767675,
+    "yesterday_high": 133.08999633789062,
+    "yesterday_low": 129.0399932861328,
+    "yesterday_close": 129.50999450683594
   },
-  "JSLL": {
-    "ema": 573.8581799594118
+  "GREAVESCOT": {
+    "ema": 237.13607285790363,
+    "yesterday_high": 238.9499969482422,
+    "yesterday_low": 231.35000610351562,
+    "yesterday_close": 231.80999755859375
   },
-  "WESTLIFE": {
-    "ema": 492.0680643731287
+  "GODFRYPHLP": {
+    "ema": 2120.4133462436034,
+    "yesterday_high": 2138.699951171875,
+    "yesterday_low": 2055.89990234375,
+    "yesterday_close": 2131.800048828125
   },
-  "INDIGOPNTS": {
-    "ema": 1098.6705209593936
+  "AMBUJACEM": {
+    "ema": 432.3605307230441,
+    "yesterday_high": 435.79998779296875,
+    "yesterday_low": 427.1000061035156,
+    "yesterday_close": 435.3999938964844
   },
-  "AEGISLOG": {
-    "ema": 1256.6913129125892
-  },
-  "MAZDOCK": {
-    "ema": 2345.058260817958
-  },
-  "SKFINDUS": {
-    "ema": 2705.1192425050153
-  },
-  "BAJAJFINSV": {
-    "ema": 1963.0150362017725
-  },
-  "WEWORK": {
-    "ema": 719.2271077542974
-  },
-  "BLUESTONE": {
-    "ema": 780.4385219611968
-  },
-  "QUESS": {
-    "ema": 322.17222253677164
-  },
-  "THELEELA": {
-    "ema": 477.1275570384441
-  },
-  "BLISSGVS": {
-    "ema": 461.528469761449
-  },
-  "MSTCLTD": {
-    "ema": 611.3774714494883
-  },
-  "LTFOODS": {
-    "ema": 397.2719420767145
-  },
-  "NAZARA": {
-    "ema": 318.92579684500936
-  },
-  "ASKAUTOLTD": {
-    "ema": 518.8215056141547
-  },
-  "QPOWER": {
-    "ema": 1110.3360903741589
-  },
-  "ABREL": {
-    "ema": 1398.2968564594103
-  },
-  "BLUEJET": {
-    "ema": 609.7018616752806
+  "IGIL": {
+    "ema": 346.47763059089584,
+    "yesterday_high": 350.25,
+    "yesterday_low": 339.29998779296875,
+    "yesterday_close": 345.75
   },
   "GALLANTT": {
-    "ema": 598.1661940920367
+    "ema": 598.1661940920367,
+    "yesterday_high": 633.4500122070312,
+    "yesterday_low": 582.4500122070312,
+    "yesterday_close": 587.8499755859375
   },
-  "SCHNEIDER": {
-    "ema": 1331.846344863899
+  "PVRINOX": {
+    "ema": 1132.8601721731352,
+    "yesterday_high": 1150.5999755859375,
+    "yesterday_low": 1119.8499755859375,
+    "yesterday_close": 1125.0
   },
-  "SIGMAADV": {
-    "ema": 609.614625984423
+  "FIEMIND": {
+    "ema": 2334.5412140274725,
+    "yesterday_high": 2386.0,
+    "yesterday_low": 2324.0,
+    "yesterday_close": 2372.0
   },
-  "OPTIEMUS": {
-    "ema": 626.0546588879474
+  "GESHIP": {
+    "ema": 1368.1747688811784,
+    "yesterday_high": 1398.9000244140625,
+    "yesterday_low": 1361.0,
+    "yesterday_close": 1377.0
   },
-  "HINDCOPPER": {
-    "ema": 486.4021052135184
+  "SOBHA": {
+    "ema": 1359.2355058422302,
+    "yesterday_high": 1364.5,
+    "yesterday_low": 1338.0,
+    "yesterday_close": 1347.5999755859375
   },
-  "JIOFIN": {
-    "ema": 248.16864481864658
+  "AGI": {
+    "ema": 707.7319481550322,
+    "yesterday_high": 713.0,
+    "yesterday_low": 698.8499755859375,
+    "yesterday_close": 704.0
   },
-  "SUBROS": {
-    "ema": 804.7962045565346
+  "KIRLFER": {
+    "ema": 471.16878844843393,
+    "yesterday_high": 474.5,
+    "yesterday_low": 464.0,
+    "yesterday_close": 465.70001220703125
   },
-  "APOLLO": {
-    "ema": 384.48772457919824
+  "SONATSOFTW": {
+    "ema": 312.9057609280393,
+    "yesterday_high": 327.3999938964844,
+    "yesterday_low": 307.54998779296875,
+    "yesterday_close": 308.0
+  },
+  "GOKULAGRO": {
+    "ema": 222.84263441837973,
+    "yesterday_high": 238.41000366210938,
+    "yesterday_low": 223.47999572753906,
+    "yesterday_close": 225.14999389648438
+  },
+  "INDHOTEL": {
+    "ema": 742.9087877887802,
+    "yesterday_high": 750.5,
+    "yesterday_low": 734.0,
+    "yesterday_close": 747.0
+  },
+  "MOTILALOFS": {
+    "ema": 852.8937880498829,
+    "yesterday_high": 857.5,
+    "yesterday_low": 835.0999755859375,
+    "yesterday_close": 836.7999877929688
+  },
+  "TATAINVEST": {
+    "ema": 676.3118143507521,
+    "yesterday_high": 683.0999755859375,
+    "yesterday_low": 673.5999755859375,
+    "yesterday_close": 678.6500244140625
+  },
+  "RAIN": {
+    "ema": 223.00741189643472,
+    "yesterday_high": 224.8000030517578,
+    "yesterday_low": 220.0399932861328,
+    "yesterday_close": 221.3699951171875
+  },
+  "BECTORFOOD": {
+    "ema": 211.38613310769048,
+    "yesterday_high": 219.3699951171875,
+    "yesterday_low": 211.24000549316406,
+    "yesterday_close": 212.5
+  },
+  "IPCALAB": {
+    "ema": 1762.3763058315917,
+    "yesterday_high": 1789.9000244140625,
+    "yesterday_low": 1743.5999755859375,
+    "yesterday_close": 1757.0
+  },
+  "TRANSRAILL": {
+    "ema": 495.44725584933747,
+    "yesterday_high": 495.70001220703125,
+    "yesterday_low": 486.95001220703125,
+    "yesterday_close": 487.8999938964844
+  },
+  "PATANJALI": {
+    "ema": 354.6002692705551,
+    "yesterday_high": 361.79998779296875,
+    "yesterday_low": 355.0,
+    "yesterday_close": 355.25
+  },
+  "LLOYDSME": {
+    "ema": 2039.641381945668,
+    "yesterday_high": 2055.0,
+    "yesterday_low": 1998.300048828125,
+    "yesterday_close": 2015.0999755859375
+  },
+  "OIL": {
+    "ema": 453.6030903375831,
+    "yesterday_high": 459.20001220703125,
+    "yesterday_low": 447.75,
+    "yesterday_close": 456.8999938964844
+  },
+  "WHIRLPOOL": {
+    "ema": 800.6779517850246,
+    "yesterday_high": 824.9000244140625,
+    "yesterday_low": 784.7999877929688,
+    "yesterday_close": 805.7000122070312
+  },
+  "COHANCE": {
+    "ema": 425.9852854557226,
+    "yesterday_high": 430.5,
+    "yesterday_low": 422.20001220703125,
+    "yesterday_close": 425.29998779296875
+  },
+  "ABCAPITAL": {
+    "ema": 401.0079669856232,
+    "yesterday_high": 398.3999938964844,
+    "yesterday_low": 392.1499938964844,
+    "yesterday_close": 394.0
+  },
+  "KARURVYSYA": {
+    "ema": 342.1358434379625,
+    "yesterday_high": 344.5,
+    "yesterday_low": 339.29998779296875,
+    "yesterday_close": 341.0
+  },
+  "KRISHANA": {
+    "ema": 176.89212841547157,
+    "yesterday_high": 181.85000610351562,
+    "yesterday_low": 162.64999389648438,
+    "yesterday_close": 180.75
+  },
+  "KAJARIACER": {
+    "ema": 1209.088729463934,
+    "yesterday_high": 1220.300048828125,
+    "yesterday_low": 1186.0,
+    "yesterday_close": 1190.0
+  },
+  "HINDPETRO": {
+    "ema": 390.7865368384106,
+    "yesterday_high": 393.25,
+    "yesterday_low": 386.29998779296875,
+    "yesterday_close": 388.3999938964844
+  },
+  "DLF": {
+    "ema": 659.8687040494551,
+    "yesterday_high": 669.4000244140625,
+    "yesterday_low": 652.0499877929688,
+    "yesterday_close": 655.5999755859375
+  },
+  "TIMKEN": {
+    "ema": 3116.213957118477,
+    "yesterday_high": 3144.199951171875,
+    "yesterday_low": 3090.800048828125,
+    "yesterday_close": 3097.60009765625
+  },
+  "PDSL": {
+    "ema": 356.60857109275884,
+    "yesterday_high": 356.1499938964844,
+    "yesterday_low": 340.5,
+    "yesterday_close": 345.04998779296875
+  },
+  "PRUDENT": {
+    "ema": 3210.7002018943344,
+    "yesterday_high": 3228.39990234375,
+    "yesterday_low": 3090.10009765625,
+    "yesterday_close": 3221.39990234375
+  },
+  "MANKIND": {
+    "ema": 2519.2090998034196,
+    "yesterday_high": 2605.0,
+    "yesterday_low": 2560.699951171875,
+    "yesterday_close": 2575.89990234375
+  },
+  "KIRLPNU": {
+    "ema": 1477.2064909054811,
+    "yesterday_high": 1494.300048828125,
+    "yesterday_low": 1457.0,
+    "yesterday_close": 1460.800048828125
+  },
+  "IONEXCHANG": {
+    "ema": 421.3943300593329,
+    "yesterday_high": 422.3999938964844,
+    "yesterday_low": 412.0,
+    "yesterday_close": 417.5
+  },
+  "SARDAEN": {
+    "ema": 516.3681201542606,
+    "yesterday_high": 525.0,
+    "yesterday_low": 510.79998779296875,
+    "yesterday_close": 511.0
+  },
+  "PARADEEP": {
+    "ema": 148.7005563874148,
+    "yesterday_high": 158.39999389648438,
+    "yesterday_low": 151.36000061035156,
+    "yesterday_close": 153.77000427246094
+  },
+  "BAJAJFINSV": {
+    "ema": 1963.0150362017725,
+    "yesterday_high": 1932.800048828125,
+    "yesterday_low": 1892.300048828125,
+    "yesterday_close": 1909.4000244140625
+  },
+  "MHRIL": {
+    "ema": 217.05722450559486,
+    "yesterday_high": 216.38999938964844,
+    "yesterday_low": 213.75,
+    "yesterday_close": 215.91000366210938
+  },
+  "NEOGEN": {
+    "ema": 2024.5359228159955,
+    "yesterday_high": 2045.0999755859375,
+    "yesterday_low": 1965.0,
+    "yesterday_close": 1988.0999755859375
+  },
+  "KIOCL": {
+    "ema": 360.0424977123626,
+    "yesterday_high": 362.0,
+    "yesterday_low": 352.0,
+    "yesterday_close": 356.20001220703125
+  },
+  "SBICARD": {
+    "ema": 659.158145103449,
+    "yesterday_high": 662.25,
+    "yesterday_low": 654.0999755859375,
+    "yesterday_close": 657.7999877929688
+  },
+  "DBL": {
+    "ema": 428.4068269864077,
+    "yesterday_high": 429.1000061035156,
+    "yesterday_low": 420.0,
+    "yesterday_close": 420.54998779296875
+  },
+  "ADANIPOWER": {
+    "ema": 210.33272479486487,
+    "yesterday_high": 211.19000244140625,
+    "yesterday_low": 207.1999969482422,
+    "yesterday_close": 209.0
+  },
+  "TVSSCS": {
+    "ema": 136.23233893412487,
+    "yesterday_high": 137.8300018310547,
+    "yesterday_low": 135.1999969482422,
+    "yesterday_close": 135.64999389648438
+  },
+  "SANDUMA": {
+    "ema": 212.44137262597934,
+    "yesterday_high": 218.25,
+    "yesterday_low": 210.0,
+    "yesterday_close": 214.00999450683594
+  },
+  "STYRENIX": {
+    "ema": 2488.318244685833,
+    "yesterday_high": 2480.0,
+    "yesterday_low": 2426.10009765625,
+    "yesterday_close": 2430.0
+  },
+  "RRKABEL": {
+    "ema": 2605.431532414295,
+    "yesterday_high": 2622.0,
+    "yesterday_low": 2543.199951171875,
+    "yesterday_close": 2562.199951171875
+  },
+  "SKFINDUS": {
+    "ema": 2705.1192425050153,
+    "yesterday_high": 2697.89990234375,
+    "yesterday_low": 2658.300048828125,
+    "yesterday_close": 2671.60009765625
+  },
+  "MAXESTATES": {
+    "ema": 391.3731612994828,
+    "yesterday_high": 390.20001220703125,
+    "yesterday_low": 386.3999938964844,
+    "yesterday_close": 387.8999938964844
+  },
+  "MAHSEAMLES": {
+    "ema": 570.0276770948414,
+    "yesterday_high": 582.0,
+    "yesterday_low": 571.5999755859375,
+    "yesterday_close": 572.5499877929688
+  },
+  "GRAVITA": {
+    "ema": 1625.5777770241584,
+    "yesterday_high": 1638.4000244140625,
+    "yesterday_low": 1575.0999755859375,
+    "yesterday_close": 1580.0
+  },
+  "BDL": {
+    "ema": 1254.6711538198865,
+    "yesterday_high": 1264.9000244140625,
+    "yesterday_low": 1240.199951171875,
+    "yesterday_close": 1246.199951171875
+  },
+  "HONASA": {
+    "ema": 450.8105529597368,
+    "yesterday_high": 452.29998779296875,
+    "yesterday_low": 442.6000061035156,
+    "yesterday_close": 449.0
+  },
+  "ICICIGI": {
+    "ema": 1640.6988587622102,
+    "yesterday_high": 1647.300048828125,
+    "yesterday_low": 1620.0999755859375,
+    "yesterday_close": 1640.0
+  },
+  "VRLLOG": {
+    "ema": 262.43493092542457,
+    "yesterday_high": 264.7699890136719,
+    "yesterday_low": 258.1000061035156,
+    "yesterday_close": 259.1000061035156
+  },
+  "GODIGIT": {
+    "ema": 253.49861850011075,
+    "yesterday_high": 257.79998779296875,
+    "yesterday_low": 252.0500030517578,
+    "yesterday_close": 254.9499969482422
+  },
+  "BANSALWIRE": {
+    "ema": 314.8674243679009,
+    "yesterday_high": 318.70001220703125,
+    "yesterday_low": 312.5,
+    "yesterday_close": 315.04998779296875
+  },
+  "TI": {
+    "ema": 463.26629591486994,
+    "yesterday_high": 476.6499938964844,
+    "yesterday_low": 459.6000061035156,
+    "yesterday_close": 467.95001220703125
+  },
+  "JSWINFRA": {
+    "ema": 316.6132895284824,
+    "yesterday_high": 320.1000061035156,
+    "yesterday_low": 310.25,
+    "yesterday_close": 318.8999938964844
+  },
+  "ASKAUTOLTD": {
+    "ema": 518.8215056141547,
+    "yesterday_high": 524.6500244140625,
+    "yesterday_low": 505.8500061035156,
+    "yesterday_close": 509.0
+  },
+  "CGCL": {
+    "ema": 227.46769231699307,
+    "yesterday_high": 227.97000122070312,
+    "yesterday_low": 218.61000061035156,
+    "yesterday_close": 222.11000061035156
+  },
+  "KSB": {
+    "ema": 849.5692665829596,
+    "yesterday_high": 850.4000244140625,
+    "yesterday_low": 828.2999877929688,
+    "yesterday_close": 849.5
+  },
+  "PRESTIGE": {
+    "ema": 1625.4607887061793,
+    "yesterday_high": 1630.800048828125,
+    "yesterday_low": 1590.0,
+    "yesterday_close": 1590.0
+  },
+  "MSTCLTD": {
+    "ema": 611.3774714494883,
+    "yesterday_high": 610.0499877929688,
+    "yesterday_low": 600.1500244140625,
+    "yesterday_close": 602.25
+  },
+  "HAPPYFORGE": {
+    "ema": 1655.5879173271103,
+    "yesterday_high": 1674.199951171875,
+    "yesterday_low": 1640.0999755859375,
+    "yesterday_close": 1661.5999755859375
+  },
+  "IOLCP": {
+    "ema": 146.79112996335428,
+    "yesterday_high": 147.6699981689453,
+    "yesterday_low": 144.1999969482422,
+    "yesterday_close": 144.49000549316406
+  },
+  "MUTHOOTMF": {
+    "ema": 250.70842591718343,
+    "yesterday_high": 255.58999633789062,
+    "yesterday_low": 245.2100067138672,
+    "yesterday_close": 246.8800048828125
+  },
+  "INDIAMART": {
+    "ema": 1767.8754163835315,
+    "yesterday_high": 1757.9000244140625,
+    "yesterday_low": 1730.0999755859375,
+    "yesterday_close": 1742.0
+  },
+  "ACC": {
+    "ema": 1356.8793775083332,
+    "yesterday_high": 1370.0,
+    "yesterday_low": 1345.300048828125,
+    "yesterday_close": 1356.5
+  },
+  "ENTERO": {
+    "ema": 1243.3291580418957,
+    "yesterday_high": 1252.0,
+    "yesterday_low": 1211.4000244140625,
+    "yesterday_close": 1243.0
+  },
+  "GOLDIAM": {
+    "ema": 365.4186516481491,
+    "yesterday_high": 373.70001220703125,
+    "yesterday_low": 355.0,
+    "yesterday_close": 361.54998779296875
+  },
+  "MPSLTD": {
+    "ema": 2668.33426097187,
+    "yesterday_high": 2723.89990234375,
+    "yesterday_low": 2637.5,
+    "yesterday_close": 2650.199951171875
+  },
+  "JSL": {
+    "ema": 732.1052749036821,
+    "yesterday_high": 739.0,
+    "yesterday_low": 726.7999877929688,
+    "yesterday_close": 738.8499755859375
+  },
+  "AFFLE": {
+    "ema": 1610.7111459590415,
+    "yesterday_high": 1665.0,
+    "yesterday_low": 1615.0,
+    "yesterday_close": 1615.0
+  },
+  "SUPRAJIT": {
+    "ema": 500.96144488261507,
+    "yesterday_high": 504.0,
+    "yesterday_low": 492.8500061035156,
+    "yesterday_close": 499.45001220703125
+  },
+  "GENUSPOWER": {
+    "ema": 312.4724865426419,
+    "yesterday_high": 313.6000061035156,
+    "yesterday_low": 306.95001220703125,
+    "yesterday_close": 307.54998779296875
+  },
+  "ADANIENT": {
+    "ema": 3023.9862500158342,
+    "yesterday_high": 3059.199951171875,
+    "yesterday_low": 2996.699951171875,
+    "yesterday_close": 3050.0
+  },
+  "BIKAJI": {
+    "ema": 644.576119610431,
+    "yesterday_high": 654.0999755859375,
+    "yesterday_low": 638.0,
+    "yesterday_close": 643.7000122070312
+  },
+  "MEDANTA": {
+    "ema": 1402.4277060563797,
+    "yesterday_high": 1423.0,
+    "yesterday_low": 1395.0999755859375,
+    "yesterday_close": 1416.4000244140625
+  },
+  "RAYMONDLSL": {
+    "ema": 722.8560914464606,
+    "yesterday_high": 753.0,
+    "yesterday_low": 706.7999877929688,
+    "yesterday_close": 731.7000122070312
+  },
+  "QUESS": {
+    "ema": 322.17222253677164,
+    "yesterday_high": 319.70001220703125,
+    "yesterday_low": 302.1000061035156,
+    "yesterday_close": 310.79998779296875
+  },
+  "TDPOWERSYS": {
+    "ema": 1100.1010019743555,
+    "yesterday_high": 1068.0,
+    "yesterday_low": 930.2999877929688,
+    "yesterday_close": 1060.5999755859375
+  },
+  "PCBL": {
+    "ema": 324.6655377952673,
+    "yesterday_high": 362.0,
+    "yesterday_low": 325.8500061035156,
+    "yesterday_close": 326.8999938964844
+  },
+  "SHAKTIPUMP": {
+    "ema": 522.4104089085641,
+    "yesterday_high": 526.9500122070312,
+    "yesterday_low": 517.5999755859375,
+    "yesterday_close": 524.75
+  },
+  "PGEL": {
+    "ema": 610.8014779353358,
+    "yesterday_high": 622.2999877929688,
+    "yesterday_low": 606.2999877929688,
+    "yesterday_close": 615.0
+  },
+  "PRSMJOHNSN": {
+    "ema": 106.40406566305037,
+    "yesterday_high": 108.0,
+    "yesterday_low": 104.30999755859375,
+    "yesterday_close": 104.8499984741211
+  },
+  "GICRE": {
+    "ema": 357.4323036510882,
+    "yesterday_high": 359.0,
+    "yesterday_low": 356.3500061035156,
+    "yesterday_close": 356.79998779296875
+  },
+  "RELIANCE": {
+    "ema": 1292.56829948961,
+    "yesterday_high": 1296.9000244140625,
+    "yesterday_low": 1276.0,
+    "yesterday_close": 1292.9000244140625
+  },
+  "SAILIFE": {
+    "ema": 1314.3025470813886,
+    "yesterday_high": 1320.0,
+    "yesterday_low": 1301.199951171875,
+    "yesterday_close": 1316.5
+  },
+  "THELEELA": {
+    "ema": 477.1275570384441,
+    "yesterday_high": 473.5,
+    "yesterday_low": 463.29998779296875,
+    "yesterday_close": 468.1000061035156
+  },
+  "VENTIVE": {
+    "ema": 625.7269457322426,
+    "yesterday_high": 635.5499877929688,
+    "yesterday_low": 627.0,
+    "yesterday_close": 632.1500244140625
+  },
+  "ONESOURCE": {
+    "ema": 1688.458028647108,
+    "yesterday_high": 1735.0,
+    "yesterday_low": 1670.0,
+    "yesterday_close": 1688.300048828125
+  },
+  "SUNDRMFAST": {
+    "ema": 968.5202487443378,
+    "yesterday_high": 976.4000244140625,
+    "yesterday_low": 957.75,
+    "yesterday_close": 966.1500244140625
+  },
+  "SUDARSCHEM": {
+    "ema": 1016.4707309144247,
+    "yesterday_high": 1028.6500244140625,
+    "yesterday_low": 1004.0999755859375,
+    "yesterday_close": 1008.0999755859375
+  },
+  "SIEMENS": {
+    "ema": 3712.572096724986,
+    "yesterday_high": 3665.0,
+    "yesterday_low": 3582.60009765625,
+    "yesterday_close": 3660.89990234375
+  },
+  "TATASTEEL": {
+    "ema": 187.62342806516716,
+    "yesterday_high": 188.6300048828125,
+    "yesterday_low": 186.10000610351562,
+    "yesterday_close": 186.9199981689453
+  },
+  "RITES": {
+    "ema": 216.33176374531473,
+    "yesterday_high": 218.88999938964844,
+    "yesterday_low": 216.16000366210938,
+    "yesterday_close": 217.8300018310547
+  },
+  "BASF": {
+    "ema": 3688.0041023143503,
+    "yesterday_high": 3740.0,
+    "yesterday_low": 3670.10009765625,
+    "yesterday_close": 3680.0
+  },
+  "AEGISLOG": {
+    "ema": 1256.6913129125892,
+    "yesterday_high": 1289.4000244140625,
+    "yesterday_low": 1243.199951171875,
+    "yesterday_close": 1255.0
+  },
+  "ZEEL": {
+    "ema": 112.12213787695926,
+    "yesterday_high": 113.5,
+    "yesterday_low": 106.5199966430664,
+    "yesterday_close": 112.69000244140625
+  },
+  "MOTHERSON": {
+    "ema": 148.6542817794033,
+    "yesterday_high": 147.33999633789062,
+    "yesterday_low": 144.8800048828125,
+    "yesterday_close": 146.5
+  },
+  "HDFCAMC": {
+    "ema": 2572.2668944993356,
+    "yesterday_high": 2554.699951171875,
+    "yesterday_low": 2531.60009765625,
+    "yesterday_close": 2546.5
+  },
+  "BHEL": {
+    "ema": 406.4746392293511,
+    "yesterday_high": 405.6499938964844,
+    "yesterday_low": 399.79998779296875,
+    "yesterday_close": 403.0
+  },
+  "MPHASIS": {
+    "ema": 2359.5853678469143,
+    "yesterday_high": 2420.0,
+    "yesterday_low": 2337.39990234375,
+    "yesterday_close": 2346.699951171875
   },
   "HIRECT": {
-    "ema": 1324.886518913187
+    "ema": 1324.886518913187,
+    "yesterday_high": 1353.0,
+    "yesterday_low": 1291.0,
+    "yesterday_close": 1296.0
+  },
+  "HDFCLIFE": {
+    "ema": 549.5733061183195,
+    "yesterday_high": 558.7999877929688,
+    "yesterday_low": 544.9000244140625,
+    "yesterday_close": 544.9000244140625
+  },
+  "ENGINERSIN": {
+    "ema": 223.4235094673613,
+    "yesterday_high": 225.35000610351562,
+    "yesterday_low": 221.1999969482422,
+    "yesterday_close": 221.97999572753906
+  },
+  "ICICIBANK": {
+    "ema": 1433.8139421950173,
+    "yesterday_high": 1440.699951171875,
+    "yesterday_low": 1422.699951171875,
+    "yesterday_close": 1429.5
+  },
+  "NUVOCO": {
+    "ema": 348.6353221994407,
+    "yesterday_high": 353.0,
+    "yesterday_low": 347.6000061035156,
+    "yesterday_close": 350.0
+  },
+  "ABREL": {
+    "ema": 1398.2968564594103,
+    "yesterday_high": 1407.4000244140625,
+    "yesterday_low": 1370.5999755859375,
+    "yesterday_close": 1382.9000244140625
+  },
+  "VISHNU": {
+    "ema": 618.5603259580514,
+    "yesterday_high": 629.0,
+    "yesterday_low": 613.9000244140625,
+    "yesterday_close": 618.0999755859375
+  },
+  "BALKRISIND": {
+    "ema": 2326.6351789229298,
+    "yesterday_high": 2333.0,
+    "yesterday_low": 2212.89990234375,
+    "yesterday_close": 2310.89990234375
+  },
+  "VAML": {
+    "ema": 449.5912320366036,
+    "yesterday_high": 463.5,
+    "yesterday_low": 433.20001220703125,
+    "yesterday_close": 456.8999938964844
+  },
+  "ATLANTAELE": {
+    "ema": 1536.0143224004305,
+    "yesterday_high": 1540.0,
+    "yesterday_low": 1496.0,
+    "yesterday_close": 1521.0
+  },
+  "JSLL": {
+    "ema": 573.8581799594118,
+    "yesterday_high": 571.8499755859375,
+    "yesterday_low": 558.25,
+    "yesterday_close": 567.0
+  },
+  "SHREEJISPG": {
+    "ema": 639.1700308892952,
+    "yesterday_high": 646.0,
+    "yesterday_low": 622.5,
+    "yesterday_close": 643.4500122070312
+  },
+  "URBANCO": {
+    "ema": 130.50585603636418,
+    "yesterday_high": 131.97999572753906,
+    "yesterday_low": 129.61000061035156,
+    "yesterday_close": 130.7100067138672
+  },
+  "FINPIPE": {
+    "ema": 162.87420998084184,
+    "yesterday_high": 165.3000030517578,
+    "yesterday_low": 162.25,
+    "yesterday_close": 162.91000366210938
+  },
+  "OLECTRA": {
+    "ema": 1328.86293057845,
+    "yesterday_high": 1344.699951171875,
+    "yesterday_low": 1314.0,
+    "yesterday_close": 1327.0
   },
   "IDEAFORGE": {
     "ema": 859.7893053826921
   },
-  "CHOICEIN": {
-    "ema": 806.8680928916591
+  "GARFIBRES": {
+    "ema": 733.4338704693158,
+    "yesterday_high": 745.9000244140625,
+    "yesterday_low": 720.0999755859375,
+    "yesterday_close": 720.0999755859375
   },
-  "ANANTRAJ": {
-    "ema": 615.2815092158987
+  "GODREJIND": {
+    "ema": 1310.163303191403,
+    "yesterday_high": 1319.9000244140625,
+    "yesterday_low": 1272.4000244140625,
+    "yesterday_close": 1308.0
   },
-  "SCI": {
-    "ema": 282.6343865017392
+  "LT": {
+    "ema": 3923.7012502270636,
+    "yesterday_high": 3951.5,
+    "yesterday_low": 3884.5,
+    "yesterday_close": 3937.699951171875
   },
-  "BALKRISIND": {
-    "ema": 2326.6351789229298
-  },
-  "PARKHOSPS": {
-    "ema": 287.07132652895115
-  },
-  "KIOCL": {
-    "ema": 360.0424977123626
-  },
-  "SBIFUNDS": {
-    "ema": 577.2646929074242
-  },
-  "WPIL": {
-    "ema": 446.52830628449783
+  "OMNI": {
+    "ema": 594.3822591289683,
+    "yesterday_high": 595.0499877929688,
+    "yesterday_low": 577.0,
+    "yesterday_close": 585.5999755859375
   },
   "SHADOWFAX": {
-    "ema": 225.96908586158372
+    "ema": 225.96908586158372,
+    "yesterday_high": 221.5399932861328,
+    "yesterday_low": 215.1199951171875,
+    "yesterday_close": 220.32000732421875
   },
-  "WABAG": {
-    "ema": 1921.5820795141576
+  "WESTLIFE": {
+    "ema": 492.0680643731287,
+    "yesterday_high": 501.20001220703125,
+    "yesterday_low": 472.3999938964844,
+    "yesterday_close": 486.95001220703125
   },
-  "SSWL": {
-    "ema": 303.70121375243957
+  "CMPDI": {
+    "ema": 242.45715343227647,
+    "yesterday_high": 244.1999969482422,
+    "yesterday_low": 237.92999267578125,
+    "yesterday_close": 239.39999389648438
   },
-  "TRANSRAILL": {
-    "ema": 495.44725584933747
+  "NEWGEN": {
+    "ema": 548.0989476063221,
+    "yesterday_high": 571.7000122070312,
+    "yesterday_low": 550.0999755859375,
+    "yesterday_close": 551.0
   },
-  "LUMAXTECH": {
-    "ema": 1535.2980271696028
+  "NH": {
+    "ema": 2061.381116838626,
+    "yesterday_high": 2088.800048828125,
+    "yesterday_low": 2059.60009765625,
+    "yesterday_close": 2080.300048828125
   },
-  "REDINGTON": {
-    "ema": 311.57367426934377
+  "GOKEX": {
+    "ema": 813.5502100010924,
+    "yesterday_high": 827.2000122070312,
+    "yesterday_low": 802.0499877929688,
+    "yesterday_close": 802.0499877929688
   },
-  "PARAS": {
-    "ema": 1233.510846973733
+  "IIFL": {
+    "ema": 607.1479862467627,
+    "yesterday_high": 619.5,
+    "yesterday_low": 601.5,
+    "yesterday_close": 608.0
   },
-  "KALPATARU": {
-    "ema": 291.88615153959773
+  "TIMEX": {
+    "ema": 541.7699112998215,
+    "yesterday_high": 552.7999877929688,
+    "yesterday_low": 516.0,
+    "yesterday_close": 531.0
   },
-  "ANTHEM": {
-    "ema": 800.1956441671143
+  "JKPAPER": {
+    "ema": 388.9014468880312,
+    "yesterday_high": 388.5,
+    "yesterday_low": 377.25,
+    "yesterday_close": 378.8999938964844
   },
-  "ABCAPITAL": {
-    "ema": 401.0079669856232
+  "GLAND": {
+    "ema": 2505.4920885361203,
+    "yesterday_high": 2585.89990234375,
+    "yesterday_low": 2493.0,
+    "yesterday_close": 2511.10009765625
   },
-  "IKS": {
-    "ema": 1829.25555095076
+  "KAYNES": {
+    "ema": 3660.6619018754295,
+    "yesterday_high": 3698.300048828125,
+    "yesterday_low": 3576.10009765625,
+    "yesterday_close": 3621.5
   },
-  "DELHIVERY": {
-    "ema": 472.70880915318696
+  "LASERPOWER": {
+    "ema": 299.3049401813442,
+    "yesterday_high": 309.0,
+    "yesterday_low": 295.07000732421875,
+    "yesterday_close": 299.5
   },
-  "GOLDIAM": {
-    "ema": 365.4186516481491
+  "KTKBANK": {
+    "ema": 285.56434625203474,
+    "yesterday_high": 292.3999938964844,
+    "yesterday_low": 280.8999938964844,
+    "yesterday_close": 291.75
   },
-  "VRLLOG": {
-    "ema": 262.43493092542457
+  "SWSOLAR": {
+    "ema": 205.9454658300129,
+    "yesterday_high": 208.1300048828125,
+    "yesterday_low": 203.27000427246094,
+    "yesterday_close": 203.50999450683594
   },
-  "TIINDIA": {
-    "ema": 2751.358099312788
+  "DEEPAKFERT": {
+    "ema": 1591.26972582967,
+    "yesterday_high": 1659.4000244140625,
+    "yesterday_low": 1518.0,
+    "yesterday_close": 1526.0
   },
-  "GRAVITA": {
-    "ema": 1625.5777770241584
-  },
-  "HDFCAMC": {
-    "ema": 2572.2668944993356
-  },
-  "RKFORGE": {
-    "ema": 635.238254850096
-  },
-  "INDIAMART": {
-    "ema": 1767.8754163835315
-  },
-  "PREMIERENE": {
-    "ema": 1010.4436002900384
-  },
-  "AVALON": {
-    "ema": 1774.4209387090182
-  },
-  "KIRLOSENG": {
-    "ema": 2195.2886726451993
-  },
-  "HBLENGINE": {
-    "ema": 715.8596487743209
-  },
-  "SONATSOFTW": {
-    "ema": 312.9057609280393
-  },
-  "SUVEN": {
-    "ema": 305.4770962513666
+  "NLCINDIA": {
+    "ema": 295.6233229740893,
+    "yesterday_high": 296.8999938964844,
+    "yesterday_low": 291.0,
+    "yesterday_close": 292.6000061035156
   },
   "AETHER": {
-    "ema": 1526.4547750347963
+    "ema": 1526.4547750347963,
+    "yesterday_high": 1524.5,
+    "yesterday_low": 1475.199951171875,
+    "yesterday_close": 1487.199951171875
   },
-  "CONCORDBIO": {
-    "ema": 1353.0790940140946
+  "ACE": {
+    "ema": 1059.9715784096802,
+    "yesterday_high": 1068.0,
+    "yesterday_low": 1033.0999755859375,
+    "yesterday_close": 1066.300048828125
   },
-  "CHOLAFIN": {
-    "ema": 1815.687171675068
-  },
-  "CORDELIA": {
-    "ema": 804.5201638935417
+  "TIPSMUSIC": {
+    "ema": 672.0383999368628,
+    "yesterday_high": 682.0,
+    "yesterday_low": 661.4000244140625,
+    "yesterday_close": 664.0
   },
   "PNCINFRA": {
-    "ema": 240.40306066388007
+    "ema": 240.40306066388007,
+    "yesterday_high": 243.0,
+    "yesterday_low": 237.57000732421875,
+    "yesterday_close": 239.47000122070312
+  },
+  "IRCTC": {
+    "ema": 492.8588376343996,
+    "yesterday_high": 495.95001220703125,
+    "yesterday_low": 491.5,
+    "yesterday_close": 493.70001220703125
+  },
+  "SKYGOLD": {
+    "ema": 650.7154874712437,
+    "yesterday_high": 662.0,
+    "yesterday_low": 633.0,
+    "yesterday_close": 638.25
+  },
+  "HINDALCO": {
+    "ema": 969.7779552651052,
+    "yesterday_high": 972.5,
+    "yesterday_low": 960.7000122070312,
+    "yesterday_close": 970.4000244140625
+  },
+  "JMFINANCIL": {
+    "ema": 122.3864570934712,
+    "yesterday_high": 123.25,
+    "yesterday_low": 121.12000274658203,
+    "yesterday_close": 121.55000305175781
+  },
+  "RPTECH": {
+    "ema": 815.832549503457,
+    "yesterday_high": 842.0,
+    "yesterday_low": 769.0,
+    "yesterday_close": 814.0
+  },
+  "IKS": {
+    "ema": 1829.25555095076,
+    "yesterday_high": 1821.4000244140625,
+    "yesterday_low": 1777.300048828125,
+    "yesterday_close": 1785.0
+  },
+  "CIEINDIA": {
+    "ema": 410.91800697309714,
+    "yesterday_high": 416.3999938964844,
+    "yesterday_low": 409.79998779296875,
+    "yesterday_close": 412.54998779296875
+  },
+  "DCBBANK": {
+    "ema": 188.8615075647019,
+    "yesterday_high": 192.0500030517578,
+    "yesterday_low": 187.0500030517578,
+    "yesterday_close": 187.44000244140625
+  },
+  "UNIMECH": {
+    "ema": 1207.8673825664837,
+    "yesterday_high": 1210.0,
+    "yesterday_low": 1166.0999755859375,
+    "yesterday_close": 1173.4000244140625
+  },
+  "CSBBANK": {
+    "ema": 330.9724681635522,
+    "yesterday_high": 333.0,
+    "yesterday_low": 326.0,
+    "yesterday_close": 327.20001220703125
+  },
+  "POWERGRID": {
+    "ema": 284.35417163288156,
+    "yesterday_high": 287.04998779296875,
+    "yesterday_low": 283.0,
+    "yesterday_close": 285.8999938964844
+  },
+  "ASTERDM": {
+    "ema": 817.6782421943186,
+    "yesterday_high": 839.4000244140625,
+    "yesterday_low": 811.4000244140625,
+    "yesterday_close": 812.0
+  },
+  "BALRAMCHIN": {
+    "ema": 602.106895011178,
+    "yesterday_high": 612.8499755859375,
+    "yesterday_low": 594.0,
+    "yesterday_close": 596.2999877929688
+  },
+  "INDIACEM": {
+    "ema": 397.1810955534308,
+    "yesterday_high": 400.95001220703125,
+    "yesterday_low": 392.04998779296875,
+    "yesterday_close": 398.04998779296875
+  },
+  "ANANTRAJ": {
+    "ema": 615.2815092158987,
+    "yesterday_high": 615.3499755859375,
+    "yesterday_low": 602.75,
+    "yesterday_close": 610.8499755859375
+  },
+  "MARICO": {
+    "ema": 876.6902824681962,
+    "yesterday_high": 888.7999877929688,
+    "yesterday_low": 873.6500244140625,
+    "yesterday_close": 885.3499755859375
+  },
+  "ALKYLAMINE": {
+    "ema": 1803.0144823465773,
+    "yesterday_high": 1817.0,
+    "yesterday_low": 1782.199951171875,
+    "yesterday_close": 1787.199951171875
+  },
+  "SBCL": {
+    "ema": 743.1538790880271,
+    "yesterday_high": 741.5499877929688,
+    "yesterday_low": 723.7999877929688,
+    "yesterday_close": 735.9500122070312
+  },
+  "WIPRO": {
+    "ema": 184.6129649836324,
+    "yesterday_high": 191.33999633789062,
+    "yesterday_low": 183.85000610351562,
+    "yesterday_close": 186.41000366210938
+  },
+  "APTUS": {
+    "ema": 278.28723350028605,
+    "yesterday_high": 281.95001220703125,
+    "yesterday_low": 276.3999938964844,
+    "yesterday_close": 277.54998779296875
+  },
+  "ARTEMISMED": {
+    "ema": 297.43398364099556,
+    "yesterday_high": 308.0,
+    "yesterday_low": 295.79998779296875,
+    "yesterday_close": 302.95001220703125
+  },
+  "ETERNAL": {
+    "ema": 306.3689926137966,
+    "yesterday_high": 312.25,
+    "yesterday_low": 305.0,
+    "yesterday_close": 310.20001220703125
   },
   "EMMVEE": {
-    "ema": 315.3544313975061
+    "ema": 315.3544313975061,
+    "yesterday_high": 319.04998779296875,
+    "yesterday_low": 306.6499938964844,
+    "yesterday_close": 308.25
   },
-  "PRICOLLTD": {
-    "ema": 687.9100520325337
+  "BLS": {
+    "ema": 238.9489698463329,
+    "yesterday_high": 243.35000610351562,
+    "yesterday_low": 238.10000610351562,
+    "yesterday_close": 238.64999389648438
+  },
+  "CUB": {
+    "ema": 215.7628503067996,
+    "yesterday_high": 227.6999969482422,
+    "yesterday_low": 214.66000366210938,
+    "yesterday_close": 216.0
+  },
+  "GOODLUCK": {
+    "ema": 1512.8032326364912,
+    "yesterday_high": 1530.0,
+    "yesterday_low": 1476.800048828125,
+    "yesterday_close": 1484.9000244140625
+  },
+  "CESC": {
+    "ema": 164.49710838357453,
+    "yesterday_high": 165.5,
+    "yesterday_low": 161.99000549316406,
+    "yesterday_close": 164.92999267578125
+  },
+  "PAYTM": {
+    "ema": 1334.4602072227644,
+    "yesterday_high": 1350.0,
+    "yesterday_low": 1317.0999755859375,
+    "yesterday_close": 1332.5
+  },
+  "WAAREERTL": {
+    "ema": 914.6463045082373,
+    "yesterday_high": 914.7999877929688,
+    "yesterday_low": 895.5,
+    "yesterday_close": 914.0
+  },
+  "MEDPLUS": {
+    "ema": 712.2788853243432,
+    "yesterday_high": 727.2999877929688,
+    "yesterday_low": 712.0,
+    "yesterday_close": 714.75
+  },
+  "GODREJPROP": {
+    "ema": 2120.1447460926192,
+    "yesterday_high": 2154.0,
+    "yesterday_low": 2100.89990234375,
+    "yesterday_close": 2107.0
+  },
+  "KIRLOSBROS": {
+    "ema": 1868.1557257295885,
+    "yesterday_high": 1908.199951171875,
+    "yesterday_low": 1821.5,
+    "yesterday_close": 1908.199951171875
+  },
+  "VBL": {
+    "ema": 447.122268417584,
+    "yesterday_high": 454.95001220703125,
+    "yesterday_low": 447.04998779296875,
+    "yesterday_close": 450.20001220703125
+  },
+  "NUVAMA": {
+    "ema": 1824.5145411956064,
+    "yesterday_high": 1832.800048828125,
+    "yesterday_low": 1784.5999755859375,
+    "yesterday_close": 1804.0
+  },
+  "WABAG": {
+    "ema": 1921.5820795141576,
+    "yesterday_high": 1905.0,
+    "yesterday_low": 1863.5,
+    "yesterday_close": 1903.0
+  },
+  "LGBBROSLTD": {
+    "ema": 1590.132349081273,
+    "yesterday_high": 1601.0999755859375,
+    "yesterday_low": 1570.0999755859375,
+    "yesterday_close": 1589.0
+  },
+  "HEG": {
+    "ema": 659.0543028098306,
+    "yesterday_high": 683.0,
+    "yesterday_low": 658.0,
+    "yesterday_close": 658.0
+  },
+  "TRAVELFOOD": {
+    "ema": 1291.2200336548867,
+    "yesterday_high": 1292.9000244140625,
+    "yesterday_low": 1275.0,
+    "yesterday_close": 1279.199951171875
+  },
+  "KEC": {
+    "ema": 469.4441365122514,
+    "yesterday_high": 475.79998779296875,
+    "yesterday_low": 467.75,
+    "yesterday_close": 468.25
+  },
+  "PICCADIL": {
+    "ema": 734.0406226828468,
+    "yesterday_high": 734.4500122070312,
+    "yesterday_low": 715.6500244140625,
+    "yesterday_close": 721.0
+  },
+  "SUNTV": {
+    "ema": 509.11976782677993,
+    "yesterday_high": 519.5999755859375,
+    "yesterday_low": 509.04998779296875,
+    "yesterday_close": 511.0
+  },
+  "PFOCUS": {
+    "ema": 289.93884332842407,
+    "yesterday_high": 307.3900146484375,
+    "yesterday_low": 288.5,
+    "yesterday_close": 290.260009765625
+  },
+  "GMRAIRPORT": {
+    "ema": 105.55536019339888,
+    "yesterday_high": 107.0,
+    "yesterday_low": 103.30000305175781,
+    "yesterday_close": 103.91000366210938
+  },
+  "TORNTPOWER": {
+    "ema": 1417.510215271145,
+    "yesterday_high": 1427.800048828125,
+    "yesterday_low": 1415.0,
+    "yesterday_close": 1424.199951171875
+  },
+  "INDIGOPNTS": {
+    "ema": 1098.6705209593936,
+    "yesterday_high": 1102.4000244140625,
+    "yesterday_low": 1068.199951171875,
+    "yesterday_close": 1080.9000244140625
+  },
+  "BANCOINDIA": {
+    "ema": 632.7302041279912,
+    "yesterday_high": 631.8499755859375,
+    "yesterday_low": 623.5,
+    "yesterday_close": 626.0
+  },
+  "CPPLUS": {
+    "ema": 3386.38355264276,
+    "yesterday_high": 3444.39990234375,
+    "yesterday_low": 3253.800048828125,
+    "yesterday_close": 3253.800048828125
+  },
+  "SGMART": {
+    "ema": 704.1995204635559,
+    "yesterday_high": 707.0499877929688,
+    "yesterday_low": 690.0,
+    "yesterday_close": 691.0
+  },
+  "PGIL": {
+    "ema": 2048.2538415612385,
+    "yesterday_high": 2063.199951171875,
+    "yesterday_low": 2013.300048828125,
+    "yesterday_close": 2028.0
+  },
+  "CANHLIFE": {
+    "ema": 146.87679267445148,
+    "yesterday_high": 148.88999938964844,
+    "yesterday_low": 145.35000610351562,
+    "yesterday_close": 147.17999267578125
+  },
+  "UNOMINDA": {
+    "ema": 1176.1002779131668,
+    "yesterday_high": 1182.9000244140625,
+    "yesterday_low": 1160.800048828125,
+    "yesterday_close": 1172.0
+  },
+  "SANOFI": {
+    "ema": 3346.957918962646,
+    "yesterday_high": 3400.0,
+    "yesterday_low": 3357.39990234375,
+    "yesterday_close": 3363.39990234375
+  },
+  "PFC": {
+    "ema": 424.2984163322052,
+    "yesterday_high": 428.8999938964844,
+    "yesterday_low": 423.6000061035156,
+    "yesterday_close": 425.75
+  },
+  "QPOWER": {
+    "ema": 1110.3360903741589
+  },
+  "AEQUS": {
+    "ema": 228.17428695443115,
+    "yesterday_high": 229.8800048828125,
+    "yesterday_low": 216.02000427246094,
+    "yesterday_close": 228.0
+  },
+  "PARKHOSPS": {
+    "ema": 287.07132652895115,
+    "yesterday_high": 283.8500061035156,
+    "yesterday_low": 278.04998779296875,
+    "yesterday_close": 279.3500061035156
+  },
+  "CMSINFO": {
+    "ema": 268.6327836927685,
+    "yesterday_high": 278.5,
+    "yesterday_low": 267.6499938964844,
+    "yesterday_close": 269.5
+  },
+  "RECLTD": {
+    "ema": 372.5825107780932,
+    "yesterday_high": 377.1000061035156,
+    "yesterday_low": 372.0,
+    "yesterday_close": 375.0
+  },
+  "EDELWEISS": {
+    "ema": 115.57340105686689,
+    "yesterday_high": 116.31999969482422,
+    "yesterday_low": 114.33999633789062,
+    "yesterday_close": 115.13999938964844
+  },
+  "IOC": {
+    "ema": 140.26231793912555,
+    "yesterday_high": 140.85000610351562,
+    "yesterday_low": 139.38999938964844,
+    "yesterday_close": 139.89999389648438
+  },
+  "RATEGAIN": {
+    "ema": 913.9412095985509,
+    "yesterday_high": 923.1500244140625,
+    "yesterday_low": 894.0999755859375,
+    "yesterday_close": 896.0999755859375
+  },
+  "REFEX": {
+    "ema": 307.2372034335258,
+    "yesterday_high": 318.8999938964844,
+    "yesterday_low": 296.75,
+    "yesterday_close": 298.6499938964844
+  },
+  "MGL": {
+    "ema": 1119.4884766594876,
+    "yesterday_high": 1166.199951171875,
+    "yesterday_low": 1099.5,
+    "yesterday_close": 1124.0
+  },
+  "SUNTECK": {
+    "ema": 304.2036488158085,
+    "yesterday_high": 309.1000061035156,
+    "yesterday_low": 302.29998779296875,
+    "yesterday_close": 303.70001220703125
+  },
+  "NESTLEIND": {
+    "ema": 1507.3751152961315,
+    "yesterday_high": 1532.0999755859375,
+    "yesterday_low": 1499.0,
+    "yesterday_close": 1520.699951171875
+  },
+  "RPGLIFE": {
+    "ema": 2810.292411636143,
+    "yesterday_high": 2897.199951171875,
+    "yesterday_low": 2770.0,
+    "yesterday_close": 2778.10009765625
+  },
+  "MAHLIFE": {
+    "ema": 386.6822449006666,
+    "yesterday_high": 388.6000061035156,
+    "yesterday_low": 383.0,
+    "yesterday_close": 385.3999938964844
+  },
+  "M&M": {
+    "ema": 3338.107200745894,
+    "yesterday_high": 3324.60009765625,
+    "yesterday_low": 3199.89990234375,
+    "yesterday_close": 3286.10009765625
+  },
+  "GVPIL": {
+    "ema": 749.0000465172244,
+    "yesterday_high": 754.75,
+    "yesterday_low": 727.1500244140625,
+    "yesterday_close": 746.5999755859375
+  },
+  "IMFA": {
+    "ema": 1413.254844048489,
+    "yesterday_high": 1418.300048828125,
+    "yesterday_low": 1365.0,
+    "yesterday_close": 1382.699951171875
+  },
+  "JAMNAAUTO": {
+    "ema": 131.91042012185352,
+    "yesterday_high": 131.5,
+    "yesterday_low": 129.9199981689453,
+    "yesterday_close": 130.60000610351562
+  },
+  "SPLPETRO": {
+    "ema": 717.7798773662255,
+    "yesterday_high": 733.0999755859375,
+    "yesterday_low": 701.0,
+    "yesterday_close": 704.9000244140625
+  },
+  "CAMPUS": {
+    "ema": 221.30286503143876,
+    "yesterday_high": 224.82000732421875,
+    "yesterday_low": 219.32000732421875,
+    "yesterday_close": 220.6999969482422
+  },
+  "CHOLAHLDNG": {
+    "ema": 1520.1613846261503,
+    "yesterday_high": 1520.9000244140625,
+    "yesterday_low": 1493.9000244140625,
+    "yesterday_close": 1502.5
+  },
+  "ASHOKLEY": {
+    "ema": 161.52130656015933,
+    "yesterday_high": 159.4600067138672,
+    "yesterday_low": 155.55999755859375,
+    "yesterday_close": 158.08999633789062
+  },
+  "NCC": {
+    "ema": 140.9735923203557,
+    "yesterday_high": 142.3300018310547,
+    "yesterday_low": 140.6999969482422,
+    "yesterday_close": 140.72000122070312
+  },
+  "HFCL": {
+    "ema": 190.61016220812164,
+    "yesterday_high": 195.33999633789062,
+    "yesterday_low": 183.91000366210938,
+    "yesterday_close": 183.91000366210938
+  },
+  "AVANTEL": {
+    "ema": 161.20771793310686,
+    "yesterday_high": 161.14999389648438,
+    "yesterday_low": 158.1999969482422,
+    "yesterday_close": 159.77999877929688
+  },
+  "MUTHOOTFIN": {
+    "ema": 3059.2844718398314,
+    "yesterday_high": 3034.0,
+    "yesterday_low": 2995.0,
+    "yesterday_close": 3008.699951171875
+  },
+  "ONGC": {
+    "ema": 240.8873224639356,
+    "yesterday_high": 244.35000610351562,
+    "yesterday_low": 239.05999755859375,
+    "yesterday_close": 241.49000549316406
+  },
+  "TRITURBINE": {
+    "ema": 607.4629974516575,
+    "yesterday_high": 615.9000244140625,
+    "yesterday_low": 604.0999755859375,
+    "yesterday_close": 605.0
+  },
+  "CEIGALL": {
+    "ema": 335.8128877965058,
+    "yesterday_high": 341.54998779296875,
+    "yesterday_low": 330.0,
+    "yesterday_close": 334.70001220703125
+  },
+  "PREMIERENE": {
+    "ema": 1010.4436002900384,
+    "yesterday_high": 1009.7000122070312,
+    "yesterday_low": 977.4000244140625,
+    "yesterday_close": 983.4000244140625
+  },
+  "PRAJIND": {
+    "ema": 310.4244500404696,
+    "yesterday_high": 311.3999938964844,
+    "yesterday_low": 306.79998779296875,
+    "yesterday_close": 308.70001220703125
+  },
+  "LEMONTREE": {
+    "ema": 109.76669206027023,
+    "yesterday_high": 110.0,
+    "yesterday_low": 108.94999694824219,
+    "yesterday_close": 109.19999694824219
+  },
+  "INNOVACAP": {
+    "ema": 970.3267645683799,
+    "yesterday_high": 975.0,
+    "yesterday_low": 961.0999755859375,
+    "yesterday_close": 969.5499877929688
+  },
+  "FEDFINA": {
+    "ema": 153.51102497059307,
+    "yesterday_high": 155.1199951171875,
+    "yesterday_low": 152.1199951171875,
+    "yesterday_close": 152.85000610351562
+  },
+  "BSE": {
+    "ema": 3568.1341690303607,
+    "yesterday_high": 3545.0,
+    "yesterday_low": 3504.0,
+    "yesterday_close": 3532.60009765625
+  },
+  "AZAD": {
+    "ema": 2323.198093342624,
+    "yesterday_high": 2386.0,
+    "yesterday_low": 2251.800048828125,
+    "yesterday_close": 2259.0
+  },
+  "AIIL": {
+    "ema": 548.6904848210975,
+    "yesterday_high": 551.8499755859375,
+    "yesterday_low": 539.7999877929688,
+    "yesterday_close": 545.9000244140625
+  },
+  "STARCEMENT": {
+    "ema": 202.95485306831952,
+    "yesterday_high": 203.41000366210938,
+    "yesterday_low": 201.11000061035156,
+    "yesterday_close": 202.52999877929688
+  },
+  "DELHIVERY": {
+    "ema": 472.70880915318696,
+    "yesterday_high": 470.70001220703125,
+    "yesterday_low": 463.04998779296875,
+    "yesterday_close": 468.8999938964844
+  },
+  "TBOTEK": {
+    "ema": 1525.3014444097894,
+    "yesterday_high": 1551.5999755859375,
+    "yesterday_low": 1473.199951171875,
+    "yesterday_close": 1499.0
+  },
+  "MIDHANI": {
+    "ema": 394.7794555696527,
+    "yesterday_high": 396.8999938964844,
+    "yesterday_low": 387.75,
+    "yesterday_close": 389.1000061035156
+  },
+  "SYMPHONY": {
+    "ema": 688.1328351686567,
+    "yesterday_high": 695.9500122070312,
+    "yesterday_low": 679.0999755859375,
+    "yesterday_close": 683.5
+  },
+  "KALYANKJIL": {
+    "ema": 621.7137148868235,
+    "yesterday_high": 648.9000244140625,
+    "yesterday_low": 627.2000122070312,
+    "yesterday_close": 631.7999877929688
+  },
+  "APLAPOLLO": {
+    "ema": 1861.2597489150294,
+    "yesterday_high": 1895.800048828125,
+    "yesterday_low": 1855.0,
+    "yesterday_close": 1895.0
+  },
+  "ISGEC": {
+    "ema": 842.9679039909561,
+    "yesterday_high": 854.5499877929688,
+    "yesterday_low": 843.9000244140625,
+    "yesterday_close": 854.5499877929688
+  },
+  "HATSUN": {
+    "ema": 882.0976439064722,
+    "yesterday_high": 887.8499755859375,
+    "yesterday_low": 874.0499877929688,
+    "yesterday_close": 879.5499877929688
+  },
+  "BORORENEW": {
+    "ema": 562.6330616548715,
+    "yesterday_high": 574.5,
+    "yesterday_low": 559.7000122070312,
+    "yesterday_close": 561.0999755859375
+  },
+  "VESUVIUS": {
+    "ema": 448.2110021701087,
+    "yesterday_high": 452.5,
+    "yesterday_low": 444.3999938964844,
+    "yesterday_close": 446.70001220703125
+  },
+  "BANKBARODA": {
+    "ema": 242.66252308214175,
+    "yesterday_high": 242.85000610351562,
+    "yesterday_low": 240.39999389648438,
+    "yesterday_close": 241.9499969482422
+  },
+  "SONACOMS": {
+    "ema": 752.674591242808,
+    "yesterday_high": 767.4500122070312,
+    "yesterday_low": 717.5,
+    "yesterday_close": 767.2999877929688
+  },
+  "KPIGREEN": {
+    "ema": 383.87094661173245,
+    "yesterday_high": 389.79998779296875,
+    "yesterday_low": 383.04998779296875,
+    "yesterday_close": 383.5
+  },
+  "GMDCLTD": {
+    "ema": 566.1551491873101,
+    "yesterday_high": 579.6500244140625,
+    "yesterday_low": 558.3499755859375,
+    "yesterday_close": 561.4000244140625
+  },
+  "GRINFRA": {
+    "ema": 882.0560151695707,
+    "yesterday_high": 894.4000244140625,
+    "yesterday_low": 878.9500122070312,
+    "yesterday_close": 891.5499877929688
+  },
+  "BIRLACORPN": {
+    "ema": 891.6192221866747,
+    "yesterday_high": 892.75,
+    "yesterday_low": 878.0499877929688,
+    "yesterday_close": 885.0
+  },
+  "GRAPHITE": {
+    "ema": 660.799268869946,
+    "yesterday_high": 675.2999877929688,
+    "yesterday_low": 658.2000122070312,
+    "yesterday_close": 663.7999877929688
+  },
+  "VMART": {
+    "ema": 757.6578274607917,
+    "yesterday_high": 767.2000122070312,
+    "yesterday_low": 726.0499877929688,
+    "yesterday_close": 764.2000122070312
+  },
+  "GREENLAM": {
+    "ema": 252.1430935361936,
+    "yesterday_high": 253.64999389648438,
+    "yesterday_low": 250.0500030517578,
+    "yesterday_close": 252.1999969482422
+  },
+  "WOCKPHARMA": {
+    "ema": 1910.3217625626257,
+    "yesterday_high": 1921.5,
+    "yesterday_low": 1877.199951171875,
+    "yesterday_close": 1894.0
+  },
+  "ITCHOTELS": {
+    "ema": 162.2195109541022,
+    "yesterday_high": 162.5500030517578,
+    "yesterday_low": 160.05999755859375,
+    "yesterday_close": 160.83999633789062
+  },
+  "JINDALSAW": {
+    "ema": 255.148750780208,
+    "yesterday_high": 257.0,
+    "yesterday_low": 253.0,
+    "yesterday_close": 254.89999389648438
+  },
+  "HEXT": {
+    "ema": 579.2073811178824,
+    "yesterday_high": 597.0,
+    "yesterday_low": 565.5999755859375,
+    "yesterday_close": 575.5499877929688
+  },
+  "TIINDIA": {
+    "ema": 2751.358099312788,
+    "yesterday_high": 2790.0,
+    "yesterday_low": 2666.0,
+    "yesterday_close": 2688.800048828125
+  },
+  "CMRGREEN": {
+    "ema": 216.4132372211942,
+    "yesterday_high": 217.6999969482422,
+    "yesterday_low": 213.10000610351562,
+    "yesterday_close": 214.0
+  },
+  "VIPIND": {
+    "ema": 296.65858765819354,
+    "yesterday_high": 298.8500061035156,
+    "yesterday_low": 294.0,
+    "yesterday_close": 296.1000061035156
+  },
+  "VOLTAS": {
+    "ema": 1329.9617339460917,
+    "yesterday_high": 1338.0,
+    "yesterday_low": 1297.5,
+    "yesterday_close": 1337.0
+  },
+  "BEML": {
+    "ema": 1766.1163066012227,
+    "yesterday_high": 1783.9000244140625,
+    "yesterday_low": 1749.199951171875,
+    "yesterday_close": 1750.9000244140625
+  },
+  "NATCOPHARM": {
+    "ema": 929.6249789938237,
+    "yesterday_high": 946.1500244140625,
+    "yesterday_low": 927.0,
+    "yesterday_close": 929.8499755859375
+  },
+  "GAIL": {
+    "ema": 176.1915139123887,
+    "yesterday_high": 175.75999450683594,
+    "yesterday_low": 173.0500030517578,
+    "yesterday_close": 173.75
+  },
+  "TECHNOE": {
+    "ema": 976.206773959848,
+    "yesterday_high": 1002.7000122070312,
+    "yesterday_low": 963.0999755859375,
+    "yesterday_close": 965.0
+  },
+  "SMARTWORKS": {
+    "ema": 473.45252844363404,
+    "yesterday_high": 485.0,
+    "yesterday_low": 464.1499938964844,
+    "yesterday_close": 469.04998779296875
+  },
+  "CANFINHOME": {
+    "ema": 819.0955812373336,
+    "yesterday_high": 823.0,
+    "yesterday_low": 812.9500122070312,
+    "yesterday_close": 816.2999877929688
+  },
+  "LOTUSDEV": {
+    "ema": 194.575181105033,
+    "yesterday_high": 193.91000366210938,
+    "yesterday_low": 189.10000610351562,
+    "yesterday_close": 193.0
+  },
+  "TATACAP": {
+    "ema": 360.9420164670572,
+    "yesterday_high": 362.75,
+    "yesterday_low": 355.3500061035156,
+    "yesterday_close": 360.75
+  },
+  "VIKRAMSOLR": {
+    "ema": 178.0786765976771,
+    "yesterday_high": 180.85000610351562,
+    "yesterday_low": 175.0800018310547,
+    "yesterday_close": 175.8000030517578
+  },
+  "KALPATARU": {
+    "ema": 291.88615153959773,
+    "yesterday_high": 310.70001220703125,
+    "yesterday_low": 288.75,
+    "yesterday_close": 290.75
+  },
+  "PIRAMALFIN": {
+    "ema": 2048.7916606132767,
+    "yesterday_high": 2052.699951171875,
+    "yesterday_low": 2014.300048828125,
+    "yesterday_close": 2028.699951171875
+  },
+  "AJANTPHARM": {
+    "ema": 3410.715650026077,
+    "yesterday_high": 3528.5,
+    "yesterday_low": 3355.10009765625,
+    "yesterday_close": 3440.0
+  },
+  "DRREDDY": {
+    "ema": 1145.5324248067775,
+    "yesterday_high": 1150.5999755859375,
+    "yesterday_low": 1139.0,
+    "yesterday_close": 1150.0
+  },
+  "AXISCADES": {
+    "ema": 1551.8846535821265,
+    "yesterday_high": 1594.0,
+    "yesterday_low": 1518.699951171875,
+    "yesterday_close": 1524.4000244140625
+  },
+  "RAINBOW": {
+    "ema": 1511.189865710455,
+    "yesterday_high": 1535.0,
+    "yesterday_low": 1478.5999755859375,
+    "yesterday_close": 1530.5
+  },
+  "AEGISVOPAK": {
+    "ema": 292.85505292061714,
+    "yesterday_high": 297.45001220703125,
+    "yesterday_low": 290.5,
+    "yesterday_close": 292.0
+  },
+  "UTLSOLAR": {
+    "ema": 374.78029900953254,
+    "yesterday_high": 372.0,
+    "yesterday_low": 360.0,
+    "yesterday_close": 367.0
+  },
+  "POWERICA": {
+    "ema": 532.6725061738586,
+    "yesterday_high": 537.9500122070312,
+    "yesterday_low": 522.5499877929688,
+    "yesterday_close": 525.25
+  },
+  "LGEINDIA": {
+    "ema": 1505.6437716954354,
+    "yesterday_high": 1518.199951171875,
+    "yesterday_low": 1494.0,
+    "yesterday_close": 1499.5999755859375
+  },
+  "PRIVISCL": {
+    "ema": 3629.3751927667545,
+    "yesterday_high": 3730.0,
+    "yesterday_low": 3503.0,
+    "yesterday_close": 3573.0
+  },
+  "ANUP": {
+    "ema": 2154.7232495570415,
+    "yesterday_high": 2169.0,
+    "yesterday_low": 2067.5,
+    "yesterday_close": 2169.0
+  },
+  "ARVINDFASN": {
+    "ema": 450.4095356987809,
+    "yesterday_high": 455.8999938964844,
+    "yesterday_low": 442.54998779296875,
+    "yesterday_close": 446.8999938964844
+  },
+  "METROPOLIS": {
+    "ema": 585.5077486884504,
+    "yesterday_high": 609.0499877929688,
+    "yesterday_low": 582.1500244140625,
+    "yesterday_close": 587.0
+  },
+  "RVNL": {
+    "ema": 224.19213147128372,
+    "yesterday_high": 224.22999572753906,
+    "yesterday_low": 222.00999450683594,
+    "yesterday_close": 222.8800048828125
+  },
+  "KRBL": {
+    "ema": 351.4222489488272,
+    "yesterday_high": 352.6499938964844,
+    "yesterday_low": 345.0,
+    "yesterday_close": 350.6499938964844
+  },
+  "SHARDAMOTR": {
+    "ema": 862.3936559338517,
+    "yesterday_high": 894.5499877929688,
+    "yesterday_low": 832.0,
+    "yesterday_close": 855.5499877929688
+  },
+  "BHARTIARTL": {
+    "ema": 1953.3604770148113,
+    "yesterday_high": 1963.0,
+    "yesterday_low": 1944.0,
+    "yesterday_close": 1956.800048828125
+  },
+  "MARKSANS": {
+    "ema": 259.3680813563458,
+    "yesterday_high": 263.6000061035156,
+    "yesterday_low": 258.1000061035156,
+    "yesterday_close": 259.6000061035156
+  },
+  "ZENSARTECH": {
+    "ema": 518.3077557238231,
+    "yesterday_high": 540.4500122070312,
+    "yesterday_low": 519.75,
+    "yesterday_close": 521.9500122070312
+  },
+  "UPL": {
+    "ema": 603.7893328221976,
+    "yesterday_high": 609.0,
+    "yesterday_low": 600.4500122070312,
+    "yesterday_close": 602.5499877929688
+  },
+  "TMB": {
+    "ema": 860.6713102255778,
+    "yesterday_high": 877.5499877929688,
+    "yesterday_low": 847.2000122070312,
+    "yesterday_close": 851.75
+  },
+  "JSWSTEEL": {
+    "ema": 1267.5319740594032,
+    "yesterday_high": 1280.5999755859375,
+    "yesterday_low": 1261.5,
+    "yesterday_close": 1270.5999755859375
+  },
+  "LALPATHLAB": {
+    "ema": 1879.478591284309,
+    "yesterday_high": 1919.800048828125,
+    "yesterday_low": 1870.0,
+    "yesterday_close": 1878.800048828125
+  },
+  "MANORAMA": {
+    "ema": 1629.157161212893,
+    "yesterday_high": 1651.800048828125,
+    "yesterday_low": 1621.199951171875,
+    "yesterday_close": 1635.199951171875
+  },
+  "GSFC": {
+    "ema": 159.983586650215,
+    "yesterday_high": 162.32000732421875,
+    "yesterday_low": 159.0,
+    "yesterday_close": 159.19000244140625
+  },
+  "BIOCON": {
+    "ema": 426.95046481127275,
+    "yesterday_high": 432.0,
+    "yesterday_low": 421.45001220703125,
+    "yesterday_close": 426.20001220703125
+  },
+  "KPITTECH": {
+    "ema": 597.0391382084787,
+    "yesterday_high": 620.4500122070312,
+    "yesterday_low": 580.4000244140625,
+    "yesterday_close": 591.0
+  },
+  "WELENT": {
+    "ema": 592.9698050027472,
+    "yesterday_high": 597.5999755859375,
+    "yesterday_low": 585.0,
+    "yesterday_close": 589.6500244140625
+  },
+  "WELCORP": {
+    "ema": 1658.3851565561608,
+    "yesterday_high": 1697.5,
+    "yesterday_low": 1652.0,
+    "yesterday_close": 1655.300048828125
+  },
+  "ACI": {
+    "ema": 554.1785499922831,
+    "yesterday_high": 569.5999755859375,
+    "yesterday_low": 555.5499877929688,
+    "yesterday_close": 559.0
+  },
+  "SUVEN": {
+    "ema": 305.4770962513666,
+    "yesterday_high": 311.0,
+    "yesterday_low": 297.8500061035156,
+    "yesterday_close": 298.6499938964844
+  },
+  "CANBK": {
+    "ema": 124.71748137851557,
+    "yesterday_high": 124.8499984741211,
+    "yesterday_low": 123.79000091552734,
+    "yesterday_close": 124.55000305175781
+  },
+  "WELSPUNLIV": {
+    "ema": 159.84574709041928,
+    "yesterday_high": 163.5,
+    "yesterday_low": 159.69000244140625,
+    "yesterday_close": 159.80999755859375
+  },
+  "ETHOSLTD": {
+    "ema": 2558.02752635618,
+    "yesterday_high": 2586.5,
+    "yesterday_low": 2506.300048828125,
+    "yesterday_close": 2536.10009765625
+  },
+  "APOLLO": {
+    "ema": 384.48772457919824,
+    "yesterday_high": 381.70001220703125,
+    "yesterday_low": 375.1000061035156,
+    "yesterday_close": 375.95001220703125
+  },
+  "GUJENERGY": {
+    "ema": 274.1406326705394,
+    "yesterday_high": 279.0,
+    "yesterday_low": 270.8999938964844,
+    "yesterday_close": 275.0
+  },
+  "COFORGE": {
+    "ema": 1719.6313796616807,
+    "yesterday_high": 1763.9000244140625,
+    "yesterday_low": 1702.4000244140625,
+    "yesterday_close": 1741.0
+  },
+  "JBMA": {
+    "ema": 668.7390965579758,
+    "yesterday_high": 688.9000244140625,
+    "yesterday_low": 665.0999755859375,
+    "yesterday_close": 673.0999755859375
+  },
+  "CCL": {
+    "ema": 1176.6560160210927,
+    "yesterday_high": 1203.0999755859375,
+    "yesterday_low": 1171.0,
+    "yesterday_close": 1171.0
+  },
+  "RUSTOMJEE": {
+    "ema": 403.75075096986825,
+    "yesterday_high": 408.04998779296875,
+    "yesterday_low": 400.25,
+    "yesterday_close": 404.75
+  },
+  "HDFCBANK": {
+    "ema": 748.4795214511432,
+    "yesterday_high": 757.0,
+    "yesterday_low": 745.5499877929688,
+    "yesterday_close": 753.4000244140625
+  },
+  "M&MFIN": {
+    "ema": 388.299176571583,
+    "yesterday_high": 398.79998779296875,
+    "yesterday_low": 388.70001220703125,
+    "yesterday_close": 393.0
+  },
+  "JKLAKSHMI": {
+    "ema": 566.1086701326157,
+    "yesterday_high": 582.5999755859375,
+    "yesterday_low": 562.0999755859375,
+    "yesterday_close": 566.1500244140625
+  },
+  "AARTIPHARM": {
+    "ema": 674.1301267874237,
+    "yesterday_high": 686.4000244140625,
+    "yesterday_low": 673.0,
+    "yesterday_close": 674.2999877929688
+  },
+  "GANESHHOU": {
+    "ema": 755.8149519063364,
+    "yesterday_high": 763.7999877929688,
+    "yesterday_low": 742.5999755859375,
+    "yesterday_close": 746.7000122070312
+  },
+  "JSWDULUX": {
+    "ema": 2951.181466514149,
+    "yesterday_high": 3009.0,
+    "yesterday_low": 2945.0,
+    "yesterday_close": 2953.39990234375
+  },
+  "HINDUNILVR": {
+    "ema": 2104.815305798201,
+    "yesterday_high": 2132.0,
+    "yesterday_low": 2088.60009765625,
+    "yesterday_close": 2107.0
+  },
+  "EMAMILTD": {
+    "ema": 403.7808784963039,
+    "yesterday_high": 408.0,
+    "yesterday_low": 401.70001220703125,
+    "yesterday_close": 404.0
+  },
+  "CENTUM": {
+    "ema": 3530.4500252172534,
+    "yesterday_high": 3594.39990234375,
+    "yesterday_low": 3430.10009765625,
+    "yesterday_close": 3445.0
+  },
+  "ADANIPORTS": {
+    "ema": 1694.8077237492305,
+    "yesterday_high": 1713.800048828125,
+    "yesterday_low": 1659.0,
+    "yesterday_close": 1660.5999755859375
+  },
+  "TARIL": {
+    "ema": 298.12777454638757,
+    "yesterday_high": 299.45001220703125,
+    "yesterday_low": 292.6499938964844,
+    "yesterday_close": 293.5
+  },
+  "JYOTHYLAB": {
+    "ema": 201.9635854754267,
+    "yesterday_high": 206.0399932861328,
+    "yesterday_low": 202.2100067138672,
+    "yesterday_close": 202.8000030517578
+  },
+  "CEATLTD": {
+    "ema": 3432.4227339861277,
+    "yesterday_high": 3523.0,
+    "yesterday_low": 3417.10009765625,
+    "yesterday_close": 3470.0
+  },
+  "UBL": {
+    "ema": 1442.7352690321566,
+    "yesterday_high": 1459.9000244140625,
+    "yesterday_low": 1433.199951171875,
+    "yesterday_close": 1450.0
+  },
+  "NESCO": {
+    "ema": 1066.3067057222281,
+    "yesterday_high": 1086.0999755859375,
+    "yesterday_low": 1065.0,
+    "yesterday_close": 1080.5
+  },
+  "ZYDUSWELL": {
+    "ema": 566.5448901292405,
+    "yesterday_high": 577.7999877929688,
+    "yesterday_low": 563.0,
+    "yesterday_close": 565.2999877929688
+  },
+  "THYROCARE": {
+    "ema": 584.1408662176091,
+    "yesterday_high": 599.0,
+    "yesterday_low": 580.0,
+    "yesterday_close": 590.0
+  },
+  "SHILPAMED": {
+    "ema": 609.082597203964,
+    "yesterday_high": 613.0,
+    "yesterday_low": 601.0999755859375,
+    "yesterday_close": 604.0
+  },
+  "AHLUCONT": {
+    "ema": 820.3320719978352,
+    "yesterday_high": 827.3499755859375,
+    "yesterday_low": 809.25,
+    "yesterday_close": 819.2999877929688
+  },
+  "BRIGADE": {
+    "ema": 567.4069945551009,
+    "yesterday_high": 569.6500244140625,
+    "yesterday_low": 561.5999755859375,
+    "yesterday_close": 565.0
+  },
+  "RBLBANK": {
+    "ema": 373.95953854117136,
+    "yesterday_high": 383.25,
+    "yesterday_low": 368.20001220703125,
+    "yesterday_close": 376.20001220703125
+  },
+  "DIACABS": {
+    "ema": 322.6223938623046,
+    "yesterday_high": 340.0,
+    "yesterday_low": 320.5799865722656,
+    "yesterday_close": 328.5
+  },
+  "LTTS": {
+    "ema": 3547.8784745995044,
+    "yesterday_high": 3642.39990234375,
+    "yesterday_low": 3545.0,
+    "yesterday_close": 3559.10009765625
+  },
+  "360ONE": {
+    "ema": 1140.395794391403,
+    "yesterday_high": 1164.0,
+    "yesterday_low": 1125.800048828125,
+    "yesterday_close": 1144.0
+  },
+  "GRINDWELL": {
+    "ema": 2106.0045912787714,
+    "yesterday_high": 2149.0,
+    "yesterday_low": 2055.0,
+    "yesterday_close": 2105.0
+  },
+  "VIYASH": {
+    "ema": 253.16311928164433,
+    "yesterday_high": 255.8000030517578,
+    "yesterday_low": 249.1999969482422,
+    "yesterday_close": 250.8000030517578
+  },
+  "KFINTECH": {
+    "ema": 944.2824920960571,
+    "yesterday_high": 948.0499877929688,
+    "yesterday_low": 922.5999755859375,
+    "yesterday_close": 936.0
+  },
+  "LTFOODS": {
+    "ema": 397.2719420767145,
+    "yesterday_high": 402.8999938964844,
+    "yesterday_low": 375.1499938964844,
+    "yesterday_close": 397.04998779296875
+  },
+  "JKTYRE": {
+    "ema": 400.8110850905937,
+    "yesterday_high": 403.70001220703125,
+    "yesterday_low": 393.6000061035156,
+    "yesterday_close": 397.04998779296875
+  },
+  "BALAMINES": {
+    "ema": 2225.2420351337296,
+    "yesterday_high": 2260.0,
+    "yesterday_low": 2219.10009765625,
+    "yesterday_close": 2233.0
+  },
+  "FORTIS": {
+    "ema": 946.6265728152298,
+    "yesterday_high": 956.0,
+    "yesterday_low": 945.6500244140625,
+    "yesterday_close": 948.8499755859375
+  },
+  "VGUARD": {
+    "ema": 313.23613329806517,
+    "yesterday_high": 338.79998779296875,
+    "yesterday_low": 299.0,
+    "yesterday_close": 317.8999938964844
+  },
+  "V2RETAIL": {
+    "ema": 220.59795549632113,
+    "yesterday_high": 222.38999938964844,
+    "yesterday_low": 217.66000366210938,
+    "yesterday_close": 219.1999969482422
+  },
+  "IFBIND": {
+    "ema": 1322.516821523255,
+    "yesterday_high": 1331.300048828125,
+    "yesterday_low": 1303.9000244140625,
+    "yesterday_close": 1311.0
+  },
+  "ZFCVINDIA": {
+    "ema": 2385.1259220144643,
+    "yesterday_high": 2435.0,
+    "yesterday_low": 2368.0,
+    "yesterday_close": 2381.300048828125
+  },
+  "JIOFIN": {
+    "ema": 248.16864481864658,
+    "yesterday_high": 249.8699951171875,
+    "yesterday_low": 245.11000061035156,
+    "yesterday_close": 246.60000610351562
+  },
+  "KOTAKBANK": {
+    "ema": 389.02969516038115,
+    "yesterday_high": 390.20001220703125,
+    "yesterday_low": 386.45001220703125,
+    "yesterday_close": 389.3999938964844
+  },
+  "JLHL": {
+    "ema": 328.3305834110831,
+    "yesterday_high": 337.70001220703125,
+    "yesterday_low": 318.8999938964844,
+    "yesterday_close": 332.3999938964844
+  },
+  "ARVIND": {
+    "ema": 514.2991734722359,
+    "yesterday_high": 519.25,
+    "yesterday_low": 505.0,
+    "yesterday_close": 506.6499938964844
+  },
+  "OBEROIRLTY": {
+    "ema": 1823.1908957113533,
+    "yesterday_high": 1831.199951171875,
+    "yesterday_low": 1804.0999755859375,
+    "yesterday_close": 1814.4000244140625
+  },
+  "DOMS": {
+    "ema": 2266.704525644051,
+    "yesterday_high": 2282.5,
+    "yesterday_low": 2250.0,
+    "yesterday_close": 2255.0
+  },
+  "NACLIND": {
+    "ema": 189.85736810340157,
+    "yesterday_high": 194.0,
+    "yesterday_low": 186.74000549316406,
+    "yesterday_close": 188.57000732421875
+  },
+  "IXIGO": {
+    "ema": 195.60448548197823,
+    "yesterday_high": 195.85000610351562,
+    "yesterday_low": 190.89999389648438,
+    "yesterday_close": 193.75
+  },
+  "MOIL": {
+    "ema": 283.09170921988834,
+    "yesterday_high": 304.3500061035156,
+    "yesterday_low": 277.95001220703125,
+    "yesterday_close": 287.95001220703125
+  },
+  "AKUMS": {
+    "ema": 661.1243808253039,
+    "yesterday_high": 667.0,
+    "yesterday_low": 658.0,
+    "yesterday_close": 659.0
+  },
+  "LTF": {
+    "ema": 309.45682412690326,
+    "yesterday_high": 309.1000061035156,
+    "yesterday_low": 303.8500061035156,
+    "yesterday_close": 306.25
+  },
+  "AVL": {
+    "ema": 633.167896640394,
+    "yesterday_high": 629.0,
+    "yesterday_low": 615.5499877929688,
+    "yesterday_close": 625.3499755859375
+  },
+  "NORTHARC": {
+    "ema": 288.184547707049,
+    "yesterday_high": 289.20001220703125,
+    "yesterday_low": 283.1499938964844,
+    "yesterday_close": 285.1499938964844
+  },
+  "APLLTD": {
+    "ema": 803.6183149071963,
+    "yesterday_high": 807.7000122070312,
+    "yesterday_low": 800.0499877929688,
+    "yesterday_close": 803.0999755859375
+  },
+  "TRENT": {
+    "ema": 2993.243012882611,
+    "yesterday_high": 3039.5,
+    "yesterday_low": 2982.5,
+    "yesterday_close": 3004.0
+  },
+  "LICHSGFIN": {
+    "ema": 536.2007572370799,
+    "yesterday_high": 551.0499877929688,
+    "yesterday_low": 536.8499755859375,
+    "yesterday_close": 540.9000244140625
+  },
+  "ASHAPURMIN": {
+    "ema": 705.4976226017284,
+    "yesterday_high": 726.0,
+    "yesterday_low": 701.2000122070312,
+    "yesterday_close": 704.5999755859375
+  },
+  "TATATECH": {
+    "ema": 748.9171351928522,
+    "yesterday_high": 776.4500122070312,
+    "yesterday_low": 741.5999755859375,
+    "yesterday_close": 751.9000244140625
+  },
+  "RESPONIND": {
+    "ema": 172.96756536770678,
+    "yesterday_high": 174.0399932861328,
+    "yesterday_low": 170.5,
+    "yesterday_close": 170.99000549316406
+  },
+  "CHENNPETRO": {
+    "ema": 1241.5853557733979,
+    "yesterday_high": 1288.0,
+    "yesterday_low": 1212.9000244140625,
+    "yesterday_close": 1243.9000244140625
+  },
+  "HOMEFIRST": {
+    "ema": 1188.9989477799106,
+    "yesterday_high": 1202.5,
+    "yesterday_low": 1169.0,
+    "yesterday_close": 1200.0999755859375
+  },
+  "TEJASNET": {
+    "ema": 514.30478313078,
+    "yesterday_high": 517.6500244140625,
+    "yesterday_low": 505.25,
+    "yesterday_close": 506.5
+  },
+  "JYOTICNC": {
+    "ema": 815.4008803820244,
+    "yesterday_high": 830.0,
+    "yesterday_low": 806.0499877929688,
+    "yesterday_close": 808.7999877929688
+  },
+  "BANDHANBNK": {
+    "ema": 172.99879946938685,
+    "yesterday_high": 174.1999969482422,
+    "yesterday_low": 171.4499969482422,
+    "yesterday_close": 172.72000122070312
+  },
+  "IEX": {
+    "ema": 131.880201760354,
+    "yesterday_high": 134.00999450683594,
+    "yesterday_low": 131.0,
+    "yesterday_close": 131.39999389648438
+  },
+  "MAXHEALTH": {
+    "ema": 1113.7304362695872,
+    "yesterday_high": 1135.5,
+    "yesterday_low": 1111.0,
+    "yesterday_close": 1124.800048828125
+  },
+  "ASIANPAINT": {
+    "ema": 2742.798938891888,
+    "yesterday_high": 2765.0,
+    "yesterday_low": 2667.699951171875,
+    "yesterday_close": 2746.199951171875
+  },
+  "AADHARHFC": {
+    "ema": 498.0338372665693,
+    "yesterday_high": 499.0,
+    "yesterday_low": 487.1000061035156,
+    "yesterday_close": 499.0
+  },
+  "FIRSTCRY": {
+    "ema": 212.69015801363932,
+    "yesterday_high": 214.89999389648438,
+    "yesterday_low": 211.39999389648438,
+    "yesterday_close": 211.89999389648438
+  },
+  "DHANUKA": {
+    "ema": 1021.9913396977446,
+    "yesterday_high": 1045.0,
+    "yesterday_low": 1012.0,
+    "yesterday_close": 1032.699951171875
+  },
+  "EUREKAFORB": {
+    "ema": 448.8523045531285,
+    "yesterday_high": 456.70001220703125,
+    "yesterday_low": 445.0,
+    "yesterday_close": 450.54998779296875
+  },
+  "AUROPHARMA": {
+    "ema": 1578.1295465806354,
+    "yesterday_high": 1607.0,
+    "yesterday_low": 1568.5999755859375,
+    "yesterday_close": 1568.5999755859375
+  },
+  "FSL": {
+    "ema": 295.3012422653567,
+    "yesterday_high": 302.0,
+    "yesterday_low": 287.5400085449219,
+    "yesterday_close": 298.989990234375
+  },
+  "SAFARI": {
+    "ema": 1578.4750784896037,
+    "yesterday_high": 1600.9000244140625,
+    "yesterday_low": 1556.0,
+    "yesterday_close": 1563.699951171875
+  },
+  "PHOENIXLTD": {
+    "ema": 1914.0679289220534,
+    "yesterday_high": 1903.4000244140625,
+    "yesterday_low": 1877.300048828125,
+    "yesterday_close": 1887.9000244140625
+  },
+  "KPRMILL": {
+    "ema": 1044.9191958503586,
+    "yesterday_high": 1068.0,
+    "yesterday_low": 1031.300048828125,
+    "yesterday_close": 1034.800048828125
+  },
+  "TIMETECHNO": {
+    "ema": 210.4296503484568,
+    "yesterday_high": 216.0,
+    "yesterday_low": 207.52000427246094,
+    "yesterday_close": 208.36000061035156
+  },
+  "PURVA": {
+    "ema": 212.40674892785597,
+    "yesterday_high": 218.0,
+    "yesterday_low": 210.1699981689453,
+    "yesterday_close": 213.02000427246094
+  },
+  "INDIAGLYCO": {
+    "ema": 1146.2981193986886,
+    "yesterday_high": 1164.4000244140625,
+    "yesterday_low": 1121.0,
+    "yesterday_close": 1121.0999755859375
+  },
+  "INFY": {
+    "ema": 1141.1570312451126,
+    "yesterday_high": 1187.300048828125,
+    "yesterday_low": 1151.300048828125,
+    "yesterday_close": 1156.699951171875
+  },
+  "ITI": {
+    "ema": 275.2699763344777,
+    "yesterday_high": 276.1000061035156,
+    "yesterday_low": 273.0,
+    "yesterday_close": 273.45001220703125
+  },
+  "CYIENTDLM": {
+    "ema": 678.5796816720764,
+    "yesterday_high": 700.7999877929688,
+    "yesterday_low": 670.0999755859375,
+    "yesterday_close": 676.0499877929688
+  },
+  "VINATIORGA": {
+    "ema": 1302.8130977081494,
+    "yesterday_high": 1309.0,
+    "yesterday_low": 1287.5,
+    "yesterday_close": 1296.4000244140625
+  },
+  "SENCO": {
+    "ema": 408.47207518727265,
+    "yesterday_high": 412.79998779296875,
+    "yesterday_low": 403.1000061035156,
+    "yesterday_close": 405.70001220703125
+  },
+  "CROMPTON": {
+    "ema": 258.7132558898083,
+    "yesterday_high": 266.04998779296875,
+    "yesterday_low": 258.6499938964844,
+    "yesterday_close": 260.29998779296875
+  },
+  "YASHO": {
+    "ema": 3437.4695350708935,
+    "yesterday_high": 3275.0,
+    "yesterday_low": 3118.89990234375,
+    "yesterday_close": 3215.60009765625
+  },
+  "JSWENERGY": {
+    "ema": 549.1022787546818,
+    "yesterday_high": 546.4500122070312,
+    "yesterday_low": 540.5499877929688,
+    "yesterday_close": 543.7000122070312
+  },
+  "JUBLFOOD": {
+    "ema": 435.88575361755596,
+    "yesterday_high": 441.0,
+    "yesterday_low": 433.6499938964844,
+    "yesterday_close": 441.0
+  },
+  "KPIL": {
+    "ema": 1282.75605220501,
+    "yesterday_high": 1305.699951171875,
+    "yesterday_low": 1272.199951171875,
+    "yesterday_close": 1282.699951171875
+  },
+  "MANAPPURAM": {
+    "ema": 369.4775387423801,
+    "yesterday_high": 381.20001220703125,
+    "yesterday_low": 366.70001220703125,
+    "yesterday_close": 368.3500061035156
+  },
+  "ITDC": {
+    "ema": 706.8955368506777,
+    "yesterday_high": 719.5,
+    "yesterday_low": 693.7999877929688,
+    "yesterday_close": 693.7999877929688
+  },
+  "LAURUSLABS": {
+    "ema": 1794.8792138609974,
+    "yesterday_high": 1798.300048828125,
+    "yesterday_low": 1774.0999755859375,
+    "yesterday_close": 1781.300048828125
+  },
+  "DMART": {
+    "ema": 3906.711891620104,
+    "yesterday_high": 3967.199951171875,
+    "yesterday_low": 3837.699951171875,
+    "yesterday_close": 3886.0
+  },
+  "GPPL": {
+    "ema": 150.4509797923877,
+    "yesterday_high": 152.92999267578125,
+    "yesterday_low": 149.16000366210938,
+    "yesterday_close": 150.6999969482422
+  },
+  "ENDURANCE": {
+    "ema": 2781.3556107011736,
+    "yesterday_high": 2825.0,
+    "yesterday_low": 2757.39990234375,
+    "yesterday_close": 2805.300048828125
+  },
+  "RAMCOCEM": {
+    "ema": 916.4878077675369,
+    "yesterday_high": 921.5,
+    "yesterday_low": 908.4000244140625,
+    "yesterday_close": 912.0
+  },
+  "INOXINDIA": {
+    "ema": 1912.5123843249503,
+    "yesterday_high": 1927.800048828125,
+    "yesterday_low": 1876.0,
+    "yesterday_close": 1897.5
+  },
+  "IREDA": {
+    "ema": 120.04442131410372,
+    "yesterday_high": 120.61000061035156,
+    "yesterday_low": 119.30000305175781,
+    "yesterday_close": 119.80999755859375
+  },
+  "VTL": {
+    "ema": 608.23782762117,
+    "yesterday_high": 647.9000244140625,
+    "yesterday_low": 596.9000244140625,
+    "yesterday_close": 605.6500244140625
+  },
+  "TEXRAIL": {
+    "ema": 111.23802980521415,
+    "yesterday_high": 111.87000274658203,
+    "yesterday_low": 110.05000305175781,
+    "yesterday_close": 110.6500015258789
+  },
+  "MFSL": {
+    "ema": 1505.1429733247603,
+    "yesterday_high": 1529.9000244140625,
+    "yesterday_low": 1499.0,
+    "yesterday_close": 1511.5
+  },
+  "COCHINSHIP": {
+    "ema": 1407.1885520248863,
+    "yesterday_high": 1405.9000244140625,
+    "yesterday_low": 1386.0,
+    "yesterday_close": 1401.0
+  },
+  "BALUFORGE": {
+    "ema": 440.44877527309023,
+    "yesterday_high": 442.0,
+    "yesterday_low": 431.25,
+    "yesterday_close": 432.20001220703125
+  },
+  "MRPL": {
+    "ema": 167.74161366818086,
+    "yesterday_high": 174.0500030517578,
+    "yesterday_low": 161.10000610351562,
+    "yesterday_close": 166.66000366210938
+  },
+  "RAILTEL": {
+    "ema": 288.28218802592403,
+    "yesterday_high": 296.0,
+    "yesterday_low": 290.0,
+    "yesterday_close": 294.0
+  },
+  "RELAXO": {
+    "ema": 406.19157279994306,
+    "yesterday_high": 417.0,
+    "yesterday_low": 401.1499938964844,
+    "yesterday_close": 408.1499938964844
+  },
+  "MINDACORP": {
+    "ema": 699.6169902598829,
+    "yesterday_high": 710.9000244140625,
+    "yesterday_low": 685.7000122070312,
+    "yesterday_close": 706.9000244140625
+  },
+  "ABDL": {
+    "ema": 635.244501785962,
+    "yesterday_high": 654.9500122070312,
+    "yesterday_low": 638.0,
+    "yesterday_close": 648.4500122070312
+  },
+  "SWIGGY": {
+    "ema": 285.3885434261283,
+    "yesterday_high": 298.8399963378906,
+    "yesterday_low": 281.260009765625,
+    "yesterday_close": 293.8999938964844
+  },
+  "AFCONS": {
+    "ema": 275.0795406438166,
+    "yesterday_high": 281.54998779296875,
+    "yesterday_low": 271.6499938964844,
+    "yesterday_close": 273.20001220703125
+  },
+  "VMM": {
+    "ema": 107.8428661847279,
+    "yesterday_high": 108.69999694824219,
+    "yesterday_low": 107.44999694824219,
+    "yesterday_close": 107.80999755859375
+  },
+  "AGARWALEYE": {
+    "ema": 486.86494169195373,
+    "yesterday_high": 496.20001220703125,
+    "yesterday_low": 480.1000061035156,
+    "yesterday_close": 480.1000061035156
+  },
+  "JUBLINGREA": {
+    "ema": 733.6931495948152,
+    "yesterday_high": 739.4500122070312,
+    "yesterday_low": 725.0,
+    "yesterday_close": 728.4500122070312
+  },
+  "SOTL": {
+    "ema": 605.9749357693605,
+    "yesterday_high": 607.7000122070312,
+    "yesterday_low": 585.5999755859375,
+    "yesterday_close": 588.0999755859375
+  },
+  "SUNFLAG": {
+    "ema": 360.95753112726067,
+    "yesterday_high": 364.0,
+    "yesterday_low": 355.04998779296875,
+    "yesterday_close": 357.79998779296875
+  },
+  "VEDL": {
+    "ema": 264.87464823380236,
+    "yesterday_high": 269.6499938964844,
+    "yesterday_low": 263.45001220703125,
+    "yesterday_close": 267.0
+  },
+  "AJAXENGG": {
+    "ema": 577.2315072038801,
+    "yesterday_high": 583.0,
+    "yesterday_low": 573.0,
+    "yesterday_close": 581.25
+  },
+  "SURYAROSNI": {
+    "ema": 238.5018773069967,
+    "yesterday_high": 240.6999969482422,
+    "yesterday_low": 237.10000610351562,
+    "yesterday_close": 239.10000610351562
+  },
+  "TATAELXSI": {
+    "ema": 3657.9722034350402,
+    "yesterday_high": 3720.5,
+    "yesterday_low": 3641.199951171875,
+    "yesterday_close": 3646.0
+  },
+  "TTKPRESTIG": {
+    "ema": 658.4494697524538,
+    "yesterday_high": 676.0,
+    "yesterday_low": 652.9500122070312,
+    "yesterday_close": 655.0
+  },
+  "BBOX": {
+    "ema": 751.5262163527673,
+    "yesterday_high": 743.3499755859375,
+    "yesterday_low": 725.0,
+    "yesterday_close": 726.4500122070312
+  },
+  "TATACONSUM": {
+    "ema": 1091.048666642841,
+    "yesterday_high": 1108.4000244140625,
+    "yesterday_low": 1091.0999755859375,
+    "yesterday_close": 1093.0
+  },
+  "JUBLPHARMA": {
+    "ema": 956.8340357219076,
+    "yesterday_high": 979.9500122070312,
+    "yesterday_low": 956.25,
+    "yesterday_close": 961.6500244140625
+  },
+  "CAPLIPOINT": {
+    "ema": 2545.7742674279853,
+    "yesterday_high": 2637.89990234375,
+    "yesterday_low": 2517.39990234375,
+    "yesterday_close": 2536.0
+  },
+  "BEL": {
+    "ema": 387.5756593933405,
+    "yesterday_high": 386.45001220703125,
+    "yesterday_low": 382.79998779296875,
+    "yesterday_close": 384.8999938964844
+  },
+  "NAM-INDIA": {
+    "ema": 1160.066978720314,
+    "yesterday_high": 1176.699951171875,
+    "yesterday_low": 1143.800048828125,
+    "yesterday_close": 1147.0
+  },
+  "CREDITACC": {
+    "ema": 1599.9877247130253,
+    "yesterday_high": 1620.0,
+    "yesterday_low": 1570.4000244140625,
+    "yesterday_close": 1611.0
+  },
+  "TATVA": {
+    "ema": 1746.0596699583205,
+    "yesterday_high": 1744.4000244140625,
+    "yesterday_low": 1672.199951171875,
+    "yesterday_close": 1679.0
+  },
+  "ALIVUS": {
+    "ema": 1137.324485065407,
+    "yesterday_high": 1142.9000244140625,
+    "yesterday_low": 1090.9000244140625,
+    "yesterday_close": 1095.699951171875
+  },
+  "GULFOILLUB": {
+    "ema": 1060.647720763769,
+    "yesterday_high": 1064.9000244140625,
+    "yesterday_low": 1044.9000244140625,
+    "yesterday_close": 1059.9000244140625
+  },
+  "ATGL": {
+    "ema": 652.0985110475235,
+    "yesterday_high": 653.5999755859375,
+    "yesterday_low": 645.7999877929688,
+    "yesterday_close": 649.0
+  },
+  "SBIN": {
+    "ema": 1022.7821310036356,
+    "yesterday_high": 1027.9000244140625,
+    "yesterday_low": 1008.0,
+    "yesterday_close": 1025.300048828125
+  },
+  "INDOSTAR": {
+    "ema": 260.72942425314585,
+    "yesterday_high": 266.0,
+    "yesterday_low": 257.6499938964844,
+    "yesterday_close": 258.1000061035156
+  },
+  "AAVAS": {
+    "ema": 1370.5491052428474,
+    "yesterday_high": 1385.9000244140625,
+    "yesterday_low": 1355.0,
+    "yesterday_close": 1357.0
+  },
+  "CHAMBLFERT": {
+    "ema": 444.3397393874029,
+    "yesterday_high": 455.79998779296875,
+    "yesterday_low": 442.1499938964844,
+    "yesterday_close": 443.0
+  },
+  "SUPRIYA": {
+    "ema": 861.060228233757,
+    "yesterday_high": 872.5999755859375,
+    "yesterday_low": 850.5,
+    "yesterday_close": 859.9000244140625
+  },
+  "MCX": {
+    "ema": 2698.994420267746,
+    "yesterday_high": 2728.0,
+    "yesterday_low": 2662.89990234375,
+    "yesterday_close": 2681.5
+  },
+  "LODHA": {
+    "ema": 1281.4139665928049,
+    "yesterday_high": 1328.75,
+    "yesterday_low": 1281.3499755859375,
+    "yesterday_close": 1289.550048828125
+  },
+  "TATACHEM": {
+    "ema": 674.8922970041848,
+    "yesterday_high": 678.0,
+    "yesterday_low": 668.2999877929688,
+    "yesterday_close": 668.7000122070312
+  },
+  "CAMS": {
+    "ema": 795.6357664422103,
+    "yesterday_high": 799.0,
+    "yesterday_low": 784.1500244140625,
+    "yesterday_close": 793.4000244140625
+  },
+  "UNIVCABLES": {
+    "ema": 1343.2055962824668,
+    "yesterday_high": 1348.0,
+    "yesterday_low": 1303.0,
+    "yesterday_close": 1331.300048828125
+  },
+  "NIACL": {
+    "ema": 167.54284858057804,
+    "yesterday_high": 167.4600067138672,
+    "yesterday_low": 162.2100067138672,
+    "yesterday_close": 165.88999938964844
+  },
+  "BBTC": {
+    "ema": 1495.7471338671085,
+    "yesterday_high": 1502.199951171875,
+    "yesterday_low": 1486.0,
+    "yesterday_close": 1488.0
+  },
+  "HAPPSTMNDS": {
+    "ema": 380.7811706686814,
+    "yesterday_high": 391.6000061035156,
+    "yesterday_low": 379.0,
+    "yesterday_close": 380.6499938964844
+  },
+  "UTIAMC": {
+    "ema": 904.670679405503,
+    "yesterday_high": 910.5,
+    "yesterday_low": 900.0,
+    "yesterday_close": 909.2999877929688
+  },
+  "NAVA": {
+    "ema": 556.1201669850541,
+    "yesterday_high": 560.4000244140625,
+    "yesterday_low": 551.4000244140625,
+    "yesterday_close": 553.1500244140625
+  },
+  "DEVYANI": {
+    "ema": 116.09348497674775,
+    "yesterday_high": 121.80000305175781,
+    "yesterday_low": 114.25,
+    "yesterday_close": 118.55000305175781
+  },
+  "THOMASCOOK": {
+    "ema": 102.30703239342179,
+    "yesterday_high": 100.30000305175781,
+    "yesterday_low": 98.76000213623047,
+    "yesterday_close": 99.5
+  },
+  "SJS": {
+    "ema": 2375.9759202283167,
+    "yesterday_high": 2403.5,
+    "yesterday_low": 2349.39990234375,
+    "yesterday_close": 2364.0
+  },
+  "CARBORUNIV": {
+    "ema": 1064.2662082617046,
+    "yesterday_high": 1061.199951171875,
+    "yesterday_low": 1044.0,
+    "yesterday_close": 1053.0
+  },
+  "SAPPHIRE": {
+    "ema": 189.0838045291907,
+    "yesterday_high": 204.88999938964844,
+    "yesterday_low": 191.99000549316406,
+    "yesterday_close": 195.0
+  },
+  "CHOLAFIN": {
+    "ema": 1815.687171675068,
+    "yesterday_high": 1806.5999755859375,
+    "yesterday_low": 1758.4000244140625,
+    "yesterday_close": 1773.800048828125
+  },
+  "HCLTECH": {
+    "ema": 1345.808248252992,
+    "yesterday_high": 1369.9000244140625,
+    "yesterday_low": 1345.5999755859375,
+    "yesterday_close": 1349.9000244140625
+  },
+  "MAPMYINDIA": {
+    "ema": 1170.4094143843924,
+    "yesterday_high": 1199.550048828125,
+    "yesterday_low": 1158.199951171875,
+    "yesterday_close": 1177.5999755859375
+  },
+  "STARHEALTH": {
+    "ema": 603.1725116786052,
+    "yesterday_high": 624.2999877929688,
+    "yesterday_low": 599.0,
+    "yesterday_close": 608.9500122070312
+  },
+  "METROBRAND": {
+    "ema": 1031.8226096561104,
+    "yesterday_high": 1042.0,
+    "yesterday_low": 1027.0,
+    "yesterday_close": 1029.699951171875
+  },
+  "SGFIN": {
+    "ema": 678.6091936020943,
+    "yesterday_high": 678.4000244140625,
+    "yesterday_low": 657.2999877929688,
+    "yesterday_close": 658.7999877929688
+  },
+  "AARTIIND": {
+    "ema": 487.37503487940546,
+    "yesterday_high": 486.79998779296875,
+    "yesterday_low": 477.0,
+    "yesterday_close": 479.70001220703125
+  },
+  "ZENTEC": {
+    "ema": 1640.1499791543167,
+    "yesterday_high": 1650.0,
+    "yesterday_low": 1602.0,
+    "yesterday_close": 1605.0
+  },
+  "COROMANDEL": {
+    "ema": 2049.1512368693366,
+    "yesterday_high": 2065.0,
+    "yesterday_low": 2023.4000244140625,
+    "yesterday_close": 2060.800048828125
+  },
+  "ENRIN": {
+    "ema": 3177.327324672731,
+    "yesterday_high": 3170.0,
+    "yesterday_low": 3075.0,
+    "yesterday_close": 3121.699951171875
+  },
+  "SAATVIKGL": {
+    "ema": 435.6118017053335,
+    "yesterday_high": 437.8500061035156,
+    "yesterday_low": 428.3500061035156,
+    "yesterday_close": 431.1000061035156
+  },
+  "PACEDIGITK": {
+    "ema": 201.9460332614544,
+    "yesterday_high": 204.3000030517578,
+    "yesterday_low": 195.0,
+    "yesterday_close": 203.89999389648438
+  },
+  "ANTHEM": {
+    "ema": 800.1956441671143,
+    "yesterday_high": 800.0,
+    "yesterday_low": 780.5999755859375,
+    "yesterday_close": 786.0
+  },
+  "TENNIND": {
+    "ema": 537.9847352706445,
+    "yesterday_high": 543.9000244140625,
+    "yesterday_low": 534.75,
+    "yesterday_close": 540.0
+  },
+  "PINELABS": {
+    "ema": 142.17686565673168,
+    "yesterday_high": 145.0,
+    "yesterday_low": 139.6199951171875,
+    "yesterday_close": 140.0
+  },
+  "CORONA": {
+    "ema": 2106.6578234362596,
+    "yesterday_high": 2145.89990234375,
+    "yesterday_low": 2075.0,
+    "yesterday_close": 2078.0
+  },
+  "ICICIAMC": {
+    "ema": 3107.610457696364,
+    "yesterday_high": 3112.800048828125,
+    "yesterday_low": 3046.5,
+    "yesterday_close": 3050.0
+  },
+  "CORDELIA": {
+    "ema": 804.5201638935417,
+    "yesterday_high": 804.75,
+    "yesterday_low": 784.4500122070312,
+    "yesterday_close": 785.0
+  },
+  "DABUR": {
+    "ema": 424.1821511764214,
+    "yesterday_high": 429.0,
+    "yesterday_low": 415.70001220703125,
+    "yesterday_close": 427.0
+  },
+  "KUSUMGAR": {
+    "ema": 581.7215461279264,
+    "yesterday_high": 593.0,
+    "yesterday_low": 568.0999755859375,
+    "yesterday_close": 569.0
+  },
+  "EBGNG": {
+    "ema": 546.9950595699745,
+    "yesterday_high": 572.5499877929688,
+    "yesterday_low": 536.9500122070312,
+    "yesterday_close": 555.8499755859375
+  },
+  "BELRISE": {
+    "ema": 235.24886132600173,
+    "yesterday_high": 233.35000610351562,
+    "yesterday_low": 229.0,
+    "yesterday_close": 232.0
+  },
+  "MIDWESTLTD": {
+    "ema": 1207.6620069831827,
+    "yesterday_high": 1225.699951171875,
+    "yesterday_low": 1195.0,
+    "yesterday_close": 1202.5999755859375
+  },
+  "AMAGI": {
+    "ema": 648.2916523086705,
+    "yesterday_high": 668.0,
+    "yesterday_low": 640.0499877929688,
+    "yesterday_close": 659.0
+  },
+  "PWL": {
+    "ema": 125.82595889779337,
+    "yesterday_high": 127.58000183105469,
+    "yesterday_low": 124.63999938964844,
+    "yesterday_close": 126.0
+  },
+  "CLEANMAX": {
+    "ema": 1322.730447498485,
+    "yesterday_high": 1330.0999755859375,
+    "yesterday_low": 1292.0,
+    "yesterday_close": 1309.0
+  },
+  "AYE": {
+    "ema": 165.82451378053304,
+    "yesterday_high": 165.9499969482422,
+    "yesterday_low": 160.0,
+    "yesterday_close": 162.0
+  },
+  "WPIL": {
+    "ema": 446.52830628449783,
+    "yesterday_high": 439.95001220703125,
+    "yesterday_low": 430.04998779296875,
+    "yesterday_close": 435.25
+  },
+  "GAEL": {
+    "ema": 170.0573709118739,
+    "yesterday_high": 173.77000427246094,
+    "yesterday_low": 163.0,
+    "yesterday_close": 172.1999969482422
+  },
+  "BLUESTARCO": {
+    "ema": 1679.2607401401501,
+    "yesterday_high": 1704.0,
+    "yesterday_low": 1665.5,
+    "yesterday_close": 1691.4000244140625
+  },
+  "MANYAVAR": {
+    "ema": 414.5749798330091,
+    "yesterday_high": 419.3500061035156,
+    "yesterday_low": 400.45001220703125,
+    "yesterday_close": 417.70001220703125
+  },
+  "DCMSHRIRAM": {
+    "ema": 1045.2349592016544,
+    "yesterday_high": 1068.0,
+    "yesterday_low": 1035.4000244140625,
+    "yesterday_close": 1054.699951171875
+  },
+  "ORCHPHARMA": {
+    "ema": 992.6857106226503,
+    "yesterday_high": 1009.0,
+    "yesterday_low": 982.25,
+    "yesterday_close": 1000.25
+  },
+  "ANURAS": {
+    "ema": 1210.4732048478816,
+    "yesterday_high": 1217.0,
+    "yesterday_low": 1203.300048828125,
+    "yesterday_close": 1208.0
+  },
+  "ELGIEQUIP": {
+    "ema": 571.2941801835503,
+    "yesterday_high": 577.4500122070312,
+    "yesterday_low": 565.5999755859375,
+    "yesterday_close": 570.9500122070312
+  },
+  "EIDPARRY": {
+    "ema": 763.6909326411092,
+    "yesterday_high": 775.5,
+    "yesterday_low": 760.3499755859375,
+    "yesterday_close": 761.9000244140625
+  },
+  "RCF": {
+    "ema": 126.8355679597755,
+    "yesterday_high": 127.4000015258789,
+    "yesterday_low": 125.02999877929688,
+    "yesterday_close": 126.0
+  },
+  "LXCHEM": {
+    "ema": 185.60603676060035,
+    "yesterday_high": 197.0,
+    "yesterday_low": 181.0500030517578,
+    "yesterday_close": 182.0
+  },
+  "SAMMAANCAP": {
+    "ema": 162.06953938815846,
+    "yesterday_high": 161.77999877929688,
+    "yesterday_low": 159.60000610351562,
+    "yesterday_close": 160.02000427246094
+  },
+  "SRF": {
+    "ema": 2623.015846740603,
+    "yesterday_high": 2637.60009765625,
+    "yesterday_low": 2596.5,
+    "yesterday_close": 2604.800048828125
+  },
+  "BAJFINANCE": {
+    "ema": 1094.4987590838832,
+    "yesterday_high": 1067.5,
+    "yesterday_low": 1036.0,
+    "yesterday_close": 1057.0
+  },
+  "TATAPOWER": {
+    "ema": 377.5481170882084,
+    "yesterday_high": 377.79998779296875,
+    "yesterday_low": 374.25,
+    "yesterday_close": 376.29998779296875
+  },
+  "SUNPHARMA": {
+    "ema": 2006.4563845281966,
+    "yesterday_high": 2017.300048828125,
+    "yesterday_low": 1993.0,
+    "yesterday_close": 2005.0
+  },
+  "CONCOR": {
+    "ema": 525.4664490557287,
+    "yesterday_high": 529.9500122070312,
+    "yesterday_low": 522.4000244140625,
+    "yesterday_close": 525.1500244140625
+  },
+  "TATACOMM": {
+    "ema": 1770.9625847817576,
+    "yesterday_high": 1805.0,
+    "yesterday_low": 1762.0,
+    "yesterday_close": 1773.699951171875
+  },
+  "BPCL": {
+    "ema": 317.67874185659883,
+    "yesterday_high": 318.25,
+    "yesterday_low": 312.8999938964844,
+    "yesterday_close": 315.79998779296875
+  },
+  "ACUTAAS": {
+    "ema": 3189.628019838308,
+    "yesterday_high": 3309.699951171875,
+    "yesterday_low": 3152.0,
+    "yesterday_close": 3237.89990234375
+  },
+  "J&KBANK": {
+    "ema": 159.04080448754848,
+    "yesterday_high": 155.72000122070312,
+    "yesterday_low": 147.11000061035156,
+    "yesterday_close": 153.60000610351562
+  },
+  "KIMS": {
+    "ema": 804.7009898679025,
+    "yesterday_high": 816.3499755859375,
+    "yesterday_low": 787.2000122070312,
+    "yesterday_close": 807.0
+  },
+  "NYKAA": {
+    "ema": 331.6846030293604,
+    "yesterday_high": 334.20001220703125,
+    "yesterday_low": 327.29998779296875,
+    "yesterday_close": 333.95001220703125
+  },
+  "EXIDEIND": {
+    "ema": 444.4687093143537,
+    "yesterday_high": 461.0,
+    "yesterday_low": 431.0,
+    "yesterday_close": 456.0
+  },
+  "NATIONALUM": {
+    "ema": 347.4846903486842,
+    "yesterday_high": 349.54998779296875,
+    "yesterday_low": 343.0,
+    "yesterday_close": 347.6499938964844
+  },
+  "POLICYBZR": {
+    "ema": 1596.6882985255518,
+    "yesterday_high": 1606.300048828125,
+    "yesterday_low": 1580.5,
+    "yesterday_close": 1593.5
+  },
+  "LATENTVIEW": {
+    "ema": 314.5670688108581,
+    "yesterday_high": 316.75,
+    "yesterday_low": 309.04998779296875,
+    "yesterday_close": 310.45001220703125
+  },
+  "TEGA": {
+    "ema": 1492.3904700772403,
+    "yesterday_high": 1516.0999755859375,
+    "yesterday_low": 1473.0,
+    "yesterday_close": 1473.0
+  },
+  "STAR": {
+    "ema": 1056.8225425656851,
+    "yesterday_high": 1094.4000244140625,
+    "yesterday_low": 1060.199951171875,
+    "yesterday_close": 1072.800048828125
+  },
+  "CRAMC": {
+    "ema": 260.9342996966026,
+    "yesterday_high": 261.30999755859375,
+    "yesterday_low": 256.95001220703125,
+    "yesterday_close": 260.3900146484375
+  },
+  "RUBICON": {
+    "ema": 1513.1025990593841,
+    "yesterday_high": 1527.300048828125,
+    "yesterday_low": 1485.0,
+    "yesterday_close": 1494.0
+  },
+  "CHALET": {
+    "ema": 812.9729115887986,
+    "yesterday_high": 813.2000122070312,
+    "yesterday_low": 785.4000244140625,
+    "yesterday_close": 804.5
+  },
+  "WAKEFIT": {
+    "ema": 125.8810038637823,
+    "yesterday_high": 130.25,
+    "yesterday_low": 123.81999969482422,
+    "yesterday_close": 125.45999908447266
+  },
+  "DALBHARAT": {
+    "ema": 1807.3767597050862,
+    "yesterday_high": 1823.0,
+    "yesterday_low": 1780.0,
+    "yesterday_close": 1794.199951171875
+  },
+  "E2E": {
+    "ema": 509.0539376689474,
+    "yesterday_high": 499.75,
+    "yesterday_low": 474.3500061035156,
+    "yesterday_close": 492.3999938964844
+  },
+  "USHAMART": {
+    "ema": 505.73355034816063,
+    "yesterday_high": 513.0,
+    "yesterday_low": 501.0,
+    "yesterday_close": 502.0
+  },
+  "SHAILY": {
+    "ema": 3042.6855087803747,
+    "yesterday_high": 3042.199951171875,
+    "yesterday_low": 2986.10009765625,
+    "yesterday_close": 3029.10009765625
+  },
+  "ESCORTS": {
+    "ema": 3033.7079504893313,
+    "yesterday_high": 3032.89990234375,
+    "yesterday_low": 2986.0,
+    "yesterday_close": 3010.39990234375
   }
 }
