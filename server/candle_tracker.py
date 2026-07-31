@@ -552,11 +552,14 @@ class CandleTracker:
     def _save_cache(self) -> None:
         """Write strategy cache to disk (tiny JSON)."""
         CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        now_ts = datetime.now(IST).isoformat()
         payload = dict(self._cache)
         payload["__meta__"] = {
-            "last_updated": datetime.now(IST).isoformat(),
+            "last_updated": now_ts,
             "symbol_count": len([k for k in self._cache if not k.startswith("__")]),
         }
+        # Also update in-memory so get_cache_status() reflects the fresh state
+        self._cache_last_updated = now_ts
         with open(CACHE_PATH, "w") as f:
             json.dump(payload, f, indent=2)
 
