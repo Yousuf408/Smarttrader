@@ -598,6 +598,9 @@ function toggleAutoBuyMode() {
         status.textContent = 'OFF';
         status.classList.remove('active');
         showToast('👤 Manual Mode ON', 'Click Place Order to buy stocks');
+        // Reset the placed-symbols tracker — next time auto-buy is
+        // turned ON it starts fresh (new day / new session).
+        _autoBuyPlacedSymbols = new Set();
     }
 }
 
@@ -702,6 +705,10 @@ async function _submitOrder(order, source = 'manual') {
 // ================================================================
 // AUTO BUY ALL STOCKS  (top-5 by screener order, parallel submit)
 // ================================================================
+// Track which symbols have already been auto-bought today so the
+// 30-second re-evaluation doesn't place duplicate orders.
+let _autoBuyPlacedSymbols = new Set();
+
 async function autoBuyAllStocks() {
     if (!lastAdvanceOrbData || !Array.isArray(lastAdvanceOrbData.data) || lastAdvanceOrbData.data.length === 0) {
         showToast('⚠️ No Stocks', 'Screener has no rows to auto-buy');
@@ -715,7 +722,11 @@ async function autoBuyAllStocks() {
     // cap at AUTO_BUY_CAP.
     const AUTO_BUY_CAP = 5;
     const eligible = lastAdvanceOrbData.data
-        .filter(r => r && r.Symbol && Number(r.MaxQty) > 0);
+        .filter(r => r && r.Symbol && Number(r.MaxQty) > 0)
+        // Skip symbols already auto-bought this session — prevents
+        // duplicate orders on the 30-second re-evaluation cycle once
+        // a stock has been purchased.
+        .filter(r => !_autoBuyPlacedSymbols.has(r.Symbol));
 
     if (eligible.length === 0) {
         showToast('⚠️ No Margin', 'No rows have MaxQty > 0 — adjust budget/parts');
@@ -989,6 +1000,16 @@ async function fetchAdvanceORBRefresh(silent = true) {
                     }
                 }, 10);
                 if (!silent) showToast('🔄 Refreshed', `${touched} stocks updated`);
+                // Auto-buy re-evaluation: if auto-buy is ON, re-scan
+                // candidates every refresh cycle. This catches stocks
+                // whose inside_915 just flipped to true (9:20 candle
+                // closed inside 9:15 range) or whose price just entered
+                // the breakout band. Without this, auto-buy only runs
+                // once when toggled ON and would miss entries that
+                // become eligible later.
+                if (autoBuyEnabled) {
+                    autoBuyAllStocks();
+                }
             }
         }
     } catch (e) {
