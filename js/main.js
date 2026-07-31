@@ -3,7 +3,7 @@
 // ================================================================
 const DOM = {
     pages: document.querySelectorAll('.page'),
-    navLinks: document.querySelectorAll('.nav-links a'),
+    navLinks: document.querySelectorAll('.sidebar-link'),
     toast: document.getElementById('toast'),
     toastTitle: document.getElementById('toastTitle'),
     toastMessage: document.getElementById('toastMessage'),
@@ -18,25 +18,19 @@ const DOM = {
 let autoBuyEnabled = false;
 
 // ================================================================
-// HAMBURGER TOGGLE — mobile responsive menu
+// SIDEBAR TOGGLE
 // ================================================================
 document.addEventListener('DOMContentLoaded', () => {
-    const btn = document.getElementById('hamburgerBtn');
-    const navLinks = document.getElementById('navLinks');
-    if (btn && navLinks) {
-        btn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            navLinks.classList.toggle('open');
-        });
-        navLinks.querySelectorAll('a').forEach(a => {
-            a.addEventListener('click', () => {
-                navLinks.classList.remove('open');
-            });
-        });
-        document.addEventListener('click', (e) => {
-            if (!navLinks.contains(e.target) && !btn.contains(e.target)) {
-                navLinks.classList.remove('open');
-            }
+    // Sidebar collapse/expand
+    const sidebar = document.getElementById('sidebar');
+    const toggleBtn = document.getElementById('sidebarToggle');
+    if (sidebar && toggleBtn) {
+        // Restore saved state
+        const saved = localStorage.getItem('sidebarCollapsed');
+        if (saved === 'true') sidebar.classList.add('collapsed');
+        toggleBtn.addEventListener('click', () => {
+            sidebar.classList.toggle('collapsed');
+            localStorage.setItem('sidebarCollapsed', sidebar.classList.contains('collapsed'));
         });
     }
     // Init theme from localStorage
@@ -261,23 +255,20 @@ const STRATEGIES = {
 // ================================================================
 function navigateTo(pageId) {
     DOM.navLinks.forEach(a => a.classList.remove('active'));
-    const activeLink = document.querySelector(`.nav-links a[data-page="${pageId}"]`);
+    const activeLink = document.querySelector(`.sidebar-link[data-page="${pageId}"]`);
     if (activeLink) activeLink.classList.add('active');
     
     DOM.pages.forEach(p => p.classList.remove('active'));
     const targetPage = document.getElementById('page-' + pageId);
     if (targetPage) targetPage.classList.add('active');
     
-    // Auto-refresh (advanceorb) keeps running even when the user is on other pages,
-    // so the screener data stays current for the upcoming auto-buy feature.
-
     if (pageId === 'home') loadHome();
     else if (pageId === 'strategies') loadStrategies();
     else if (pageId === 'portfolio') loadPortfolio();
     else if (pageId === 'testing') loadTesting();
 }
 
-document.querySelectorAll('.nav-links a').forEach(link => {
+document.querySelectorAll('.sidebar-link').forEach(link => {
     link.addEventListener('click', function(e) {
         e.preventDefault();
         const pageId = this.getAttribute('data-page');

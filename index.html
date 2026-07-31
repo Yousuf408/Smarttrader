@@ -11,35 +11,51 @@
 <body>
 
     <!-- ================================================================ -->
-    <!-- NAVBAR -->
+    <!-- SIDEBAR -->
     <!-- ================================================================ -->
-    <nav class="navbar">
-        <div class="nav-left">
-            <button class="hamburger" id="hamburgerBtn" aria-label="Toggle menu">☰</button>
-            <div class="logo">📊 <span>TradeAlgo</span>Pro</div>
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <div class="sidebar-logo">📊<span class="sidebar-logo-text">TradeAlgoPro</span></div>
+            <button class="sidebar-toggle" id="sidebarToggle" aria-label="Toggle sidebar">◀</button>
         </div>
-        <ul class="nav-links" id="navLinks">
-            <li><a class="active" data-page="home">🏠 Home</a></li>
-            <li><a data-page="strategies">📋 Strategies</a></li>
-            <li><a data-page="screener">🔍 Screener</a></li>
-            <li><a data-page="portfolio">💰 Portfolio</a></li>
-            <li><a data-page="backtest">📊 Backtest</a></li>
-            <li><a data-page="testing">🧪 Testing</a></li>
-            <li><a data-page="settings">⚙️ Settings</a></li>
-        </ul>
-        <div class="nav-right">
-            <button class="notif-bell" id="notifBell" onclick="toggleNotifPanel()" aria-label="Notifications">🔔<span class="notif-badge" id="notifBadge" style="display:none;">0</span></button>
-            <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" aria-label="Toggle theme">🌙</button>
+        <nav class="sidebar-nav">
+            <a class="sidebar-link active" data-page="home"><span class="sidebar-icon">🏠</span><span class="sidebar-label">Home</span></a>
+            <a class="sidebar-link" data-page="strategies"><span class="sidebar-icon">📋</span><span class="sidebar-label">Strategies</span></a>
+            <a class="sidebar-link" data-page="screener"><span class="sidebar-icon">🔍</span><span class="sidebar-label">Screener</span></a>
+            <a class="sidebar-link" data-page="portfolio"><span class="sidebar-icon">💰</span><span class="sidebar-label">Portfolio</span></a>
+            <a class="sidebar-link" data-page="backtest"><span class="sidebar-icon">📊</span><span class="sidebar-label">Backtest</span></a>
+            <a class="sidebar-link" data-page="testing"><span class="sidebar-icon">🧪</span><span class="sidebar-label">Testing</span></a>
+            <a class="sidebar-link" data-page="settings"><span class="sidebar-icon">⚙️</span><span class="sidebar-label">Settings</span></a>
+        </nav>
+        <div class="sidebar-footer">
+            <button class="sidebar-footer-btn" id="sidebarThemeToggle" onclick="toggleTheme()" aria-label="Toggle theme">
+                <span class="sidebar-icon">🌙</span><span class="sidebar-label">Dark Mode</span>
+            </button>
+            <div class="sidebar-user">
+                <div class="sidebar-avatar">JD</div>
+                <span class="sidebar-label">John Doe</span>
+            </div>
+        </div>
+    </aside>
+
+    <!-- ================================================================ -->
+    <!-- TOP BAR (Compact) -->
+    <!-- ================================================================ -->
+    <header class="topbar" id="topbar">
+        <div class="topbar-left">
             <span class="status"><span class="dot"></span> Live</span>
+        </div>
+        <div class="topbar-right">
+            <button class="notif-bell" id="notifBell" onclick="toggleNotifPanel()" aria-label="Notifications">🔔<span class="notif-badge" id="notifBadge" style="display:none;">0</span></button>
             <span class="balance">₹1,24,500</span>
             <div class="avatar">JD</div>
         </div>
-    </nav>
+    </header>
 
     <!-- ================================================================ -->
     <!-- MAIN CONTENT -->
     <!-- ================================================================ -->
-    <div class="container">
+    <div class="container" id="mainContainer">
 
         <!-- ============================================================= -->
         <!-- HOME -->
