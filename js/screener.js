@@ -737,12 +737,24 @@ async function autoBuyAllStocks() {
     //            risk. Skip — do NOT place an order.
     // Constants at the top of this file: AUTO_BUY_MIN/MAX_MOVE...
     // -----------------------------------------------------------------
+    // ADDITIONAL CHECK — 2nd Candle (9:20) Confirmation
+    // -----------------------------------------------------------------
+    // The 9:20 (2nd 5-min) candle must have closed inside the 9:15
+    // candle range before we buy. This ensures the stock didn't reject
+    // the 9:15 range immediately — a candle that closes outside means
+    // the breakout already failed or is false.
+    // Because the 9:20 candle data comes from yfinance (which can be
+    // slightly delayed), we also skip rows where inside_915 is null
+    // (data not yet available) to avoid buying on incomplete info.
+    // -----------------------------------------------------------------
     const bandFiltered = eligible.filter(row => {
         const high915 = parseFloat(row.high915);
         const price = parseFloat(row.Price ?? row.price);
         // Skip rows missing either anchor (zero / NaN) — can't decide.
         if (!Number.isFinite(high915) || high915 <= 0) return false;
         if (!Number.isFinite(price) || price <= 0) return false;
+        // 2nd candle must have closed inside 9:15 range before buying
+        if (row.inside_915 !== true) return false;
         const movePct = ((price - high915) / high915) * 100;
         // The actual condition the user asked for:
         //   if price < +0.15% above 9:15 high  → DO NOT execute
