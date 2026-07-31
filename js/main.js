@@ -74,6 +74,7 @@ function navigateTo(pageId) {
     if (pageId === 'home') loadHome();
     else if (pageId === 'strategies') loadStrategies();
     else if (pageId === 'portfolio') loadPortfolio();
+    else if (pageId === 'testing') loadTesting();
 }
 
 document.querySelectorAll('.nav-links a').forEach(link => {
