@@ -33,7 +33,7 @@
             </button>
             <div class="sidebar-user" id="sidebarUser">
                 <div class="sidebar-avatar" id="sidebarAvatar">U</div>
-                <span class="sidebar-label" id="sidebarUserName">User</span>
+                <span class="sidebar-label" id="sidebarUserName">Welcome, User</span>
             </div>
             <button class="sidebar-footer-btn" onclick="logout()" aria-label="Logout" style="color:var(--color-danger);">
                 <span class="sidebar-icon">🚪</span><span class="sidebar-label">Logout</span>
@@ -50,8 +50,8 @@
         </div>
         <div class="topbar-right">
             <button class="notif-bell" id="notifBell" onclick="toggleNotifPanel()" aria-label="Notifications">🔔<span class="notif-badge" id="notifBadge" style="display:none;">0</span></button>
-            <span class="balance">₹1,24,500</span>
-            <div class="avatar">JD</div>
+            <span class="balance" id="headerCapital">₹0</span>
+            <div class="avatar" id="headerAvatar">U</div>
         </div>
     </header>
 

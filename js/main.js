@@ -24,10 +24,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     // ── Auth check ────────────────────────────────────────────
     const user = await checkAuth();
     if (user) {
-        const av = document.getElementById('sidebarAvatar');
-        const nm = document.getElementById('sidebarUserName');
-        if (av) av.textContent = (user.email || 'U')[0].toUpperCase();
-        if (nm) nm.textContent = user.email?.split('@')[0] || 'User';
+        const name = user.email?.split('@')[0] || 'User';
+        const initial = (user.email || 'U')[0].toUpperCase();
+        // Sidebar
+        const sAv = document.getElementById('sidebarAvatar');
+        const sNm = document.getElementById('sidebarUserName');
+        if (sAv) sAv.textContent = initial;
+        if (sNm) sNm.textContent = `Welcome, ${name}`;
+        // Top bar
+        const hAv = document.getElementById('headerAvatar');
+        if (hAv) hAv.textContent = initial;
     }
 
     // Sidebar collapse/expand
