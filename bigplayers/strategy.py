@@ -12,18 +12,17 @@ Breakout status:
   - "Waiting" → pattern not yet confirmed
 
 Support price = the 09:15 opening-candle low.
+
+Data source: CandleTracker (WebSocket-built candles), NOT yfinance.
+Using yfinance here was the reason for 0% diff / inaccurate high-low
+values — now we rely solely on live Angel One WebSocket data.
 """
 
-import yfinance as yf
-import pandas as pd
-from zoneinfo import ZoneInfo
 from typing import Optional
-
-IST = ZoneInfo("Asia/Kolkata")
 
 
 class BigPlayersStrategy:
-    """Identifies support-then-reversal patterns on 5-min candles."""
+    """Identifies support-then-reversal patterns using candle_tracker data."""
 
     def __init__(self):
         pass
@@ -33,13 +32,17 @@ class BigPlayersStrategy:
         Return 'Active' if price touched/broke the 09:15 low intraday
         and then recovered above it; otherwise return 'Waiting'.
 
-        Expects row keys: Symbol, low915, Price (current price).
+        Uses only candle_tracker data (WebSocket-built) — NO yfinance calls.
+
+        Expects row keys: Symbol, low915, Price (current price), todayLow.
+        If todayLow is present and < low915, and current price > low915,
+        we consider the breakout confirmed.
         """
-        symbol = row.get("Symbol", "")
         low915 = row.get("low915")
         current_price = row.get("Price")
+        today_low = row.get("todayLow")
 
-        if not symbol or low915 is None or current_price is None:
+        if low915 is None or current_price is None:
             return "Waiting"
 
         try:
@@ -52,72 +55,20 @@ class BigPlayersStrategy:
         if current_price <= low915:
             return "Waiting"
 
-        # Fetch today's 5-min candles to check the intraday sequence.
-        ticker = f"{str(symbol).strip().upper()}.NS"
+        # Check if price dipped below the 09:15 low intraday using
+        # candle_tracker's day_low (WebSocket data, NOT yfinance).
+        if today_low is None:
+            return "Waiting"
         try:
-            candles = yf.download(
-                tickers=ticker,
-                period="1d",
-                interval="5m",
-                progress=False,
-                auto_adjust=False,
-                prepost=False,
-                threads=False,
-            )
-        except Exception:
+            today_low = float(today_low)
+        except (TypeError, ValueError):
             return "Waiting"
 
-        if candles is None or candles.empty:
+        if today_low >= low915:
+            # Never touched/broke support.
             return "Waiting"
 
-        # Handle MultiIndex columns (yfinance quirk).
-        if isinstance(candles.columns, pd.MultiIndex):
-            try:
-                candles = candles.xs(ticker, axis=1, level=-1)
-            except (KeyError, IndexError):
-                try:
-                    candles = candles.xs(ticker, axis=1, level=0)
-                except (KeyError, IndexError):
-                    return "Waiting"
-
-        if "Low" not in candles or "Close" not in candles:
-            return "Waiting"
-
-        # Convert to IST.
-        local_index = pd.DatetimeIndex(candles.index)
-        if local_index.tz is None:
-            local_index = local_index.tz_localize("UTC").tz_convert(IST)
-        else:
-            local_index = local_index.tz_convert(IST)
-        candles = candles.copy()
-        candles.index = local_index
-
-        # Candles strictly AFTER the 09:15 opening candle.
-        after_open = candles[
-            (candles.index.hour > 9)
-            | ((candles.index.hour == 9) & (candles.index.minute > 15))
-        ]
-        if after_open.empty:
-            return "Waiting"
-
-        lows = pd.to_numeric(after_open["Low"], errors="coerce")
-        below_support = lows[lows < low915]
-
-        if below_support.empty:
-            # Never touched support.
-            return "Waiting"
-
-        # Found at least one candle that dipped below the 09:15 low.
-        # Now check if a later candle closed back above support.
-        first_dip_idx = below_support.index[0]
-        after_dip = after_open.loc[first_dip_idx:]
-
-        closes = pd.to_numeric(after_dip["Close"], errors="coerce")
-        above_support = closes[closes > low915]
-
-        if above_support.empty:
-            return "Waiting"
-
+        # Price dipped below 09:15 low AND has now recovered above it.
         return "Active"
 
     def calculate_support_price(self, row: dict) -> Optional[float]:

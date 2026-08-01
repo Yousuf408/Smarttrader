@@ -151,6 +151,7 @@ def get_big_players(budget: int = 100000, parts: int = 4):
                 'high915': row.get('high915'),
                 'low915': row.get('low915'),
                 'ema': row.get('ema'),
+                'todayLow': today_low,
             }
             breakout_status = bp_strategy.calculate_breakout_status(row_dict)
             support_price = bp_strategy.calculate_support_price(row_dict)
@@ -245,6 +246,7 @@ def refresh_big_players(tickers: str = ""):
                 'high915': high915,
                 'low915': low915,
                 'ema': ema,
+                'todayLow': today_low,
             }
             breakout_status = bp_strategy.calculate_breakout_status(row_dict)
             support_price = bp_strategy.calculate_support_price(row_dict)
