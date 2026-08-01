@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TradeAlgo Pro — Login</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        /* ── Full-page auth layout ── */
+        body {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            background: var(--bg-primary);
+            margin: 0;
+            padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        .auth-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 40px 36px;
+            width: 100%;
+            max-width: 400px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+        }
+        .auth-card h1 {
+            font-size: 24px;
+            margin: 0 0 4px;
+            color: var(--text-primary);
+        }
+        .auth-card p.sub {
+            color: var(--text-secondary);
+            font-size: 14px;
+            margin: 0 0 28px;
+        }
+        .auth-card .logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 24px;
+        }
+        .auth-card .logo span {
+            font-size: 28px;
+        }
+        .auth-card .logo h1 {
+            margin: 0;
+            font-size: 22px;
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .form-group {
+            margin-bottom: 16px;
+        }
+        .form-group label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 6px;
+        }
+        .form-group input {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.2s;
+            box-sizing: border-box;
+        }
+        .form-group input:focus {
+            border-color: #6366f1;
+        }
+        .btn-auth {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            color: #fff;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        .btn-auth:hover { opacity: 0.9; }
+        .btn-auth:disabled { opacity: 0.5; cursor: not-allowed; }
+        .auth-error {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            color: #ef4444;
+            padding: 10px 12px;
+            border-radius: 8px;
+            font-size: 13px;
+            margin-bottom: 16px;
+            display: none;
+        }
+        .auth-success {
+            background: rgba(34, 197, 94, 0.1);
+            border: 1px solid rgba(34, 197, 94, 0.3);
+            color: #22c55e;
+            padding: 10px 12px;
+            border-radius: 8px;
+            font-size: 13px;
+            margin-bottom: 16px;
+            display: none;
+        }
+        .auth-toggle {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+        .auth-toggle a {
+            color: #6366f1;
+            cursor: pointer;
+            text-decoration: none;
+            font-weight: 600;
+        }
+        .auth-toggle a:hover { text-decoration: underline; }
+        .auth-spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+            vertical-align: middle;
+            margin-right: 6px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <div class="auth-card">
+        <div class="logo">
+            <span>📈</span>
+            <h1>TradeAlgo Pro</h1>
+        </div>
+
+        <div id="authError" class="auth-error"></div>
+        <div id="authSuccess" class="auth-success"></div>
+
+        <!-- Sign In Form -->
+        <div id="signinForm">
+            <p class="sub">Sign in to your account</p>
+            <div class="form-group">
+                <label>Email</label>
+                <input type="email" id="signinEmail" placeholder="you@example.com" autocomplete="email">
+            </div>
+            <div class="form-group">
+                <label>Password</label>
+                <input type="password" id="signinPassword" placeholder="••••••••" autocomplete="current-password">
+            </div>
+            <button class="btn-auth" id="signinBtn" onclick="handleSignin()">Sign In</button>
+            <div class="auth-toggle">
+                Don't have an account? <a onclick="showSignup()">Create one</a>
+            </div>
+        </div>
+
+        <!-- Sign Up Form -->
+        <div id="signupForm" style="display:none;">
+            <p class="sub">Create a new account</p>
+            <div class="form-group">
+                <label>Email</label>
+                <input type="email" id="signupEmail" placeholder="you@example.com" autocomplete="email">
+            </div>
+            <div class="form-group">
+                <label>Password</label>
+                <input type="password" id="signupPassword" placeholder="••••••••" autocomplete="new-password">
+            </div>
+            <button class="btn-auth" id="signupBtn" onclick="handleSignup()">Create Account</button>
+            <div class="auth-toggle">
+                Already have an account? <a onclick="showSignin()">Sign in</a>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/auth.js"></script>
+    <script>
+        function showError(msg) {
+            const el = document.getElementById('authError');
+            el.textContent = msg;
+            el.style.display = 'block';
+            document.getElementById('authSuccess').style.display = 'none';
+        }
+
+        function showSuccess(msg) {
+            const el = document.getElementById('authSuccess');
+            el.textContent = msg;
+            el.style.display = 'block';
+            document.getElementById('authError').style.display = 'none';
+        }
+
+        function clearMessages() {
+            document.getElementById('authError').style.display = 'none';
+            document.getElementById('authSuccess').style.display = 'none';
+        }
+
+        function showSignup() {
+            clearMessages();
+            document.getElementById('signinForm').style.display = 'none';
+            document.getElementById('signupForm').style.display = 'block';
+        }
+
+        function showSignin() {
+            clearMessages();
+            document.getElementById('signupForm').style.display = 'none';
+            document.getElementById('signinForm').style.display = 'block';
+        }
+
+        function setLoading(btnId, loading) {
+            const btn = document.getElementById(btnId);
+            if (loading) {
+                btn.disabled = true;
+                btn.innerHTML = '<span class="auth-spinner"></span> Please wait...';
+            } else {
+                btn.disabled = false;
+                btn.textContent = btnId === 'signinBtn' ? 'Sign In' : 'Create Account';
+            }
+        }
+
+        async function handleSignin() {
+            const email = document.getElementById('signinEmail').value.trim();
+            const password = document.getElementById('signinPassword').value;
+            if (!email || !password) { showError('Please fill in all fields.'); return; }
+
+            clearMessages();
+            setLoading('signinBtn', true);
+
+            try {
+                const resp = await fetch('/auth/signin', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password }),
+                });
+                const data = await resp.json();
+
+                if (data.ok) {
+                    saveAuth(data.access_token, data.user);
+                    window.location.href = '/';
+                } else {
+                    showError(data.error || 'Login failed.');
+                }
+            } catch (e) {
+                showError('Network error. Please try again.');
+            } finally {
+                setLoading('signinBtn', false);
+            }
+        }
+
+        async function handleSignup() {
+            const email = document.getElementById('signupEmail').value.trim();
+            const password = document.getElementById('signupPassword').value;
+            if (!email || !password) { showError('Please fill in all fields.'); return; }
+            if (password.length < 6) { showError('Password must be at least 6 characters.'); return; }
+
+            clearMessages();
+            setLoading('signupBtn', true);
+
+            try {
+                const resp = await fetch('/auth/signup', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password }),
+                });
+                const data = await resp.json();
+
+                if (data.ok) {
+                    saveAuth(data.access_token, data.user);
+                    window.location.href = '/';
+                } else {
+                    showError(data.error || 'Signup failed.');
+                }
+            } catch (e) {
+                showError('Network error. Please try again.');
+            } finally {
+                setLoading('signupBtn', false);
+            }
+        }
+
+        // Check if already logged in
+        (async () => {
+            const user = await checkAuth();
+            if (user) {
+                window.location.href = '/';
+            }
+        })();
+    </script>
+</body>
+</html>

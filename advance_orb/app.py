@@ -50,18 +50,11 @@ from broker.angel_ws import (
     get_subscription_status as angel_ws_status,
 )
 from advance_orb.supabase_db import save_top5_strategy, ensure_table
+from advance_orb.auth_routes import router as auth_router
 from server.candle_tracker import candle_tracker
 
 # Ensure the strategy_trades table exists (run once at startup)
 ensure_table()
-
-# =================================================================
-# No login flow, no Supabase, no JWT — the auth surface has been
-# stripped. All API endpoints in this app are open and read/write
-# the screener's in-memory caches. Frontend is served as static
-# files from PROJECT_ROOT (see secure-static-hosting.md for the
-# why-we-don't-mount-repo-root rule).
-# =================================================================
 
 
 # =================================================================
@@ -194,6 +187,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Auth router — signup, signin, me, logout via Supabase Auth
+app.include_router(auth_router)
 
 # No-cache for every response — HTML, JS, CSS, JSON. After the
 # auth-strip the user's browser held stale copies of (a) the deleted
@@ -944,6 +939,11 @@ def frontend():
 @app.get("/style.css", include_in_schema=False)
 def stylesheet():
     return FileResponse(PROJECT_ROOT / "style.css", media_type="text/css")
+
+
+@app.get("/login.html", include_in_schema=False)
+def login_page():
+    return FileResponse(PROJECT_ROOT / "login.html", media_type="text/html")
 
 
 app.mount("/js", StaticFiles(directory=PROJECT_ROOT / "js"), name="frontend-js")

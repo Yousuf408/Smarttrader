@@ -20,7 +20,16 @@ let autoBuyEnabled = false;
 // ================================================================
 // SIDEBAR TOGGLE
 // ================================================================
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+    // ── Auth check ────────────────────────────────────────────
+    const user = await checkAuth();
+    if (user) {
+        const av = document.getElementById('sidebarAvatar');
+        const nm = document.getElementById('sidebarUserName');
+        if (av) av.textContent = (user.email || 'U')[0].toUpperCase();
+        if (nm) nm.textContent = user.email?.split('@')[0] || 'User';
+    }
+
     // Sidebar collapse/expand
     const sidebar = document.getElementById('sidebar');
     const toggleBtn = document.getElementById('sidebarToggle');
