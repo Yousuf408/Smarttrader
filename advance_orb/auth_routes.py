@@ -137,23 +137,13 @@ async def signup(payload: SignUpPayload):
     if not uid:
         raise HTTPException(status_code=500, detail="Failed to create user — no user ID returned")
 
-    # ── Step 2: Insert into algo_user ─────────────────────────
-    async with httpx.AsyncClient() as cl:
-        insert_resp = await cl.post(
-            f"{_SUPABASE_URL}/rest/v1/algo_user",
-            headers=_sb_headers(access_token),
-            json={
-                "id": uid,
-                "username": username,
-                "email": email,
-            },
-            timeout=10,
-        )
-
-    if insert_resp.status_code not in (200, 201):
-        # Non-critical — user is created in auth, algo_user insert may fail
-        # if RLS blocks it. The user can still sign in.
-        print(f"[auth] Warning: algo_user insert status={insert_resp.status_code}: {insert_resp.text[:100]}")
+    # ── No algo_user insert ───────────────────────────────────
+    # The username & email are stored in Supabase Auth's
+    # user_metadata (sent as `data` in the signup request above).
+    # get_current_user() reads from user_metadata, so no separate
+    # algo_user insert is needed for authentication to work.
+    # An algo_user row can be created later (e.g. via Settings)
+    # when the user explicitly saves profile data.
 
     return {
         "ok": True,
