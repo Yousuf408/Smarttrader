@@ -284,10 +284,13 @@ function _bpApplyTicks(ticks) {
     }
 }
 
+let _bpTickWatchdog = null;
+
 function _startBigPlayersTicks() {
     _stopBigPlayersTicks();
     _bpEventSource = new EventSource('/api/market/bigplayers-ticks/stream');
     _bpEventSource.onmessage = function (ev) {
+        _resetBpTickWatchdog();
         try {
             const data = JSON.parse(ev.data);
             if (data.connected && data.ticks) {
@@ -302,7 +305,23 @@ function _startBigPlayersTicks() {
     _bpEventSource.onerror = function () {};
 }
 
+function _resetBpTickWatchdog() {
+    if (_bpTickWatchdog) clearTimeout(_bpTickWatchdog);
+    _bpTickWatchdog = setTimeout(() => {
+        console.warn('[bp-tick-watchdog] No message for 10s — reconnecting SSE');
+        if (_bpEventSource) {
+            try { _bpEventSource.close(); } catch (_) {}
+            _bpEventSource = null;
+        }
+        _startBigPlayersTicks();
+    }, 10000);
+}
+
 function _stopBigPlayersTicks() {
+    if (_bpTickWatchdog) {
+        clearTimeout(_bpTickWatchdog);
+        _bpTickWatchdog = null;
+    }
     if (_bpEventSource) {
         _bpEventSource.close();
         _bpEventSource = null;

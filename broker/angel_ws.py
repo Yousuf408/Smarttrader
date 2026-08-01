@@ -54,6 +54,14 @@ _thread = None
 _connected = False
 _correlation_id = "trading_app_live"
 
+# ── Auto-reconnect state ──────────────────────────────────────────
+_reconnect_active = False              # set True while a reconnect is in progress
+_reconnect_stop = threading.Event()    # set to stop reconnection loop
+_reconnect_max_attempts = 0            # 0 = unlimited
+_reconnect_delay = 5.0                 # initial delay (seconds)
+_reconnect_max_delay = 120.0           # cap at 2 minutes
+_reconnect_multiplier = 2.0            # exponential backoff factor
+
 # Reverse lookup: token → display symbol (populated by _build_token_map)
 _TOKEN_SYMBOL_MAP = {}
 
@@ -300,11 +308,13 @@ _last_tick_save = time.time()
 _TICK_SAVE_INTERVAL = 30.0  # seconds between tick-file saves
 
 def on_close(wsapp):
-    """Called when WebSocket connection closes."""
+    """Called when WebSocket connection closes — triggers auto-reconnect."""
     global _connected
     _connected = False
     _save_ticks()  # preserve last-known prices on disconnect
-    logger.info(f"🔌 WebSocket Closed ({len(latest_ticks)} ticks saved)")
+    logger.info(f"🔌 WebSocket Closed ({len(latest_ticks)} ticks saved) — reconnecting...")
+    # Auto-reconnect in background (non-blocking)
+    threading.Thread(target=_auto_reconnect, daemon=True).start()
 
 # ==============================================================================
 # START / STOP WEBSOCKET
@@ -423,10 +433,73 @@ def start_websocket(feed_token=None, watchlist=None):
         logger.error(f"🔴 Failed to start WebSocket: {e}", exc_info=True)
         return {"success": False, "error": str(e)}
 
+# ==============================================================================
+# AUTO-RECONNECT — exponential backoff, survives sleep/refresh
+# ==============================================================================
+
+def _auto_reconnect():
+    """Background reconnection loop with exponential backoff.
+
+    Triggered by on_close.  Runs in a daemon thread so it doesn't block
+    shutdown.  Stops when _reconnect_stop is set (by stop_websocket).
+    """
+    global _reconnect_active, _connected, _reconnect_stop
+
+    if _reconnect_active:
+        logger.info("ℹ️ Reconnect already in progress — skipping")
+        return
+    _reconnect_active = True
+    _reconnect_stop.clear()
+
+    delay = _reconnect_delay
+    attempt = 0
+
+    while not _reconnect_stop.is_set():
+        if _connected:
+            logger.info("✅ WebSocket reconnected successfully")
+            break
+        attempt += 1
+        logger.info(
+            f"🔄 Reconnect attempt {attempt}"
+            + (f" (max {_reconnect_max_attempts})" if _reconnect_max_attempts else "")
+            + f" — waiting {delay:.0f}s..."
+        )
+
+        # Wait (check stop-flag every second so we can cancel promptly)
+        waited = 0.0
+        while waited < delay and not _reconnect_stop.is_set():
+            _reconnect_stop.wait(1.0)
+            waited += 1.0
+
+        if _reconnect_stop.is_set():
+            break
+
+        if _reconnect_max_attempts and attempt >= _reconnect_max_attempts:
+            logger.error(f"🔴 Reconnect failed after {attempt} attempts — giving up")
+            break
+
+        # Attempt reconnection
+        try:
+            result = start_websocket()
+            if result.get("success"):
+                logger.info(f"✅ Reconnected on attempt {attempt}")
+                break
+            else:
+                logger.warning(f"⚠️ Reconnect attempt {attempt} failed: {result.get('error')}")
+        except Exception as e:
+            logger.error(f"🔴 Reconnect exception: {e}")
+
+        # Exponential backoff (capped)
+        delay = min(delay * _reconnect_multiplier, _reconnect_max_delay)
+
+    _reconnect_active = False
+
+
 def stop_websocket():
-    """Close WebSocket connection."""
-    global _sws, _connected
+    """Close WebSocket connection and cancel any pending reconnect."""
+    global _sws, _connected, _reconnect_stop
     _connected = False
+    _reconnect_stop.set()  # cancel any pending reconnect
 
     if _sws:
         try:

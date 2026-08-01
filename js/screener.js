@@ -1145,11 +1145,15 @@ function _applyTicks(ticks) {
     }
 }
 
+let _tickWatchdog = null;
+
 function startLiveTickPoll() {
     stopLiveTickPoll();
     const url = '/api/market/live-ticks/stream';
     _tickEventSource = new EventSource(url);
     _tickEventSource.onmessage = function (ev) {
+        // Reset watchdog on every message (heartbeat or data)
+        _resetTickWatchdog();
         try {
             const data = JSON.parse(ev.data);
             if (data.connected && data.ticks) {
@@ -1164,11 +1168,31 @@ function startLiveTickPoll() {
         } catch (_) {}
     };
     _tickEventSource.onerror = function () {
-        // EventSource auto-reconnects; nothing more to do
+        // EventSource auto-reconnects natively, but on screen-sleep the
+        // browser may not fire onerror at all.  The watchdog below
+        // catches that case by detecting message silence.
     };
 }
 
+function _resetTickWatchdog() {
+    if (_tickWatchdog) clearTimeout(_tickWatchdog);
+    // If no message (data or heartbeat) arrives for 10 seconds,
+    // force-close and re-open the EventSource.
+    _tickWatchdog = setTimeout(() => {
+        console.warn('[tick-watchdog] No message for 10s — reconnecting SSE');
+        if (_tickEventSource) {
+            try { _tickEventSource.close(); } catch (_) {}
+            _tickEventSource = null;
+        }
+        startLiveTickPoll();
+    }, 10000);
+}
+
 function stopLiveTickPoll() {
+    if (_tickWatchdog) {
+        clearTimeout(_tickWatchdog);
+        _tickWatchdog = null;
+    }
     if (_tickEventSource) {
         _tickEventSource.close();
         _tickEventSource = null;
