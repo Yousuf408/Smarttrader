@@ -51,7 +51,19 @@
         <div class="topbar-right">
             <button class="notif-bell" id="notifBell" onclick="toggleNotifPanel()" aria-label="Notifications">🔔<span class="notif-badge" id="notifBadge" style="display:none;">0</span></button>
             <span class="balance" id="headerCapital">₹0</span>
-            <div class="avatar" id="headerAvatar">U</div>
+            <div class="avatar-wrap" id="avatarWrap">
+                <div class="avatar" id="headerAvatar">U</div>
+                <div class="avatar-dropdown" id="avatarDropdown">
+                    <div class="dropdown-user" id="dropdownUserInfo">
+                        <span class="dropdown-name" id="dropdownUserName">User</span>
+                        <span class="dropdown-email" id="dropdownUserEmail"></span>
+                    </div>
+                    <div class="dropdown-divider"></div>
+                    <button class="dropdown-item" onclick="handleLogout()">
+                        <span>🚪</span> Logout
+                    </button>
+                </div>
+            </div>
         </div>
     </header>
 

@@ -34,6 +34,37 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Top bar
         const hAv = document.getElementById('headerAvatar');
         if (hAv) hAv.textContent = initial;
+        // Dropdown user info
+        const dName = document.getElementById('dropdownUserName');
+        const dEmail = document.getElementById('dropdownUserEmail');
+        if (dName) dName.textContent = name;
+        if (dEmail) dEmail.textContent = user.email || '';
+    }
+
+    // ── Fetch real capital from broker ───────────────────────────
+    try {
+        const resp = await fetch('/api/portfolio/funds');
+        const data = await resp.json();
+        if (data.success && data.data) {
+            const balance = data.data.availabelBalance || data.data.sodLimit || 0;
+            const capEl = document.getElementById('headerCapital');
+            if (capEl) capEl.textContent = '₹' + Math.round(balance).toLocaleString('en-IN');
+        }
+    } catch (e) {
+        // Silently ignore — broker not connected yet
+    }
+
+    // ── Avatar dropdown toggle ───────────────────────────────────
+    const avatarWrap = document.getElementById('avatarWrap');
+    const dropdown = document.getElementById('avatarDropdown');
+    if (avatarWrap && dropdown) {
+        avatarWrap.addEventListener('click', (e) => {
+            e.stopPropagation();
+            dropdown.classList.toggle('open');
+        });
+        document.addEventListener('click', () => {
+            dropdown.classList.remove('open');
+        });
     }
 
     // Sidebar collapse/expand

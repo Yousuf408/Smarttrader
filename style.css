@@ -330,6 +330,77 @@ body {
 }
 .avatar:hover { transform: scale(1.05) rotate(-4deg); }
 
+/* ── Avatar dropdown ── */
+.avatar-wrap {
+    position: relative;
+    display: inline-flex;
+}
+.avatar-dropdown {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    background: var(--bg-secondary);
+    border: 1px solid rgba(0,0,0,0.08);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-lg);
+    min-width: 200px;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-4px);
+    transition: var(--transition);
+    z-index: 300;
+    overflow: hidden;
+}
+.avatar-dropdown.open {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+.avatar-dropdown .dropdown-user {
+    padding: 14px 16px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.avatar-dropdown .dropdown-name {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+.avatar-dropdown .dropdown-email {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+.avatar-dropdown .dropdown-divider {
+    height: 1px;
+    background: rgba(0,0,0,0.06);
+    margin: 0;
+}
+.avatar-dropdown .dropdown-item {
+    width: 100%;
+    padding: 12px 16px;
+    border: none;
+    background: transparent;
+    color: var(--color-danger);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: inherit;
+    transition: var(--transition);
+}
+.avatar-dropdown .dropdown-item:hover {
+    background: rgba(225,112,85,0.08);
+}
+body.dark-theme .avatar-dropdown {
+    border-color: rgba(255,255,255,0.08);
+}
+body.dark-theme .avatar-dropdown .dropdown-divider {
+    background: rgba(255,255,255,0.06);
+}
+
 /* ================================================================
    CONTAINER & PAGES — offset for sidebar
    ================================================================ */
