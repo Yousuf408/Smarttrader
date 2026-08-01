@@ -160,14 +160,12 @@ def renew_dhan_access_token():
             (r.text or "")[:200], "status_code": r.status_code}
 
 # ================================================================
-# PROXY CONFIGURATION
+# PROXY CONFIGURATION — Dhan does NOT need a proxy for auth or API
+# calls (token generation, margin calc, holdings, orders). Only
+# Angel One uses a proxy for IP whitelisting (configured in
+# broker/angel_margin_calculator.py).
 # ================================================================
-DHAN_PROXY_HOST = "151.242.178.149"
-DHAN_PROXY_PORT = "50100"
-DHAN_PROXY_USERNAME = "yousufshaikh420"
-DHAN_PROXY_PASSWORD = "cVTbJi6VVA"
-DHAN_PROXY_URL = f"http://{DHAN_PROXY_USERNAME}:{DHAN_PROXY_PASSWORD}@{DHAN_PROXY_HOST}:{DHAN_PROXY_PORT}"
-DHAN_PROXIES = {"http": DHAN_PROXY_URL, "https": DHAN_PROXY_URL}
+DHAN_PROXIES = {}
 
 # ================================================================
 # DHAN API URLS
