@@ -50,7 +50,6 @@ from broker.angel_ws import (
     get_subscription_status as angel_ws_status,
 )
 from advance_orb.supabase_db import save_top5_strategy, ensure_table
-from advance_orb.auth_routes import router as auth_router, get_current_user
 from server.candle_tracker import candle_tracker
 
 # Ensure the strategy_trades table exists (run once at startup)
@@ -186,9 +185,6 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
-
-# Include auth routes (signup, signin, me)
-app.include_router(auth_router)
 
 # CORS - Allow frontend to call this API
 app.add_middleware(
@@ -948,11 +944,6 @@ def frontend():
 @app.get("/style.css", include_in_schema=False)
 def stylesheet():
     return FileResponse(PROJECT_ROOT / "style.css", media_type="text/css")
-
-
-@app.get("/login.html", include_in_schema=False)
-def login_page():
-    return FileResponse(PROJECT_ROOT / "login.html", media_type="text/html")
 
 
 app.mount("/js", StaticFiles(directory=PROJECT_ROOT / "js"), name="frontend-js")
