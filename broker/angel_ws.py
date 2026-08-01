@@ -437,11 +437,49 @@ def start_websocket(feed_token=None, watchlist=None):
 # AUTO-RECONNECT — exponential backoff, survives sleep/refresh
 # ==============================================================================
 
+def _refresh_angel_auth():
+    """Re-authenticate Angel One if the access token is stale or missing.
+
+    Returns True if the API is now authenticated (was already or just-refreshed).
+    """
+    if not _CREDS.get("access_token"):
+        logger.warning("⚠️ Cannot refresh Angel auth: no credentials stored (user must connect in Settings)")
+        return False
+
+    # Check token age: Angel One tokens are valid ~24 h.
+    # If the token was issued more than 12 h ago, renew it.
+    try:
+        issued_str = _CREDS.get("token_issued_at", "0")
+        issued = float(issued_str) if issued_str else 0
+        age = time.time() - issued
+        if age < 12 * 3600:
+            return True  # still fresh enough
+    except (ValueError, TypeError):
+        pass
+
+    logger.info("🔄 Angel One token stale — re-authenticating before WS reconnect...")
+    try:
+        # authenticate() re-uses the stored api_key, client_id, password, totp_secret
+        from .angel_margin_calculator import authenticate
+        result = authenticate()
+        if result.get("ok"):
+            logger.info("✅ Angel One re-authenticated successfully")
+            return True
+        else:
+            logger.error(f"🔴 Angel re-auth failed: {result.get('error')}")
+            return False
+    except Exception as e:
+        logger.error(f"🔴 Angel re-auth exception: {e}")
+        return False
+
+
 def _auto_reconnect():
     """Background reconnection loop with exponential backoff.
 
     Triggered by on_close.  Runs in a daemon thread so it doesn't block
     shutdown.  Stops when _reconnect_stop is set (by stop_websocket).
+    Before each attempt, it refreshes the Angel One API credentials so
+    we never try to open a WS with a stale jwtToken.
     """
     global _reconnect_active, _connected, _reconnect_stop
 
@@ -477,6 +515,14 @@ def _auto_reconnect():
         if _reconnect_max_attempts and attempt >= _reconnect_max_attempts:
             logger.error(f"🔴 Reconnect failed after {attempt} attempts — giving up")
             break
+
+        # ── Refresh API credentials before reconnecting ──────────
+        # If the access_token has expired, the WS handshake will be
+        # rejected.  Re-auth now so we use a fresh jwtToken + feedToken.
+        if not _refresh_angel_auth():
+            logger.warning("⚠️ Skipping WS reconnect — cannot refresh API auth")
+            delay = min(delay * _reconnect_multiplier, _reconnect_max_delay)
+            continue
 
         # Attempt reconnection
         try:

@@ -34,6 +34,7 @@ _CREDS = {
     "access_token": "",
     "refresh_token": "",
     "feed_token": "",  # ← ADDED FOR WEBSOCKET
+    "token_issued_at": 0,  # epoch seconds — for auto-renew tracking
 }
 
 # Persistent SmartConnect SDK instance (created once on auth, reused for
@@ -159,8 +160,9 @@ def authenticate():
             feed_token = data["data"].get("feedToken") or data["data"].get("feed_token", "")
 
         # Store credentials
-        _CREDS["access_token"]  = jwt_token
-        _CREDS["refresh_token"] = refresh_token
+        _CREDS["access_token"]   = jwt_token
+        _CREDS["refresh_token"]  = refresh_token
+        _CREDS["token_issued_at"] = str(time.time())  # for auto-renew tracking
         if feed_token:
             _CREDS["feed_token"] = str(feed_token)
             print(f"✅ Feed token received and stored")

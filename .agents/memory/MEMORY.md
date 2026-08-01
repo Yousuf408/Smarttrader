@@ -5,3 +5,4 @@
 - [Angel One WAF + margin API payload fields](angel-waf-margin-sdk.md) — use SmartConnect SDK, strip "Bearer " prefix from jwtToken, camelCase field names, token from -EQ scrip entry.
 - [CSS-driven auto-hide for time-bound UI](css-driven-auto-hide.md) — toasts/banners fade out via CSS animation + `animationend`, not JS setTimeout; JS event loop can starve the timer on heavy render paths.
 - [Replit `gitPush` callback works without local GitHub auth](replit-git-push-no-creds.md) — try the `git-remote` skill callback first, even when `gh auth status` says you're not logged in.
+- [Angel One WS auto-reconnect](angel-one-ws-reconnect.md) — on_close triggers exponential-backoff reconnect; each attempt re-auths stale tokens first.

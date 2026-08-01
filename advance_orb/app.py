@@ -114,16 +114,67 @@ async def _dhan_auto_renew_loop():
         await asyncio.sleep(sleep_for)
 
 
+# =================================================================
+# ANGEL ONE AUTO-RENEW LOOP — same pattern as Dhan, but using
+# authenticate() (TOTP-based re-login) since Angel has no /RenewToken.
+# Checks every 5 min; re-auths when token age > 12 h.
+# =================================================================
+_ANGEL_TOKEN_TTL_SECONDS = 24 * 3600       # 24 h (typical Angel WS expiry)
+_ANGEL_AUTO_RENEW_LEAD_SECONDS = 12 * 3600  # re-auth after 12 h
+
+async def _angel_auto_renew_loop():
+    while True:
+        sleep_for = 300.0  # default: check every 5 min
+        try:
+            issued_str = _angel_creds.get("token_issued_at", "0")
+            tok = _angel_creds.get("access_token", "")
+            if issued_str and tok:
+                try:
+                    issued = float(issued_str) if issued_str else 0
+                except ValueError:
+                    issued = 0
+                age = time.time() - issued
+                renew_at_age = (
+                    _ANGEL_TOKEN_TTL_SECONDS - _ANGEL_AUTO_RENEW_LEAD_SECONDS
+                )
+                if age >= renew_at_age:
+                    print(
+                        f"[broker-angel] auto-renewing access token "
+                        f"(age={age/3600:.2f}h)"
+                    )
+                    res = await asyncio.to_thread(angel_authenticate)
+                    print(
+                        f"[broker-angel] auto-renew result: "
+                        f"ok={res.get('ok')} "
+                        f"{'error: '+str(res.get('error',''))[:120] if not res.get('ok') else ''}"
+                    )
+                age = time.time() - float(issued or "0")
+                remaining = max(0.0, renew_at_age - age)
+                sleep_for = min(
+                    max(30.0, remaining + 5.0),
+                    15 * 60.0,  # never sleep more than 15 min
+                )
+        except Exception as e:
+            print(f"[broker-angel] auto-renew loop tick error: {e!r}")
+        await asyncio.sleep(sleep_for)
+
+
 @asynccontextmanager
 async def lifespan(_app):
-    task = asyncio.create_task(_dhan_auto_renew_loop())
-    print("[broker] daily auto-renew loop started")
+    task_dhan = asyncio.create_task(_dhan_auto_renew_loop())
+    task_angel = asyncio.create_task(_angel_auto_renew_loop())
+    print("[broker] daily auto-renew loop started (Dhan + Angel)")
     try:
         yield
     finally:
-        task.cancel()
+        task_dhan.cancel()
+        task_angel.cancel()
         try:
-            await task
+            await task_dhan
+        except (asyncio.CancelledError, Exception):
+            pass
+        try:
+            await task_angel
         except (asyncio.CancelledError, Exception):
             pass
 
@@ -770,10 +821,13 @@ async def stream_live_ticks(request: Request):
                     last_digest = digest
                     yield f"data: {payload}\n\n"
                 else:
-                    yield ": heartbeat\n\n"  # SSE comment → keeps connection alive
+                    # Regular data line (not a comment) so onmessage fires
+                    # on the frontend — this resets the watchdog that detects
+                    # silent disconnects from screen-sleep.
+                    yield f"data: {{\"connected\": {_json.dumps(is_conn)}}}\n\n"
             except Exception:
                 yield f"data: {_json.dumps({'connected': False, 'ticks': {}})}\n\n"
-            await asyncio.sleep(0.25)
+            await asyncio.sleep(0.50)  # 500 ms (was 250 — no need to hammer)
 
     return StreamingResponse(
         _generate(),
