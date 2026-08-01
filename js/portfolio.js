@@ -376,8 +376,10 @@ function _buildUnifiedRows(positions, holdings) {
 function _extractAvailable(funds) {
     if (!funds || !funds.data) return 0;
     const d = funds.data;
-    return _getVal(d, 'availableBalance')
+    return _getVal(d, 'availabelBalance')      // Dhan (note: Dhan's own spelling)
+        || _getVal(d, 'availableBalance')       // standard
         || _getVal(d, 'availableCash')
+        || _getVal(d, 'withdrawableBalance')
         || _getVal(d, 'net')
         || _getVal(d, 'totalBalance')
         || 0;
@@ -386,10 +388,15 @@ function _extractAvailable(funds) {
 function _extractMarginUsed(funds) {
     if (!funds || !funds.data) return 0;
     const d = funds.data;
-    return _getVal(d, 'marginUsed')
+    return _getVal(d, 'utilizedAmount')          // Dhan
+        || _getVal(d, 'marginUsed')
         || _getVal(d, 'usedMargin')
-        || _getVal(d, 'utilizedAmount')
         || 0;
+}
+
+function _extractSodLimit(funds) {
+    if (!funds || !funds.data) return 0;
+    return _getVal(funds.data, 'sodLimit') || 0;
 }
 
 function numberFmt(n) {
