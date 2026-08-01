@@ -950,6 +950,11 @@ def stylesheet():
     return FileResponse(PROJECT_ROOT / "style.css", media_type="text/css")
 
 
+@app.get("/login.html", include_in_schema=False)
+def login_page():
+    return FileResponse(PROJECT_ROOT / "login.html", media_type="text/html")
+
+
 app.mount("/js", StaticFiles(directory=PROJECT_ROOT / "js"), name="frontend-js")
 
 
