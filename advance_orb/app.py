@@ -942,6 +942,87 @@ app.mount("/js", StaticFiles(directory=PROJECT_ROOT / "js"), name="frontend-js")
 # refresh the green/red status badge next to the dropdown.
 # /api/broker/disconnect is wired to the "Disconnect" button.
 
+# ================================================================
+# PORTFOLIO — real-time funds + holdings from connected broker
+# ================================================================
+
+@app.get("/api/portfolio/funds")
+def portfolio_funds():
+    """Fetch available funds/margin from the connected broker.
+
+    Returns the active broker's fund limit so the portfolio page
+    can show real-time available budget.
+
+    Response: {"success": bool, "broker": str, "data": dict|None, "error": str|None}
+    """
+    from broker.dhan_holdings import get_dhan_fund_limit
+    from broker.angel_holdings import get_angel_fund_limit
+
+    dhan_tok = _broker_cred("access_token")
+    if dhan_tok and _broker_cred("client_id"):
+        result = get_dhan_fund_limit()
+        result["broker"] = "dhan"
+        return result
+
+    if angel_is_connected():
+        result = get_angel_fund_limit()
+        result["broker"] = "angel"
+        return result
+
+    return {"success": False, "broker": None, "data": None, "error": "No broker connected"}
+
+
+@app.get("/api/portfolio/holdings")
+def portfolio_holdings():
+    """Fetch current holdings from the connected broker.
+
+    Returns list of holding positions for the portfolio page.
+
+    Response: {"success": bool, "broker": str, "data": list|None, "error": str|None}
+    """
+    from broker.dhan_holdings import get_dhan_holdings
+    from broker.angel_holdings import get_angel_holdings
+
+    dhan_tok = _broker_cred("access_token")
+    if dhan_tok and _broker_cred("client_id"):
+        result = get_dhan_holdings()
+        result["broker"] = "dhan"
+        return result
+
+    if angel_is_connected():
+        result = get_angel_holdings()
+        result["broker"] = "angel"
+        return result
+
+    return {"success": False, "broker": None, "data": [], "error": "No broker connected"}
+
+
+@app.get("/api/portfolio/positions")
+def portfolio_positions():
+    """Fetch open positions from the connected broker.
+
+    Returns intraday + carry-forward positions so the portfolio
+    table can show real per-stock P&L, quantity, entry price etc.
+
+    Response: {"success": bool, "broker": str, "data": list|None, "error": str|None}
+    """
+    from broker.dhan_holdings import get_dhan_positions
+    from broker.angel_holdings import get_angel_positions
+
+    dhan_tok = _broker_cred("access_token")
+    if dhan_tok and _broker_cred("client_id"):
+        result = get_dhan_positions()
+        result["broker"] = "dhan"
+        return result
+
+    if angel_is_connected():
+        result = get_angel_positions()
+        result["broker"] = "angel"
+        return result
+
+    return {"success": False, "broker": None, "data": [], "error": "No broker connected"}
+
+
 @app.post("/api/broker/connect")
 def broker_connect(payload: dict):
     broker = (payload.get("broker") or "").strip().lower()

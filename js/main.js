@@ -262,6 +262,11 @@ function navigateTo(pageId) {
     const targetPage = document.getElementById('page-' + pageId);
     if (targetPage) targetPage.classList.add('active');
     
+    // Stop portfolio simulation when navigating away
+    if (pageId !== 'portfolio' && typeof stopSimulation === 'function') {
+        stopSimulation();
+    }
+
     if (pageId === 'home') loadHome();
     else if (pageId === 'strategies') loadStrategies();
     else if (pageId === 'portfolio') loadPortfolio();

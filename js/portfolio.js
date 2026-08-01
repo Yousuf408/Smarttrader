@@ -1,226 +1,223 @@
 // ================================================================
-// INTRADAY PORTFOLIO — full-featured dashboard
+// INTRADAY PORTFOLIO — real broker data
 // ================================================================
 
-const BUDGET = 100000;
-const MARGIN_MULTIPLIER = 5;
+let portfolioData = { holdings: [], positions: [], funds: null };
+let _portfolioSimInterval = null;
 
-const holdingsData = [
-    { 
-        symbol: 'RELIANCE', 
-        qty: 10, 
-        buyAvg: 2810, 
-        sellAvg: null,
-        current: 2856, 
-        sector: 'Energy', 
-        volume: '1.2M',
-        entryTime: '09:15 AM',
-        marginUsed: 28100,
-        budgetUsed: 5620,
-        isSold: false
-    },
-    { 
-        symbol: 'TCS', 
-        qty: 5, 
-        buyAvg: 3890, 
-        sellAvg: 3925,
-        current: 3920, 
-        sector: 'IT', 
-        volume: '850K',
-        entryTime: '09:30 AM',
-        marginUsed: 19450,
-        budgetUsed: 3890,
-        isSold: true
-    },
-    { 
-        symbol: 'INFY', 
-        qty: 15, 
-        buyAvg: 1520, 
-        sellAvg: null,
-        current: 1545, 
-        sector: 'IT', 
-        volume: '2.1M',
-        entryTime: '10:00 AM',
-        marginUsed: 22800,
-        budgetUsed: 4560,
-        isSold: false
-    },
-    { 
-        symbol: 'HDFC', 
-        qty: 8, 
-        buyAvg: 1700, 
-        sellAvg: null,
-        current: 1680, 
-        sector: 'Banking', 
-        volume: '950K',
-        entryTime: '10:15 AM',
-        marginUsed: 13600,
-        budgetUsed: 2720,
-        isSold: false
-    },
-    { 
-        symbol: 'TATAMOTORS', 
-        qty: 12, 
-        buyAvg: 890, 
-        sellAvg: null,
-        current: 905, 
-        sector: 'Auto', 
-        volume: '1.8M',
-        entryTime: '11:00 AM',
-        marginUsed: 10680,
-        budgetUsed: 2136,
-        isSold: false
+// ================================================================
+// LOAD PORTFOLIO — fetch funds + holdings from broker
+// ================================================================
+async function loadPortfolio() {
+    startSimulation();
+
+    const [fundsRes, holdingsRes, positionsRes] = await Promise.all([
+        fetch('/api/portfolio/funds').catch(() => null),
+        fetch('/api/portfolio/holdings').catch(() => null),
+        fetch('/api/portfolio/positions').catch(() => null),
+    ]);
+
+    const funds   = fundsRes    ? await fundsRes.json().catch(() => ({})) : {};
+    const holdingsResData = holdingsRes ? await holdingsRes.json().catch(() => ({})) : {};
+    const positionsResData = positionsRes ? await positionsRes.json().catch(() => ({})) : {};
+
+    portfolioData.funds = funds;
+    portfolioData.holdings = holdingsResData.data || [];
+    portfolioData.positions = positionsResData.data || [];
+
+    const isConnected = funds.success || holdingsResData.success || positionsResData.success;
+    if (!isConnected) {
+        renderEmptyPortfolio();
+        return;
     }
-];
 
-function loadPortfolio() {
-    const holdings = holdingsData;
-    
-    const activeHoldings = holdings.filter(h => !h.isSold);
-    const totalValue = activeHoldings.reduce((s, h) => s + (h.current * h.qty), 0);
-    const invested = activeHoldings.reduce((s, h) => s + (h.buyAvg * h.qty), 0);
-    const totalPnl = totalValue - invested;
-    const totalPnlPercent = invested > 0 ? (totalPnl / invested) * 100 : 0;
-    
-    const totalMarginUsed = activeHoldings.reduce((s, h) => s + h.marginUsed, 0);
-    const totalBudgetUsed = activeHoldings.reduce((s, h) => s + h.budgetUsed, 0);
-    const pnlOnBudget = totalBudgetUsed > 0 ? (totalPnl / totalBudgetUsed) * 100 : 0;
-    const pnlOnMargin = totalMarginUsed > 0 ? (totalPnl / totalMarginUsed) * 100 : 0;
-    
-    const gainers = activeHoldings.filter(h => h.current > h.buyAvg).length;
-    const losers = activeHoldings.filter(h => h.current < h.buyAvg).length;
+    renderPortfolio(funds, portfolioData.holdings, portfolioData.positions);
+}
 
-    document.getElementById('gainersCount').textContent = `▲ ${gainers}`;
-    document.getElementById('losersCount').textContent = `▼ ${losers}`;
+// ================================================================
+// RENDER — full portfolio with real broker data
+// ================================================================
+function renderPortfolio(funds, holdings, positions) {
+    // --- Funds / Budget ---
+    const availableCash = _extractAvailable(funds);
+    const totalInvested = positions.reduce((s, p) => s + (_getVal(p, 'buyAmount') + _getVal(p, 'sellAmount')), 0);
+    const totalMtmPnl = positions.reduce((s, p) => s + _getVal(p, 'mtm'), 0);
+    const dayPnl = positions.reduce((s, p) => s + (_getVal(p, 'realizedPnl') + _getVal(p, 'unrealizedPnl')), 0);
+    const dayPnlRaw = dayPnl || totalMtmPnl;
 
-    // Render Stats
+    const activePositions = positions.filter(p => _getQty(p) > 0);
+    const totalValue = availableCash + totalInvested;
+
+    // Stats row
     document.getElementById('portfolioStats').innerHTML = `
         <div class="stat-box">
             <div class="stat-icon">💰</div>
-            <div class="label">Total Value</div>
-            <div class="value">₹${totalValue.toLocaleString()}</div>
-            <div class="sub ${totalPnl >= 0 ? 'green' : 'red'}">
-                ${totalPnl >= 0 ? '↑' : '↓'} ₹${Math.abs(totalPnl).toLocaleString()} 
-                <span style="font-weight:400;color:var(--text-muted);">(${totalPnlPercent >= 0 ? '+' : ''}${totalPnlPercent.toFixed(2)}%)</span>
+            <div class="label">Available</div>
+            <div class="value">₹${numberFmt(availableCash)}</div>
+            <div class="sub" style="color:var(--text-muted);font-size:9px;">
+                <div class="progress-mini">
+                    <div class="progress-fill" style="width:${totalValue > 0 ? Math.round(availableCash/totalValue*100) : 100}%;background:var(--gradient-brand);"></div>
+                </div>
+                ${totalValue > 0 ? Math.round(availableCash/totalValue*100) : 100}% free
             </div>
         </div>
         <div class="stat-box">
             <div class="stat-icon">📊</div>
             <div class="label">Invested</div>
-            <div class="value">₹${invested.toLocaleString()}</div>
+            <div class="value">₹${numberFmt(totalInvested)}</div>
             <div class="sub" style="color:var(--text-muted);font-size:9px;">
                 <div class="progress-mini">
-                    <div class="progress-fill" style="width:${invested > 0 ? Math.round((invested/totalValue)*100) : 0}%;background:var(--gradient-brand);"></div>
+                    <div class="progress-fill" style="width:${totalValue > 0 ? Math.round(totalInvested/totalValue*100) : 0}%;background:var(--color-warning);"></div>
                 </div>
-                ${invested > 0 ? Math.round((invested/totalValue)*100) : 0}% allocated
+                ${activePositions.length} position(s)
             </div>
         </div>
         <div class="stat-box">
             <div class="stat-icon">💵</div>
-            <div class="label">Available</div>
-            <div class="value">₹${Math.round(totalValue * 0.32).toLocaleString()}</div>
-            <div class="sub" style="color:var(--text-muted);font-size:9px;">
-                <div class="progress-mini">
-                    <div class="progress-fill" style="width:32%;background:var(--color-success);"></div>
-                </div>
-                32% free
-            </div>
+            <div class="label">Margin Used</div>
+            <div class="value">₹${numberFmt(_extractMarginUsed(funds))}</div>
+            <div class="sub" style="color:var(--text-muted);font-size:9px;">Intraday</div>
         </div>
-        <div class="stat-box" style="border-left:3px solid ${totalPnl >= 0 ? 'var(--color-success)' : 'var(--color-danger)'};">
+        <div class="stat-box" style="border-left:3px solid ${dayPnlRaw >= 0 ? 'var(--color-success)' : 'var(--color-danger)'};">
             <div class="stat-icon">📈</div>
             <div class="label">Day P&L</div>
-            <div class="value" style="color:${totalPnl >= 0 ? 'var(--color-success)' : 'var(--color-danger)'};">
-                ${totalPnl >= 0 ? '+' : ''}₹${totalPnl.toLocaleString()}
+            <div class="value" style="color:${dayPnlRaw >= 0 ? 'var(--color-success)' : 'var(--color-danger)'};">
+                ${dayPnlRaw >= 0 ? '+' : ''}₹${numberFmt(Math.abs(dayPnlRaw))}
             </div>
-            <div class="sub ${totalPnl >= 0 ? 'green' : 'red'}">
-                ${totalPnl >= 0 ? '↑' : '↓'} ${Math.abs(totalPnlPercent).toFixed(2)}%
+            <div class="sub ${dayPnlRaw >= 0 ? 'green' : 'red'}">
+                ${dayPnlRaw >= 0 ? '↑' : '↓'}
                 <span style="font-weight:400;color:var(--text-muted);margin-left:4px;font-size:9px;">
-                    ${gainers} gainers · ${losers} losers
+                    ${activePositions.length} active · ${funds.broker || '—'}
                 </span>
             </div>
         </div>
     `;
 
-    // Render Intraday Metrics
-    renderIntradayMetrics(activeHoldings, totalPnl, totalBudgetUsed, totalMarginUsed);
+    // Intraday Metrics
+    renderIntradayMetrics(activePositions, positions, dayPnlRaw, availableCash);
 
-    // Render Holdings Table
-    renderHoldingsTable(holdings);
+    // Holdings / Positions table
+    renderPortfolioTable(positions, holdings);
+
+    // Footer
+    const countEl = document.getElementById('holdingsCount');
+    if (countEl) {
+        const activeCount = activePositions.length;
+        const totalCount = positions.length;
+        countEl.textContent = `${totalCount > 0 ? `Showing ${totalCount} position(s)` : 'No positions'} ${activeCount > 0 ? `(${activeCount} active)` : ''}`;
+    }
 
     const now = new Date();
     const lu = document.getElementById('lastUpdated');
     if (lu) lu.textContent = `Last updated: ${now.toLocaleTimeString()}`;
+
+    const gainers = activePositions.filter(p => _getPnl(p) > 0).length;
+    const losers = activePositions.filter(p => _getPnl(p) < 0).length;
+    document.getElementById('gainersCount').textContent = `▲ ${gainers}`;
+    document.getElementById('losersCount').textContent = `▼ ${losers}`;
+}
+
+// ================================================================
+// EMPTY STATE — no broker connected
+// ================================================================
+function renderEmptyPortfolio() {
+    document.getElementById('portfolioStats').innerHTML = `
+        <div class="stat-box" style="grid-column:1/-1;text-align:center;padding:20px;">
+            <div class="stat-icon" style="font-size:24px;">🔌</div>
+            <div class="label">No Broker Connected</div>
+            <div class="value" style="font-size:14px;color:var(--text-muted);">Connect your broker in Settings</div>
+            <div class="sub" style="margin-top:6px;">
+                <button class="btn btn-primary btn-sm" onclick="navigateTo('settings')">⚙️ Go to Settings</button>
+            </div>
+        </div>
+    `;
+
+    document.getElementById('intradayMetrics').innerHTML = `
+        <div class="metric-card" style="grid-column:1/-1;text-align:center;padding:30px;">
+            <div class="metric-label" style="font-size:13px;color:var(--text-muted);">No data — connect your broker to see intraday metrics</div>
+        </div>
+    `;
+
+    document.getElementById('holdingsTable').innerHTML = `
+        <div style="text-align:center;padding:40px;color:var(--text-muted);font-size:13px;">
+            <div style="font-size:32px;margin-bottom:8px;">📭</div>
+            <p>No positions to display</p>
+            <p style="font-size:11px;margin-top:4px;">Connect your broker to view live holdings</p>
+        </div>
+    `;
+
+    document.getElementById('gainersCount').textContent = '▲ 0';
+    document.getElementById('losersCount').textContent = '▼ 0';
+    const countEl = document.getElementById('holdingsCount');
+    if (countEl) countEl.textContent = 'No positions';
+    const lu = document.getElementById('lastUpdated');
+    if (lu) lu.textContent = `Last updated: ${new Date().toLocaleTimeString()}`;
 }
 
 // ================================================================
 // INTRADAY METRICS
 // ================================================================
-function renderIntradayMetrics(holdings, totalPnl, totalBudgetUsed, totalMarginUsed) {
-    const pnlOnBudget = totalBudgetUsed > 0 ? (totalPnl / totalBudgetUsed) * 100 : 0;
-    const pnlOnMargin = totalMarginUsed > 0 ? (totalPnl / totalMarginUsed) * 100 : 0;
-    
-    let best = holdings[0], worst = holdings[0];
-    if (holdings.length > 0) {
-        holdings.forEach(h => {
-            const pnl = ((h.current - h.buyAvg) / h.buyAvg) * 100;
-            const bestPnl = best ? ((best.current - best.buyAvg) / best.buyAvg) * 100 : -Infinity;
-            const worstPnl = worst ? ((worst.current - worst.buyAvg) / worst.buyAvg) * 100 : Infinity;
-            if (pnl > bestPnl) best = h;
-            if (pnl < worstPnl) worst = h;
-        });
-    }
-
-    const avgReturn = holdings.length > 0 
-        ? holdings.reduce((s, h) => s + ((h.current - h.buyAvg) / h.buyAvg * 100), 0) / holdings.length 
+function renderIntradayMetrics(activePositions, allPositions, dayPnl, availableCash) {
+    const winRate = activePositions.length > 0
+        ? Math.round(activePositions.filter(p => _getPnl(p) > 0).length / activePositions.length * 100)
         : 0;
-    const leverageUsed = totalBudgetUsed > 0 ? (totalMarginUsed / totalBudgetUsed).toFixed(1) : '0.0';
-    const winRate = holdings.length > 0 
-        ? (holdings.filter(h => h.current > h.buyAvg).length / holdings.length * 100).toFixed(0) 
-        : '0';
+    const avgReturn = activePositions.length > 0
+        ? activePositions.reduce((s, p) => s + _getPnl(p), 0) / activePositions.length
+        : 0;
+    const marginUsed = _extractMarginUsed(portfolioData.funds);
+    const pnlOnMargin = marginUsed > 0 ? (dayPnl / marginUsed * 100) : 0;
+
+    let best = null, bestPnl = -Infinity;
+    let worst = null, worstPnl = Infinity;
+    activePositions.forEach(p => {
+        const pnl = _getPnl(p);
+        if (pnl > bestPnl) { best = p; bestPnl = pnl; }
+        if (pnl < worstPnl) { worst = p; worstPnl = pnl; }
+    });
 
     const el = document.getElementById('intradayMetrics');
     if (!el) return;
 
     el.innerHTML = `
         <div class="metric-card" style="border-left:2px solid var(--brand-start);">
-            <div class="metric-label">💰 Budget P&L</div>
-            <div class="metric-value" style="color:${pnlOnBudget > 0 ? 'var(--color-success)' : 'var(--color-danger)'};">
-                ${pnlOnBudget > 0 ? '+' : ''}${pnlOnBudget.toFixed(2)}%
+            <div class="metric-label">💰 Available</div>
+            <div class="metric-value" style="color:var(--color-success);font-size:15px;">
+                ₹${numberFmt(availableCash)}
             </div>
-            <div class="metric-sub">₹${Math.abs(totalPnl).toLocaleString()}</div>
+            <div class="metric-sub">Trading budget</div>
         </div>
         <div class="metric-card" style="border-left:2px solid var(--color-warning);">
             <div class="metric-label">📈 Margin P&L</div>
-            <div class="metric-value" style="color:${pnlOnMargin > 0 ? 'var(--color-success)' : 'var(--color-danger)'};">
+            <div class="metric-value" style="color:${pnlOnMargin > 0 ? 'var(--color-success)' : pnlOnMargin < 0 ? 'var(--color-danger)' : 'var(--text-muted)'};">
                 ${pnlOnMargin > 0 ? '+' : ''}${pnlOnMargin.toFixed(2)}%
             </div>
-            <div class="metric-sub">${leverageUsed}x leverage</div>
+            <div class="metric-sub">On margin used</div>
         </div>
         <div class="metric-card">
             <div class="metric-label">🏆 Best</div>
             <div class="metric-value" style="color:var(--color-success);font-size:15px;">
-                ${best ? best.symbol : '—'}
+                ${best ? _getSym(best) : '—'}
             </div>
-            <div class="metric-sub">${best ? '+' + ((best.current - best.buyAvg) / best.buyAvg * 100).toFixed(2) + '%' : ''}</div>
+            <div class="metric-sub">${best ? '+' + numberFmt(bestPnl) : ''}</div>
         </div>
         <div class="metric-card">
             <div class="metric-label">📉 Worst</div>
             <div class="metric-value" style="color:var(--color-danger);font-size:15px;">
-                ${worst ? worst.symbol : '—'}
+                ${worst ? _getSym(worst) : '—'}
             </div>
-            <div class="metric-sub">${worst ? ((worst.current - worst.buyAvg) / worst.buyAvg * 100).toFixed(2) + '%' : ''}</div>
+            <div class="metric-sub">${worst ? numberFmt(worstPnl) : ''}</div>
         </div>
         <div class="metric-card">
             <div class="metric-label">📊 Win Rate</div>
-            <div class="metric-value" style="color:${Number(winRate) >= 50 ? 'var(--color-success)' : 'var(--color-danger)'};">
+            <div class="metric-value" style="color:${winRate >= 50 ? 'var(--color-success)' : 'var(--color-danger)'};">
                 ${winRate}%
             </div>
-            <div class="metric-sub">${holdings.filter(h => h.current > h.buyAvg).length}/${holdings.length}</div>
+            <div class="metric-sub">${activePositions.filter(p => _getPnl(p) > 0).length}/${activePositions.length}</div>
         </div>
         <div class="metric-card">
             <div class="metric-label">📊 Avg Return</div>
-            <div class="metric-value" style="color:${avgReturn > 0 ? 'var(--color-success)' : 'var(--color-danger)'};">
-                ${avgReturn > 0 ? '+' : ''}${avgReturn.toFixed(2)}%
+            <div class="metric-value" style="color:${avgReturn > 0 ? 'var(--color-success)' : avgReturn < 0 ? 'var(--color-danger)' : 'var(--text-muted)'};">
+                ${avgReturn > 0 ? '+' : ''}₹${numberFmt(Math.abs(avgReturn))}
             </div>
             <div class="metric-sub">Per position</div>
         </div>
@@ -228,14 +225,17 @@ function renderIntradayMetrics(holdings, totalPnl, totalBudgetUsed, totalMarginU
 }
 
 // ================================================================
-// HOLDINGS TABLE
+// PORTFOLIO TABLE
 // ================================================================
-function renderHoldingsTable(holdings) {
+function renderPortfolioTable(positions, holdings) {
     const el = document.getElementById('holdingsTable');
     if (!el) return;
 
-    if (holdings.length === 0) {
-        el.innerHTML = '<div style="text-align:center;padding:30px;color:var(--text-muted);font-size:13px;">No positions to display</div>';
+    // Build a unified list from positions + holdings
+    const items = _buildUnifiedRows(positions, holdings);
+
+    if (items.length === 0) {
+        el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted);font-size:13px;"><div style="font-size:32px;margin-bottom:8px;">📭</div><p>No positions to display</p></div>';
         return;
     }
 
@@ -244,11 +244,9 @@ function renderHoldingsTable(holdings) {
             <thead>
                 <tr>
                     <th>Symbol</th>
-                    <th>Sector</th>
-                    <th>Entry</th>
+                    <th>Product</th>
                     <th>Qty</th>
                     <th>Buy Avg</th>
-                    <th>Sell Avg</th>
                     <th>LTP</th>
                     <th>P&L</th>
                     <th>P&L %</th>
@@ -256,61 +254,41 @@ function renderHoldingsTable(holdings) {
                 </tr>
             </thead>
             <tbody>
-                ${holdings.map((h) => {
-                    let pnl, pnlPercent;
-                    if (h.isSold && h.sellAvg) {
-                        pnl = (h.sellAvg - h.buyAvg) * h.qty;
-                        pnlPercent = ((h.sellAvg - h.buyAvg) / h.buyAvg) * 100;
-                    } else {
-                        pnl = (h.current - h.buyAvg) * h.qty;
-                        pnlPercent = ((h.current - h.buyAvg) / h.buyAvg) * 100;
-                    }
-                    const isGainer = pnl > 0;
-                    const sectorClass = isGainer ? 'positive' : 'negative';
-                    const dotColor = isGainer ? 'green' : 'red';
-                    
-                    const displaySellAvg = h.isSold && h.sellAvg ? 
-                        `<span style="color:var(--text-muted);font-size:10px;">₹${h.sellAvg.toLocaleString()}</span>` : 
-                        `<span style="color:var(--text-muted);font-size:10px;">—</span>`;
+                ${items.map((item) => {
+                    const isGainer = item.pnl >= 0;
+                    const qty = item.qty;
+                    const displayQty = qty !== 0 ? qty : '—';
 
                     return `
-                        <tr style="${!isGainer ? 'background:rgba(225,112,85,0.02);' : ''}">
+                        <tr style="${!isGainer && qty !== 0 ? 'background:rgba(225,112,85,0.02);' : ''}">
                             <td>
                                 <div style="display:flex;align-items:center;gap:4px;">
-                                    <span class="status-dot ${dotColor}"></span>
-                                    <span class="symbol-highlight">${h.symbol}</span>
-                                    ${h.isSold ? '<span class="sold-badge">SOLD</span>' : ''}
+                                    <span class="status-dot ${isGainer ? 'green' : 'red'}"></span>
+                                    <span class="symbol-highlight">${item.symbol}</span>
+                                    ${item.isSold ? '<span class="sold-badge">CLOSED</span>' : ''}
                                 </div>
                             </td>
-                            <td><span class="sector-tag ${sectorClass}">${h.sector}</span></td>
-                            <td><span class="entry-badge">${h.entryTime}</span></td>
-                            <td>${h.qty}</td>
-                            <td style="font-weight:600;font-size:11px;">₹${h.buyAvg.toLocaleString()}</td>
-                            <td>${displaySellAvg}</td>
-                            <td style="font-weight:600;font-size:11px;">₹${h.current.toLocaleString()}</td>
-                            <td style="color:${isGainer ? 'var(--color-success)' : 'var(--color-danger)'};font-weight:700;font-size:11px;">
-                                ${isGainer ? '+' : ''}₹${pnl.toLocaleString()}
+                            <td><span class="sector-tag ${isGainer ? 'positive' : 'negative'}">${item.product || 'INTRADAY'}</span></td>
+                            <td>${displayQty}</td>
+                            <td style="font-weight:600;font-size:11px;">${item.buyAvg > 0 ? '₹' + numberFmt(item.buyAvg) : '—'}</td>
+                            <td style="font-weight:600;font-size:11px;">${item.ltp > 0 ? '₹' + numberFmt(item.ltp) : '—'}</td>
+                            <td style="color:${item.pnl > 0 ? 'var(--color-success)' : item.pnl < 0 ? 'var(--color-danger)' : 'var(--text-muted)'};font-weight:700;font-size:11px;">
+                                ${item.pnl > 0 ? '+' : ''}${item.pnl !== 0 ? '₹' + numberFmt(Math.abs(item.pnl)) : '—'}
                             </td>
                             <td>
-                                <span style="color:${isGainer ? 'var(--color-success)' : 'var(--color-danger)'};font-weight:700;font-size:11px;">
-                                    ${isGainer ? '+' : ''}${pnlPercent.toFixed(2)}%
+                                <span style="color:${item.pnlPct > 0 ? 'var(--color-success)' : item.pnlPct < 0 ? 'var(--color-danger)' : 'var(--text-muted)'};font-weight:700;font-size:11px;">
+                                    ${item.pnlPct !== 0 ? (item.pnlPct > 0 ? '+' : '') + item.pnlPct.toFixed(2) + '%' : '—'}
                                 </span>
                             </td>
                             <td>
                                 <div class="action-group">
-                                    ${!h.isSold ? `
-                                        <button class="action-btn action-btn-sell" onclick="showToast('📤 Sold','${h.symbol} sold at ₹${h.current}')">
-                                            Sell
-                                        </button>
-                                        <button class="action-btn action-btn-sl" onclick="showToast('⛔ SL Set','SL for ${h.symbol} at ₹${(h.current * 0.97).toFixed(0)}')">
-                                            SL
-                                        </button>
+                                    ${qty > 0 ? `
+                                        <button class="action-btn action-btn-sell" onclick="showToast('📤','Place sell order for ${item.symbol}')">Sell</button>
+                                        <button class="action-btn action-btn-sl" onclick="showToast('⛔','Set SL for ${item.symbol}')">SL</button>
                                     ` : `
-                                        <span style="font-size:8px;color:var(--text-muted);">Closed</span>
+                                        <span style="font-size:8px;color:var(--text-muted);">—</span>
                                     `}
-                                    <button class="action-btn action-btn-book" onclick='showToast("📊","${h.symbol} details shown")'>
-                                        📊
-                                    </button>
+                                    <button class="action-btn action-btn-book" onclick='showToast("📊","${item.symbol} chart")'>📊</button>
                                 </div>
                             </td>
                         </tr>
@@ -319,8 +297,104 @@ function renderHoldingsTable(holdings) {
             </tbody>
         </table>
     `;
-    const countEl = document.getElementById('holdingsCount');
-    if (countEl) countEl.textContent = `Showing ${holdings.length} positions (${holdings.filter(h => !h.isSold).length} active)`;
+}
+
+// ================================================================
+// HELPERS — normalize broker data
+// ================================================================
+
+function _getVal(obj, key) {
+    if (!obj || typeof obj !== 'object') return 0;
+    const v = obj[key];
+    return (v != null && !isNaN(Number(v))) ? Number(v) : 0;
+}
+
+function _getQty(p) {
+    return _getVal(p, 'netQty') || _getVal(p, 'quantity') || _getVal(p, 'buyQty') || _getVal(p, 'sellQty') || 0;
+}
+
+function _getSym(p) {
+    return p.tradingSymbol || p.symbol || p.TradingSymbol || '?';
+}
+
+function _getPnl(p) {
+    return _getVal(p, 'mtm') || (_getVal(p, 'unrealizedPnl')) || 0;
+}
+
+function _buildUnifiedRows(positions, holdings) {
+    // Merge positions (intraday + carry-forward) with holdings
+    const seen = new Set();
+    const rows = [];
+
+    // First: positions (they have live P&L)
+    for (const p of positions) {
+        const sym = _getSym(p);
+        if (!sym || sym === '?') continue;
+        seen.add(sym);
+        const qty = _getQty(p);
+        const buyAvg = _getVal(p, 'buyAvg') || _getVal(p, 'buyPrice') || _getVal(p, 'entryPrice') || 0;
+        const ltp = _getVal(p, 'ltp') || _getVal(p, 'marketValue') || _getVal(p, 'currentPrice') || _getVal(p, 'closePrice') || 0;
+        const pnl = _getPnl(p);
+        const pnlPct = buyAvg > 0 ? (pnl / (buyAvg * Math.abs(qty))) * 100 : 0;
+        rows.push({
+            symbol: sym,
+            qty: qty,
+            buyAvg: buyAvg,
+            ltp: ltp,
+            pnl: pnl,
+            pnlPct: pnlPct,
+            product: _getVal(p, 'productType') ? String(p.productType) : 'INTRADAY',
+            isSold: false,
+        });
+    }
+
+    // Second: holdings not in positions (delivery holdings)
+    for (const h of holdings) {
+        const sym = h.tradingSymbol || h.symbol || h.TradingSymbol || '';
+        if (!sym || seen.has(sym)) continue;
+        seen.add(sym);
+        const qty = _getVal(h, 'totalQty') || _getVal(h, 'quantity') || _getVal(h, 'holdingQty') || 0;
+        const buyAvg = _getVal(h, 'averagePrice') || _getVal(h, 'buyPrice') || 0;
+        const ltp = _getVal(h, 'ltp') || _getVal(h, 'marketValue') || _getVal(h, 'currentPrice') || 0;
+        const pnl = _getVal(h, 'pnl') || (ltp > 0 && buyAvg > 0 ? (ltp - buyAvg) * qty : 0);
+        const pnlPct = buyAvg > 0 ? ((ltp - buyAvg) / buyAvg) * 100 : 0;
+        rows.push({
+            symbol: sym,
+            qty: qty,
+            buyAvg: buyAvg,
+            ltp: ltp,
+            pnl: pnl,
+            pnlPct: pnlPct,
+            product: 'CNC',
+            isSold: qty === 0,
+        });
+    }
+
+    return rows;
+}
+
+function _extractAvailable(funds) {
+    if (!funds || !funds.data) return 0;
+    const d = funds.data;
+    return _getVal(d, 'availableBalance')
+        || _getVal(d, 'availableCash')
+        || _getVal(d, 'net')
+        || _getVal(d, 'totalBalance')
+        || 0;
+}
+
+function _extractMarginUsed(funds) {
+    if (!funds || !funds.data) return 0;
+    const d = funds.data;
+    return _getVal(d, 'marginUsed')
+        || _getVal(d, 'usedMargin')
+        || _getVal(d, 'utilizedAmount')
+        || 0;
+}
+
+function numberFmt(n) {
+    if (n == null || isNaN(n)) return '0';
+    return Math.abs(n).toLocaleString('en-IN', { maximumFractionDigits: 2 });
 }
 
 // ================================================================
@@ -328,42 +402,32 @@ function renderHoldingsTable(holdings) {
 // ================================================================
 function refreshPortfolio() {
     showToast('🔄', 'Refreshing portfolio...');
-    setTimeout(() => {
-        loadPortfolio();
+    loadPortfolio().then(() => {
         showToast('✅', 'Portfolio refreshed');
-    }, 500);
+    });
 }
 
 // ================================================================
-// LIVE PRICE SIMULATION
+// LIVE PRICE SIMULATION (fallback when no broker data)
 // ================================================================
 function simulatePriceChange() {
-    holdingsData.forEach(h => {
-        if (!h.isSold) {
-            const change = (Math.random() - 0.48) * 12;
-            h.current = Math.max(h.buyAvg - 100, Math.min(h.buyAvg + 150, h.current + change));
-            h.current = Math.round(h.current);
-        }
-    });
-    loadPortfolio();
+    // Not needed with real broker data — prices come live from broker
 }
 
-// Auto-refresh prices every 5s when portfolio is active
-let simInterval = null;
 function startSimulation() {
-    if (simInterval) return;
-    simInterval = setInterval(simulatePriceChange, 5000);
+    if (_portfolioSimInterval) return;
+    // Refresh portfolio every 15 seconds for live data
+    _portfolioSimInterval = setInterval(() => {
+        // Only reload if we have real data
+        if (portfolioData.funds?.success || portfolioData.positions?.length > 0) {
+            loadPortfolio();
+        }
+    }, 15000);
 }
+
 function stopSimulation() {
-    if (simInterval) {
-        clearInterval(simInterval);
-        simInterval = null;
+    if (_portfolioSimInterval) {
+        clearInterval(_portfolioSimInterval);
+        _portfolioSimInterval = null;
     }
 }
-
-// Override loadPortfolio to auto-start simulation
-const _origLoadPortfolio = loadPortfolio;
-loadPortfolio = function() {
-    startSimulation();
-    _origLoadPortfolio();
-};
