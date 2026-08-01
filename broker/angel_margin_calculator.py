@@ -91,11 +91,13 @@ def get_feed_token():
     return _CREDS.get("feed_token", "")
 
 def _make_smart_connect():
-    """Create a SmartConnect instance with the stored credentials and proxy."""
+    """Create a SmartConnect instance with the stored credentials."""
     from SmartApi import SmartConnect
     sc = SmartConnect(api_key=_CREDS.get("api_key"))
-    # Attach proxy at the instance level (same pattern as the working code)
-    sc.proxies = ANGEL_PROXIES
+    # Proxy is disabled because the server at 151.242.178.149:50100 is
+    # unreachable. Direct connections to Angel One work from this
+    # environment. Re-enable (sc.proxies = ANGEL_PROXIES) if you need
+    # the proxy for IP whitelisting and it becomes available again.
     return sc
 
 def authenticate():
