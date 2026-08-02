@@ -47,11 +47,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         const data = await resp.json();
         if (data.success && data.data) {
             // Dhan fields: availabelBalance, sodLimit
-            // Angel RMS fields: totalavailablemargin, availablemargin, net
+            // Angel RMS fields: totalavailablemargin, availablemargin, net, availablecash
             const balance = data.data.availabelBalance
                 || data.data.sodLimit
                 || data.data.totalavailablemargin
                 || data.data.availablemargin
+                || data.data.availablecash
                 || data.data.net
                 || 0;
             const capEl = document.getElementById('headerCapital');

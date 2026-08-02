@@ -5,27 +5,23 @@
 # using the SmartConnect SDK — raw requests.post() triggers WAF blocks.
 # ==============================================================================
 
-from .angel_margin_calculator import (
-    is_connected,
-    _SMART_API,
-)
+from . import angel_margin_calculator as amc
+
+
+def _get_smart_api():
+    """Return the SmartConnect SDK instance, or None."""
+    return amc._SMART_API
 
 
 def get_angel_fund_limit() -> dict:
-    """Fetch RMS fund limit from Angel One via SmartConnect SDK.
-
-    Returns:
-        dict with keys:
-            success: bool
-            data: dict with fund details (or None on failure)
-            error: str | None
-    """
-    if not is_connected():
+    """Fetch RMS fund limit from Angel One via SmartConnect SDK."""
+    if not amc.is_connected():
         return {"success": False, "data": None, "error": "Angel One not connected"}
-    if _SMART_API is None:
+    sdk = _get_smart_api()
+    if sdk is None:
         return {"success": False, "data": None, "error": "SmartConnect SDK not initialised"}
     try:
-        resp = _SMART_API.rmsLimit()
+        resp = sdk.rmsLimit()
         if resp is None:
             return {"success": False, "data": None, "error": "SDK returned None"}
         if resp.get("status"):
@@ -40,20 +36,14 @@ def get_angel_fund_limit() -> dict:
 
 
 def get_angel_holdings() -> dict:
-    """Fetch current holdings from Angel One via SmartConnect SDK.
-
-    Returns:
-        dict with keys:
-            success: bool
-            data: list of holding dicts (or [] on failure)
-            error: str | None
-    """
-    if not is_connected():
+    """Fetch current holdings from Angel One via SmartConnect SDK."""
+    if not amc.is_connected():
         return {"success": False, "data": None, "error": "Angel One not connected"}
-    if _SMART_API is None:
+    sdk = _get_smart_api()
+    if sdk is None:
         return {"success": False, "data": None, "error": "SmartConnect SDK not initialised"}
     try:
-        resp = _SMART_API.holding()
+        resp = sdk.holding()
         if resp is None:
             return {"success": False, "data": [], "error": "SDK returned None"}
         if resp.get("status"):
@@ -69,20 +59,14 @@ def get_angel_holdings() -> dict:
 
 
 def get_angel_positions() -> dict:
-    """Fetch open positions from Angel One via SmartConnect SDK.
-
-    Returns:
-        dict with keys:
-            success: bool
-            data: list of position dicts (or [] on failure)
-            error: str | None
-    """
-    if not is_connected():
+    """Fetch open positions from Angel One via SmartConnect SDK."""
+    if not amc.is_connected():
         return {"success": False, "data": None, "error": "Angel One not connected"}
-    if _SMART_API is None:
+    sdk = _get_smart_api()
+    if sdk is None:
         return {"success": False, "data": None, "error": "SmartConnect SDK not initialised"}
     try:
-        resp = _SMART_API.position()
+        resp = sdk.position()
         if resp is None:
             return {"success": False, "data": [], "error": "SDK returned None"}
         if resp.get("status"):
