@@ -94,10 +94,9 @@ def _make_smart_connect():
     """Create a SmartConnect instance with the stored credentials."""
     from SmartApi import SmartConnect
     sc = SmartConnect(api_key=_CREDS.get("api_key"))
-    # Proxy is disabled because the server at 151.242.178.149:50100 is
-    # unreachable. Direct connections to Angel One work from this
-    # environment. Re-enable (sc.proxies = ANGEL_PROXIES) if you need
-    # the proxy for IP whitelisting and it becomes available again.
+    # Proxy for IP whitelisting — routes order placement through a
+    # registered static IP.  Proxy server is available again as of Aug 2026.
+    sc.proxies = ANGEL_PROXIES
     return sc
 
 def authenticate():

@@ -163,9 +163,9 @@ def place_angel_order(
     order_type_map = {
         "MARKET": "MARKET",
         "LIMIT": "LIMIT",
-        "SL": "STOP_LOSS",
-        "SL_M": "STOP_LOSS_MARKET",
-        "SL_L": "STOP_LOSS_LIMIT"
+        "SL": "STOPLOSS_MARKET",  # Angel has no standalone STOPLOSS ordertype
+        "SL_M": "STOPLOSS_MARKET",
+        "SL_L": "STOPLOSS_LIMIT"
     }
 
     angel_order_type = order_type_map.get(order_type, "MARKET")
@@ -192,7 +192,7 @@ def place_angel_order(
     #   NORMAL   — regular intraday / delivery order
     #   AMO      — after-market order
     #   STOPLOSS — stop-loss / trailing-stop order
-    if angel_order_type in ("STOP_LOSS", "STOP_LOSS_MARKET", "STOP_LOSS_LIMIT"):
+    if angel_order_type in ("STOPLOSS", "STOPLOSS_MARKET", "STOPLOSS_LIMIT"):
         payload["variety"] = "STOPLOSS"
     else:
         payload["variety"] = "AMO" if after_market_order else "NORMAL"
@@ -225,12 +225,13 @@ def place_angel_order(
                 err_msg = sdk_result.get("message") or sdk_result.get("error") or str(sdk_result)
             print(f"⚠️ SDK order failed: {err_msg}")
 
-        # Raw-request fallback (direct — Angel One IP whitelist covers this server)
+        # Raw-request fallback (use proxy for IP whitelisting)
         headers = _make_sdk_headers(api_key, access_token)
         response = requests.post(
             ANGEL_ORDER_URL,
             json=payload,
             headers=headers,
+            proxies=ANGEL_PROXIES,
             timeout=15,
         )
 
