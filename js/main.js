@@ -46,13 +46,23 @@ document.addEventListener('DOMContentLoaded', async () => {
         const resp = await fetch('/api/portfolio/funds');
         const data = await resp.json();
         if (data.success && data.data) {
-            const balance = data.data.availabelBalance || data.data.sodLimit || 0;
+            // Dhan fields: availabelBalance, sodLimit
+            // Angel RMS fields: totalavailablemargin, availablemargin, net
+            const balance = data.data.availabelBalance
+                || data.data.sodLimit
+                || data.data.totalavailablemargin
+                || data.data.availablemargin
+                || data.data.net
+                || 0;
             const capEl = document.getElementById('headerCapital');
             if (capEl) capEl.textContent = '₹' + Math.round(balance).toLocaleString('en-IN');
         }
     } catch (e) {
         // Silently ignore — broker not connected yet
     }
+
+    // ── Initial market status ────────────────────────────────────
+    updateMarketStatus();
 
     // ── Avatar dropdown toggle ───────────────────────────────────
     const avatarWrap = document.getElementById('avatarWrap');
@@ -297,6 +307,29 @@ const STRATEGIES = {
 };
 
 // ================================================================
+// MARKET STATUS — dynamic open/close based on IST
+// ================================================================
+function updateMarketStatus() {
+    const el = document.getElementById('marketStatus');
+    if (!el) return;
+    const now = new Date();
+    // Convert to IST (UTC+5:30)
+    const istOffset = 5.5 * 60 * 60 * 1000;
+    const ist = new Date(now.getTime() + istOffset * 1);
+    const h = ist.getUTCHours();
+    const m = ist.getUTCMinutes();
+    const mins = h * 60 + m;
+    const day = ist.getUTCDay(); // 0=Sun, 6=Sat
+    const isOpen = day >= 1 && day <= 5 && mins >= (9 * 60 + 15) && mins < (15 * 60 + 45);
+    el.innerHTML = isOpen
+        ? '<span class="status-dot green"></span> Market Open'
+        : '<span class="status-dot red"></span> Market Closed';
+}
+
+// Refresh market status every 30 seconds
+setInterval(updateMarketStatus, 30000);
+
+// ================================================================
 // NAVIGATION
 // ================================================================
 function navigateTo(pageId) {
@@ -317,6 +350,9 @@ function navigateTo(pageId) {
     else if (pageId === 'strategies') loadStrategies();
     else if (pageId === 'portfolio') loadPortfolio();
     else if (pageId === 'testing') loadTesting();
+
+    // Refresh market status on every navigation
+    updateMarketStatus();
 }
 
 document.querySelectorAll('.sidebar-link').forEach(link => {

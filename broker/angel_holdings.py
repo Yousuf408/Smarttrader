@@ -63,7 +63,6 @@ def get_angel_fund_limit() -> dict:
             ANGEL_FUNDS_URL,
             json=payload,
             headers=headers,
-            proxies=ANGEL_PROXIES,
             timeout=10,
         )
         if resp.status_code != 200:
@@ -103,7 +102,6 @@ def get_angel_holdings() -> dict:
             ANGEL_HOLDINGS_URL,
             json=payload,
             headers=headers,
-            proxies=ANGEL_PROXIES,
             timeout=10,
         )
         if resp.status_code != 200:
@@ -144,7 +142,6 @@ def get_angel_positions() -> dict:
             ANGEL_POSITIONS_URL,
             json=payload,
             headers=headers,
-            proxies=ANGEL_PROXIES,
             timeout=10,
         )
         if resp.status_code != 200:

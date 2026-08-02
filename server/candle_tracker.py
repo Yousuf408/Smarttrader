@@ -71,7 +71,7 @@ from logzero import logger
 # ─── constants ───────────────────────────────────────────────────────
 IST = timezone(timedelta(hours=5, minutes=30))
 MARKET_OPEN_MIN = 9 * 60 + 15   # 09:15 IST
-MARKET_CLOSE_MIN = 15 * 60 + 30  # 15:30 IST
+MARKET_CLOSE_MIN = 15 * 60 + 45  # 15:45 IST
 SLOT_LENGTH = 5                  # minutes per slot
 EMA_SPAN = 200
 EMA_LOOKBACK_DAYS = 4

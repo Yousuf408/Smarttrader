@@ -171,12 +171,12 @@ def _seed_ticks_from_rest():
 # ==============================================================================
 
 def is_market_open() -> bool:
-    """Check if NSE market is open (9:15 AM - 3:30 PM IST, Mon-Fri)."""
+    """Check if NSE market is open (9:15 AM - 3:45 PM IST, Mon-Fri)."""
     now = datetime.now(IST)
     if now.weekday() >= 5:  # Saturday=5, Sunday=6
         return False
     mins = now.hour * 60 + now.minute
-    return (9 * 60 + 15) <= mins <= (15 * 60 + 30)
+    return (9 * 60 + 15) <= mins < (15 * 60 + 45)
 
 # ==============================================================================
 # WEBSOCKET CALLBACKS
