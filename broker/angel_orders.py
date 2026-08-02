@@ -225,13 +225,12 @@ def place_angel_order(
                 err_msg = sdk_result.get("message") or sdk_result.get("error") or str(sdk_result)
             print(f"⚠️ SDK order failed: {err_msg}")
 
-        # Raw-request fallback (use proxy — Angel One requires whitelisted IP for order placement)
+        # Raw-request fallback (direct — Angel One IP whitelist covers this server)
         headers = _make_sdk_headers(api_key, access_token)
         response = requests.post(
             ANGEL_ORDER_URL,
             json=payload,
             headers=headers,
-            proxies=ANGEL_PROXIES,
             timeout=15,
         )
 
