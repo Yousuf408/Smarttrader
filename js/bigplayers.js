@@ -18,11 +18,11 @@ let _bpAutoBuyEnabled = false;
 const _bpBoughtSymbols = new Set();
 
 // Active BP positions for trailing SL (tracked after successful buy + SL)
-// symbol → { entryPrice, highPrice, slTrigger, slOrderId, quantity }
+// symbol → { entryPrice, slTrigger, slOrderId, quantity, slTrailed: bool }
 const _bpActivePositions = {};
 
-let _bpTrailingEnabled = true;    // toggle trailing SL on/off
-const BP_TRAIL_PERCENT = 0.5;      // trail SL 0.5% below highest price seen
+let _bpTrailingEnabled = true;         // toggle trailing SL on/off
+const BP_TRAIL_TRIGGER_PERCENT = 2.0;  // trail SL to entry once price is 2% above entry
 
 const BIG_PLAYERS_AUTO_BUY = {
     requireBreakoutActive: true,
@@ -289,56 +289,45 @@ function _bpApplyTicks(ticks) {
             _placeBpOrder(sym, maxQty, low915);
         }
 
-        // ── Trailing SL: move SL up as price rises ──
+        // ── Trailing SL: if price reaches 2% above entry, trail SL to entry ──
         if (_bpTrailingEnabled && tick.ltp != null) {
             const pos = _bpActivePositions[sym];
-            if (pos && pos.slOrderId) {
+            if (pos && pos.slOrderId && !pos.slTrailed) {
                 const currentPrice = Number(tick.ltp);
-                // Update high price if current is higher
-                if (currentPrice > pos.highPrice) {
-                    pos.highPrice = currentPrice;
-                    // New SL = highPrice - 0.5%, but never below current SL
-                    const newSl = parseFloat((currentPrice * (1 - BP_TRAIL_PERCENT / 100)).toFixed(2));
-                    if (newSl > pos.slTrigger) {
-                        const oldSl = pos.slTrigger;
-                        pos.slTrigger = newSl;
-                        _trailSlOrder(sym, pos.slOrderId, newSl, pos.quantity);
-                    }
+                const entryPrice = pos.entryPrice;
+                if (entryPrice > 0 && currentPrice >= entryPrice * (1 + BP_TRAIL_TRIGGER_PERCENT / 100)) {
+                    // Mark as trailed so we only do this once
+                    pos.slTrailed = true;
+                    pos.slTrigger = entryPrice;
+                    _trailSlOnce(sym, pos.slOrderId, entryPrice, pos.quantity);
                 }
             }
         }
     }
 }
 
-// ── Debounced trail-SL call ──
-const _trailSlTimers = {};
-
-async function _trailSlOrder(symbol, orderId, newTrigger, quantity) {
-    // Debounce: wait 1s after the last tick before calling the API
-    if (_trailSlTimers[symbol]) clearTimeout(_trailSlTimers[symbol]);
-    _trailSlTimers[symbol] = setTimeout(async () => {
-        delete _trailSlTimers[symbol];
-        try {
-            const resp = await fetch('/api/orders/trail-sl', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    symbol,
-                    order_id: orderId,
-                    new_trigger: newTrigger,
-                    quantity,
-                }),
-            });
-            const result = await resp.json();
-            if (result.success) {
-                console.log(`📈 Trail SL ${symbol} → ₹${newTrigger}`);
-            } else {
-                console.warn(`⚠️ Trail SL failed for ${symbol}:`, result.error);
-            }
-        } catch (e) {
-            console.error(`❌ Trail SL error for ${symbol}:`, e);
+// ── Single trail-SL call at 2% threshold ──
+async function _trailSlOnce(symbol, orderId, newTrigger, quantity) {
+    try {
+        const resp = await fetch('/api/orders/trail-sl', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                symbol,
+                order_id: orderId,
+                new_trigger: newTrigger,
+                quantity,
+            }),
+        });
+        const result = await resp.json();
+        if (result.success) {
+            console.log(`📈 Trail SL ${symbol} → breakeven @ ₹${newTrigger}`);
+        } else {
+            console.warn(`⚠️ Trail SL failed for ${symbol}:`, result.error);
         }
-    }, 1000);
+    } catch (e) {
+        console.error(`❌ Trail SL error for ${symbol}:`, e);
+    }
 }
 
 let _bpTickWatchdog = null;
@@ -438,10 +427,10 @@ async function _placeBpOrder(symbol, quantity, slTrigger) {
             if (slOrderId && slTrigger > 0) {
                 _bpActivePositions[symbol] = {
                     entryPrice: entryPrice || 0,
-                    highPrice: entryPrice || 0,
                     slTrigger: slTrigger,
                     slOrderId: slOrderId,
                     quantity: quantity,
+                    slTrailed: false,
                 };
             }
             let msg = `${symbol} × ${quantity}`;
@@ -551,10 +540,10 @@ async function autoBuyAllStocksBigPlayers() {
                     if (r && r.success && r.sl_order_id && i < orders.length) {
                         _bpActivePositions[orders[i].symbol] = {
                             entryPrice: parseFloat(r.data?.price || 0) || 0,
-                            highPrice: parseFloat(r.data?.price || 0) || 0,
                             slTrigger: orders[i].stopLoss || 0,
                             slOrderId: r.sl_order_id,
                             quantity: orders[i].quantity,
+                            slTrailed: false,
                         };
                     }
                 });
