@@ -749,6 +749,8 @@ def place_order_batch_endpoint(payload: dict):
             raise HTTPException(status_code=400, detail=f"orders[{i}]: symbol required")
         if not isinstance(quantity, int) or isinstance(quantity, bool) or quantity < 1:
             raise HTTPException(status_code=400, detail=f"orders[{i}]: quantity must be a positive integer")
+        sl_raw = o.get("stopLoss")
+        sl_trigger = float(sl_raw) if sl_raw and float(sl_raw) > 0 else 0
         validated.append({
             "symbol": symbol,
             "quantity": quantity,
@@ -756,12 +758,13 @@ def place_order_batch_endpoint(payload: dict):
             "product_type":   (o.get("productType")   or "INTRADAY").upper(),
             "after_market_order": bool(o.get("afterMarketOrder", False)),
             "amo_time": str(o.get("amoTime") or "OPEN").upper(),
+            "stop_loss": sl_trigger,
         })
 
     order_fn, broker = _order_broker()
 
     def submit_one(order):
-        return order_fn(
+        buy_result = order_fn(
             symbol=order["symbol"],
             quantity=order["quantity"],
             transaction_type=order["transaction_type"],
@@ -769,6 +772,29 @@ def place_order_batch_endpoint(payload: dict):
             after_market_order=order["after_market_order"],
             amo_time=order["amo_time"],
         )
+        # If buy succeeded and a stop-loss trigger was provided, place SL-M sell
+        if buy_result and buy_result.get("success") and order.get("stop_loss", 0) > 0:
+            try:
+                sl_fn, _ = _order_broker()
+                sl_result = sl_fn(
+                    symbol=order["symbol"],
+                    quantity=order["quantity"],
+                    transaction_type="SELL",
+                    product_type=order["product_type"],
+                    order_type="SL_M",
+                    trigger_price=order["stop_loss"],
+                    price=0,
+                    after_market_order=False,
+                    amo_time="OPEN",
+                )
+                if sl_result and sl_result.get("success"):
+                    buy_result["sl_order_id"] = sl_result.get("order_id")
+                    buy_result["sl_trigger"] = order["stop_loss"]
+                else:
+                    buy_result["sl_error"] = (sl_result or {}).get("error", "SL placement failed")
+            except Exception as sl_exc:
+                buy_result["sl_error"] = str(sl_exc)
+        return buy_result
 
     workers = min(5, len(validated))
     results: list = [None] * len(validated)
@@ -782,11 +808,13 @@ def place_order_batch_endpoint(payload: dict):
                 results[idx] = {"success": False, "error": str(exc), "symbol": validated[idx]["symbol"]}
 
     succeeded = sum(1 for r in results if r and r.get("success"))
+    sl_placed = sum(1 for r in results if r and r.get("sl_order_id"))
     return {
         "source": source,
         "total": len(validated),
         "succeeded": succeeded,
         "failed": len(validated) - succeeded,
+        "slPlaced": sl_placed,
         "results": results,
     }
 

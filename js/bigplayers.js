@@ -277,9 +277,9 @@ function _bpApplyTicks(ticks) {
             const maxEntry = high915 * 1.005;
             if (price < minEntry || price > maxEntry) continue;
 
-            // All conditions met — buy immediately
+            // All conditions met — buy immediately with SL at the 9:15 low
             _bpBoughtSymbols.add(sym);
-            _placeBpOrder(sym, maxQty);
+            _placeBpOrder(sym, maxQty, low915);
         }
     }
 }
@@ -349,8 +349,8 @@ function stopBigPlayersAutoRefresh() {
 // SECTION 8: BIG PLAYERS AUTO BUY (tick-triggered via _bpApplyTicks)
 // ================================================================
 
-/** Place a single Big Players buy order immediately via the backend. */
-async function _placeBpOrder(symbol, quantity) {
+/** Place a single Big Players buy order + SL at the 9:15 low. */
+async function _placeBpOrder(symbol, quantity, slTrigger) {
     try {
         const response = await fetch('/api/orders/place-batch', {
             method: 'POST',
@@ -363,6 +363,8 @@ async function _placeBpOrder(symbol, quantity) {
                     productType: 'INTRADAY',
                     afterMarketOrder: window.amoEnabled || false,
                     amoTime: 'OPEN',
+                    // SL-M sell placed after buy to protect the position
+                    stopLoss: slTrigger || 0,
                 }],
                 productType: 'INTRADAY',
                 afterMarketOrder: window.amoEnabled || false,
@@ -373,7 +375,9 @@ async function _placeBpOrder(symbol, quantity) {
         });
         const result = await response.json();
         if (response.ok && result.succeeded > 0) {
-            showToast('✅ BP Buy', `${symbol} × ${quantity} at 75% recovery`);
+            let msg = `${symbol} × ${quantity}`;
+            if (result.slPlaced) msg += ` · SL @ ₹${slTrigger}`;
+            showToast('✅ BP Buy', msg);
         } else {
             const err = (result.results && result.results[0] && result.results[0].error) || result.detail || 'Unknown';
             showToast('❌ BP Buy Failed', `${symbol}: ${err}`);
@@ -427,22 +431,28 @@ async function autoBuyAllStocksBigPlayers() {
 
     const topN = eligibleStocks.slice(0, BIG_PLAYERS_AUTO_BUY.maxStocksPerDay);
 
-    const orders = topN.map(r => ({
-        symbol: r.Symbol || r.symbol,
-        quantity: parseInt(r.maxQty || r.MaxQty || 0, 10),
-        transactionType: 'BUY',
-        productType: 'INTRADAY',
-        afterMarketOrder: window.amoEnabled || false,
-        amoTime: 'OPEN',
-        breakoutStatus: r.breakout || r.Breakout,
-        supportPrice: r.supportPrice || r.SupportPrice,
-    }));
+    const orders = topN.map(r => {
+        const low915 = parseFloat(r.low915);
+        const high915 = parseFloat(r.high915);
+        const slTrigger = Number.isFinite(low915) ? low915 : 0;
+        return {
+            symbol: r.Symbol || r.symbol,
+            quantity: parseInt(r.maxQty || r.MaxQty || 0, 10),
+            transactionType: 'BUY',
+            productType: 'INTRADAY',
+            afterMarketOrder: window.amoEnabled || false,
+            amoTime: 'OPEN',
+            breakoutStatus: r.breakout || r.Breakout,
+            supportPrice: r.supportPrice || r.SupportPrice,
+            stopLoss: slTrigger,
+        };
+    });
 
     const entryDetails = topN.map(r => {
         const lo = parseFloat(r.low915);
         const hi = parseFloat(r.high915);
         const ep = lo + (hi - lo) * 0.75;
-        return `${r.Symbol}@₹${ep.toFixed(2)}`;
+        return `${r.Symbol}@₹${ep.toFixed(2)}·SL@₹${lo}`;
     }).join(', ');
     showToast('🏢 BP Auto-Buy', `Submitting ${orders.length}: ${entryDetails}`);
 
