@@ -663,6 +663,9 @@ def place_order_endpoint(payload: dict):
       "symbol": "...", "quantity": int,
       "transactionType": "BUY"|"SELL" (default BUY),
       "productType": "INTRADAY"|"CNC" (default INTRADAY),
+      "orderType": "MARKET"|"LIMIT"|"SL"|"SL_M"|"SL_L" (default MARKET),
+      "price": float (required for LIMIT/SL_L, default 0),
+      "triggerPrice": float (required for SL/SL_M/SL_L, default 0),
       "afterMarketOrder": bool (default False),
       "amoTime": "OPEN"|"OPEN_30"|"OPEN_60" (default OPEN, only matters when AMO=True)
     }
@@ -671,6 +674,9 @@ def place_order_endpoint(payload: dict):
     quantity = payload.get("quantity")
     transaction_type = (payload.get("transactionType") or "BUY").upper()
     product_type = (payload.get("productType") or "INTRADAY").upper()
+    order_type = (payload.get("orderType") or "MARKET").upper()
+    price = float(payload.get("price") or 0)
+    trigger_price = float(payload.get("triggerPrice") or 0)
     after_market_order = bool(payload.get("afterMarketOrder", False))
     amo_time = str(payload.get("amoTime") or "OPEN").upper()
 
@@ -683,6 +689,12 @@ def place_order_endpoint(payload: dict):
         raise HTTPException(status_code=400, detail="transactionType must be BUY or SELL")
     if product_type not in ("INTRADAY", "CNC"):
         raise HTTPException(status_code=400, detail="productType must be INTRADAY or CNC")
+    if order_type not in ("MARKET", "LIMIT", "SL", "SL_M", "SL_L"):
+        raise HTTPException(status_code=400, detail="orderType must be MARKET, LIMIT, SL, SL_M or SL_L")
+    if order_type in ("LIMIT", "SL_L") and price <= 0:
+        raise HTTPException(status_code=400, detail="price > 0 required for LIMIT / SL_L orders")
+    if order_type in ("SL", "SL_M", "SL_L") and trigger_price <= 0:
+        raise HTTPException(status_code=400, detail="triggerPrice > 0 required for SL / SL_M / SL_L orders")
     if amo_time not in ("OPEN", "OPEN_30", "OPEN_60"):
         raise HTTPException(status_code=400, detail="amoTime must be OPEN, OPEN_30 or OPEN_60")
 
@@ -692,6 +704,9 @@ def place_order_endpoint(payload: dict):
         quantity=quantity,
         transaction_type=transaction_type,
         product_type=product_type,
+        order_type=order_type,
+        price=price,
+        trigger_price=trigger_price,
         after_market_order=after_market_order,
         amo_time=amo_time,
     )

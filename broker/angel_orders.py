@@ -188,12 +188,14 @@ def place_angel_order(
     if trigger_price > 0:
         payload["triggerprice"] = float(trigger_price)
 
-    # AMO: Angel One expects the variety field to indicate AMO
     # Angel One requires the 'variety' field for all orders:
-    #   NORMAL  — regular intraday / delivery order
-    #   AMO     — after-market order
-    #   STOPLOSS — stop-loss order
-    payload["variety"] = "AMO" if after_market_order else "NORMAL"
+    #   NORMAL   — regular intraday / delivery order
+    #   AMO      — after-market order
+    #   STOPLOSS — stop-loss / trailing-stop order
+    if angel_order_type in ("STOP_LOSS", "STOP_LOSS_MARKET", "STOP_LOSS_LIMIT"):
+        payload["variety"] = "STOPLOSS"
+    else:
+        payload["variety"] = "AMO" if after_market_order else "NORMAL"
 
     # Step 8: Submit order — prefer the SmartConnect SDK (which sends the
     # correct headers and routes through the proxy automatically), falling
@@ -203,27 +205,34 @@ def place_angel_order(
         print(f"   Payload: {json.dumps(payload, indent=2)}")
 
         if _SMART_API is not None:
-            # Use SDK — it handles headers, proxies and auth token
-            sdk_result = _SMART_API.placeOrder(payload)
-            if sdk_result is not None:
-                return {
-                    "success": True,
-                    "order_id": str(sdk_result),
-                    "symbol": symbol_upper,
-                }
-            else:
-                # SDK placeOrder returned None — the order failed but was
-                # already logged by the SDK.  Fall through to raw retry.
-                print("⚠️ SDK placeOrder returned None, trying raw request…")
+            # Use SDK with full response — captures error details
+            sdk_result = _SMART_API.placeOrderFullResponse(payload)
+            if sdk_result is not None and sdk_result.get("status"):
+                order_id = (
+                    sdk_result.get("data", {}).get("orderid")
+                    or sdk_result.get("orderid")
+                )
+                if order_id:
+                    return {
+                        "success": True,
+                        "order_id": str(order_id),
+                        "symbol": symbol_upper,
+                        "data": sdk_result.get("data"),
+                    }
+            # Log the failure reason
+            err_msg = "unknown"
+            if sdk_result:
+                err_msg = sdk_result.get("message") or sdk_result.get("error") or str(sdk_result)
+            print(f"⚠️ SDK order failed: {err_msg}")
 
-        # Raw-request fallback
+        # Raw-request fallback (use proxy — Angel One requires whitelisted IP for order placement)
         headers = _make_sdk_headers(api_key, access_token)
         response = requests.post(
             ANGEL_ORDER_URL,
             json=payload,
             headers=headers,
             proxies=ANGEL_PROXIES,
-            timeout=10,
+            timeout=15,
         )
 
         print(f"📥 Response status: {response.status_code}")
