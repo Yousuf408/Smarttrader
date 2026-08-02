@@ -296,10 +296,11 @@ function _bpApplyTicks(ticks) {
                 const currentPrice = Number(tick.ltp);
                 const entryPrice = pos.entryPrice;
                 if (entryPrice > 0 && currentPrice >= entryPrice * (1 + BP_TRAIL_TRIGGER_PERCENT / 100)) {
-                    // Mark as trailed so we only do this once
+                    // Trail SL to entry + 1.8% (lock in profit, 0.2% below trigger)
                     pos.slTrailed = true;
-                    pos.slTrigger = entryPrice;
-                    _trailSlOnce(sym, pos.slOrderId, entryPrice, pos.quantity);
+                    const trailedSl = parseFloat((entryPrice * 1.018).toFixed(2));
+                    pos.slTrigger = trailedSl;
+                    _trailSlOnce(sym, pos.slOrderId, trailedSl, pos.quantity);
                 }
             }
         }
