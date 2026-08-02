@@ -62,6 +62,7 @@ ANGEL_BASE_URL = "https://apiconnect.angelone.in"
 ANGEL_ORDER_URL = f"{ANGEL_BASE_URL}/rest/secure/angelbroking/order/v1/placeOrder"
 ANGEL_ORDER_STATUS_URL = f"{ANGEL_BASE_URL}/rest/secure/angelbroking/order/v1/getOrderBook"
 ANGEL_ORDER_CANCEL_URL = f"{ANGEL_BASE_URL}/rest/secure/angelbroking/order/v1/cancelOrder"
+ANGEL_ORDER_MODIFY_URL = f"{ANGEL_BASE_URL}/rest/secure/angelbroking/order/v1/modifyOrder"
 
 # ==============================================================================
 # ORDER PLACEMENT
@@ -434,28 +435,132 @@ def cancel_angel_order(order_id):
         }
 
 # ==============================================================================
-# MODIFY ORDER (Placeholder)
+# SL ORDER METADATA STORE (for trailing SL modify calls)
+# ==============================================================================
+# Stored when an SL-M order is placed so modify_angel_order can re-send all
+# required fields without making an extra getOrderBook call.
+_SL_ORDER_META: dict[str, dict] = {}
+
+def register_sl_order(order_id, metadata: dict):
+    """Store SL order metadata for later modify calls."""
+    _SL_ORDER_META[str(order_id)] = metadata
+
+# ==============================================================================
+# MODIFY ORDER (Update trigger price for trailing SL)
 # ==============================================================================
 
-def modify_angel_order(order_id, quantity=None, price=None, trigger_price=None):
+def modify_angel_order(order_id, symbol, new_trigger, new_price=None, new_quantity=None):
     """
-    Modify an existing order.
-    Note: Angel One may or may not support order modification.
-    This is a placeholder.
+    Modify an existing SL order's trigger price (trailing SL support).
+
+    Uses the SmartConnect SDK's modifyOrder method, falling back to a raw
+    request through the proxy if the SDK is unavailable.
+
+    Angel One's modifyOrder requires ALL original order fields. We only
+    change triggerprice/price/quantity, but the SDK re-sends the rest
+    from the payload we provide.
 
     Args:
         order_id (str): The order ID to modify.
-        quantity (int): New quantity (optional).
-        price (float): New price (optional).
-        trigger_price (float): New trigger price (optional).
+        symbol (str): The stock symbol (e.g. "TCS").
+        new_trigger (float): New trigger price for the SL.
+        new_price (float, optional): New price (0 for market).
+        new_quantity (int, optional): New quantity.
 
     Returns:
-        dict: {"success": bool, "error": str|None}
+        dict: {"success": bool, "order_id": str, "error": str|None}
     """
-    return {
-        "success": False,
-        "error": "Order modification not yet implemented for Angel One"
+    symbol_upper = str(symbol or "").strip().upper()
+    if not symbol_upper or not order_id:
+        return {"success": False, "error": "symbol and order_id are required", "order_id": order_id}
+
+    api_key = _CREDS.get("api_key", "")
+    access_token = get_access_token()
+    if not api_key or not access_token:
+        return {"success": False, "error": "Not authenticated", "order_id": order_id}
+
+    # Look up stored SL order metadata so we can re-send all required fields
+    meta = _SL_ORDER_META.get(str(order_id))
+
+    if not meta:
+        return {
+            "success": False,
+            "error": f"No stored metadata for order {order_id} — cannot modify",
+            "order_id": order_id,
+        }
+
+    payload = {
+        "orderid": str(order_id),
+        "tradingsymbol": meta.get("tradingsymbol", f"{symbol_upper}-EQ"),
+        "symboltoken": str(meta.get("token", "")),
+        "exchange": meta.get("exchange", "NSE"),
+        "transactiontype": meta.get("transaction_type", "SELL"),
+        "producttype": meta.get("product_type", "INTRADAY"),
+        "ordertype": meta.get("order_type", "STOPLOSS_MARKET"),
+        "quantity": int(new_quantity if new_quantity is not None else meta.get("quantity", 0)),
+        "price": str(new_price if new_price is not None else meta.get("price", "0")),
+        "triggerprice": str(new_trigger),
+        "duration": "DAY",
+        "variety": meta.get("variety", "STOPLOSS"),
     }
+
+    try:
+        print(f"📤 Modifying Angel One SL order {order_id}")
+        print(f"   New trigger: {new_trigger}")
+
+        if _SMART_API is not None:
+            # Use SDK's modifyOrder (returns full response)
+            sdk_result = _SMART_API.modifyOrder(payload)
+            if sdk_result is not None and sdk_result.get("status"):
+                return {
+                    "success": True,
+                    "order_id": str(order_id),
+                    "new_trigger": new_trigger,
+                }
+            err_msg = "unknown"
+            if sdk_result:
+                err_msg = sdk_result.get("message") or sdk_result.get("error") or str(sdk_result)
+            print(f"⚠️ SDK modify failed: {err_msg}")
+            # Fall through to raw request
+
+        # Raw-request fallback through proxy
+        headers = _make_sdk_headers(api_key, access_token)
+        response = requests.post(
+            ANGEL_ORDER_MODIFY_URL,
+            json=payload,
+            headers=headers,
+            proxies=ANGEL_PROXIES,
+            timeout=15,
+        )
+
+        if response.status_code not in (200, 201, 202):
+            return {
+                "success": False,
+                "error": f"HTTP {response.status_code}: {response.text[:300]}",
+                "order_id": order_id,
+            }
+
+        data = response.json()
+        if data.get("status"):
+            return {
+                "success": True,
+                "order_id": str(order_id),
+                "new_trigger": new_trigger,
+            }
+
+        return {
+            "success": False,
+            "error": data.get("message", "Modify failed"),
+            "order_id": order_id,
+            "data": data,
+        }
+
+    except Exception as exc:
+        return {
+            "success": False,
+            "error": f"Exception: {type(exc).__name__}: {exc}",
+            "order_id": order_id,
+        }
 
 # ==============================================================================
 # TEST FUNCTION

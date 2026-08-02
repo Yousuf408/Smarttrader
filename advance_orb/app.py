@@ -27,7 +27,7 @@ from broker.quantity_calculator import (
     DHAN_AUTO_RENEW_LEAD_SECONDS,
 )
 from broker.dhan_orders import place_dhan_order
-from broker.angel_orders import place_angel_order
+from broker.angel_orders import place_angel_order, modify_angel_order, register_sl_order
 from broker.quantity_calculator import DHAN_ACCESS_TOKEN as dhan_token
 from broker.angel_margin_calculator import (
     set_credentials as set_angel_credentials,
@@ -788,8 +788,26 @@ def place_order_batch_endpoint(payload: dict):
                     amo_time="OPEN",
                 )
                 if sl_result and sl_result.get("success"):
-                    buy_result["sl_order_id"] = sl_result.get("order_id")
+                    sl_order_id = sl_result.get("order_id")
+                    buy_result["sl_order_id"] = sl_order_id
                     buy_result["sl_trigger"] = order["stop_loss"]
+                    # Store SL metadata so modify_angel_order can trail it
+                    try:
+                        from broker.angel_margin_calculator import resolve_symbol_token as _resolve_sl_token
+                        _tradingsym, _token = _resolve_sl_token(order["symbol"], "NSE")
+                        register_sl_order(sl_order_id, {
+                            "tradingsymbol": _tradingsym or f"{order['symbol']}-EQ",
+                            "token": str(_token or ""),
+                            "exchange": "NSE",
+                            "transaction_type": "SELL",
+                            "product_type": order["product_type"],
+                            "order_type": "STOPLOSS_MARKET",
+                            "quantity": order["quantity"],
+                            "price": "0",
+                            "variety": "STOPLOSS",
+                        })
+                    except Exception as reg_exc:
+                        print(f"⚠️ Failed to register SL metadata: {reg_exc}")
                 else:
                     buy_result["sl_error"] = (sl_result or {}).get("error", "SL placement failed")
             except Exception as sl_exc:
@@ -817,6 +835,51 @@ def place_order_batch_endpoint(payload: dict):
         "slPlaced": sl_placed,
         "results": results,
     }
+
+
+# ================================================================
+# TRAILING SL ENDPOINT (for Big Players auto trail)
+# ================================================================
+
+_bp_sl_orders: dict[str, dict] = {}  # symbol → {slOrderId, trigger, entryPrice}
+
+@app.post("/api/orders/trail-sl")
+def trail_sl_endpoint(payload: dict):
+    """Move an existing SL order's trigger price up (trailing SL).
+
+    Angel One's modifyOrder API updates the trigger price in place —
+    no cancel/replace needed.  We store the SL order metadata on first
+    placement (in place-batch) so this endpoint has all required fields
+    without a getOrderBook call.
+
+    Args (JSON body):
+        symbol (str): Stock symbol.
+        order_id (str): Existing SL order ID to trail.
+        new_trigger (float): New trigger price (must be higher).
+        quantity (int, optional): Quantity (defaults to stored).
+    """
+    symbol = ((payload.get("symbol") or "")).strip().upper()
+    order_id = str(payload.get("order_id") or "")
+    new_trigger = float(payload.get("new_trigger") or 0)
+
+    if not symbol or not order_id or new_trigger <= 0:
+        raise HTTPException(status_code=400, detail="symbol, order_id, and new_trigger (>0) required")
+
+    result = modify_angel_order(
+        order_id=order_id,
+        symbol=symbol,
+        new_trigger=new_trigger,
+        new_quantity=payload.get("quantity"),
+    )
+
+    if result.get("success"):
+        # Update the frontend-accessible store with new trigger
+        _bp_sl_orders[symbol] = {
+            "slOrderId": order_id,
+            "trigger": new_trigger,
+        }
+
+    return result
 
 
 @app.get("/api/health")

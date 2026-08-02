@@ -17,6 +17,13 @@ const BIG_PLAYERS_REFRESH_MS = 30000;
 let _bpAutoBuyEnabled = false;
 const _bpBoughtSymbols = new Set();
 
+// Active BP positions for trailing SL (tracked after successful buy + SL)
+// symbol → { entryPrice, highPrice, slTrigger, slOrderId, quantity }
+const _bpActivePositions = {};
+
+let _bpTrailingEnabled = true;    // toggle trailing SL on/off
+const BP_TRAIL_PERCENT = 0.5;      // trail SL 0.5% below highest price seen
+
 const BIG_PLAYERS_AUTO_BUY = {
     requireBreakoutActive: true,
     maxStocksPerDay: 5,
@@ -281,7 +288,57 @@ function _bpApplyTicks(ticks) {
             _bpBoughtSymbols.add(sym);
             _placeBpOrder(sym, maxQty, low915);
         }
+
+        // ── Trailing SL: move SL up as price rises ──
+        if (_bpTrailingEnabled && tick.ltp != null) {
+            const pos = _bpActivePositions[sym];
+            if (pos && pos.slOrderId) {
+                const currentPrice = Number(tick.ltp);
+                // Update high price if current is higher
+                if (currentPrice > pos.highPrice) {
+                    pos.highPrice = currentPrice;
+                    // New SL = highPrice - 0.5%, but never below current SL
+                    const newSl = parseFloat((currentPrice * (1 - BP_TRAIL_PERCENT / 100)).toFixed(2));
+                    if (newSl > pos.slTrigger) {
+                        const oldSl = pos.slTrigger;
+                        pos.slTrigger = newSl;
+                        _trailSlOrder(sym, pos.slOrderId, newSl, pos.quantity);
+                    }
+                }
+            }
+        }
     }
+}
+
+// ── Debounced trail-SL call ──
+const _trailSlTimers = {};
+
+async function _trailSlOrder(symbol, orderId, newTrigger, quantity) {
+    // Debounce: wait 1s after the last tick before calling the API
+    if (_trailSlTimers[symbol]) clearTimeout(_trailSlTimers[symbol]);
+    _trailSlTimers[symbol] = setTimeout(async () => {
+        delete _trailSlTimers[symbol];
+        try {
+            const resp = await fetch('/api/orders/trail-sl', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    symbol,
+                    order_id: orderId,
+                    new_trigger: newTrigger,
+                    quantity,
+                }),
+            });
+            const result = await resp.json();
+            if (result.success) {
+                console.log(`📈 Trail SL ${symbol} → ₹${newTrigger}`);
+            } else {
+                console.warn(`⚠️ Trail SL failed for ${symbol}:`, result.error);
+            }
+        } catch (e) {
+            console.error(`❌ Trail SL error for ${symbol}:`, e);
+        }
+    }, 1000);
 }
 
 let _bpTickWatchdog = null;
@@ -375,6 +432,18 @@ async function _placeBpOrder(symbol, quantity, slTrigger) {
         });
         const result = await response.json();
         if (response.ok && result.succeeded > 0) {
+            const slOrderId = result.results && result.results[0] && result.results[0].sl_order_id;
+            const entryPrice = parseFloat(result.results[0]?.data?.price || 0);
+            // Register in active positions for trailing SL
+            if (slOrderId && slTrigger > 0) {
+                _bpActivePositions[symbol] = {
+                    entryPrice: entryPrice || 0,
+                    highPrice: entryPrice || 0,
+                    slTrigger: slTrigger,
+                    slOrderId: slOrderId,
+                    quantity: quantity,
+                };
+            }
             let msg = `${symbol} × ${quantity}`;
             if (result.slPlaced) msg += ` · SL @ ₹${slTrigger}`;
             showToast('✅ BP Buy', msg);
@@ -475,6 +544,22 @@ async function autoBuyAllStocksBigPlayers() {
         if (response.ok) {
             const succeeded = result.succeeded || 0;
             const total = result.total || orders.length;
+
+            // Register each successful order for trailing SL
+            if (result.results && Array.isArray(result.results)) {
+                result.results.forEach((r, i) => {
+                    if (r && r.success && r.sl_order_id && i < orders.length) {
+                        _bpActivePositions[orders[i].symbol] = {
+                            entryPrice: parseFloat(r.data?.price || 0) || 0,
+                            highPrice: parseFloat(r.data?.price || 0) || 0,
+                            slTrigger: orders[i].stopLoss || 0,
+                            slOrderId: r.sl_order_id,
+                            quantity: orders[i].quantity,
+                        };
+                    }
+                });
+            }
+
             if (succeeded === total) {
                 showToast('✅ Auto-Buy Complete', `${succeeded}/${total} Big Players orders placed`);
             } else if (succeeded > 0) {
