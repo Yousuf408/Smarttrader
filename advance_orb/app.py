@@ -39,6 +39,7 @@ from broker.angel_margin_calculator import (
     calculate_quantities as angel_calculate_quantities,
     _CREDS as _angel_creds,
     ANGEL_PROXIES,
+    is_stock_tradable,
 )
 from broker.angel_ws import (
     start_websocket as angel_ws_start,
@@ -764,6 +765,14 @@ def place_order_batch_endpoint(payload: dict):
     order_fn, broker = _order_broker()
 
     def submit_one(order):
+        # Pre-filter cautionary listings — skip without calling broker API
+        _tradable, _reason = is_stock_tradable(order["symbol"], "NSE")
+        if not _tradable:
+            return {
+                "success": False,
+                "error": f"Cautionary listing — order blocked by exchange",
+                "symbol": order["symbol"],
+            }
         buy_result = order_fn(
             symbol=order["symbol"],
             quantity=order["quantity"],

@@ -295,6 +295,46 @@ def resolve_symbol_token(symbol, exchange="NSE"):
     return None, None
 
 
+def is_stock_tradable(symbol, exchange="NSE"):
+    """Check if a stock is CAS-enabled (tradable) in Angel One.
+
+    The Angel One scrip master has an ``is_cas_enabled`` field.
+    When ``False``, the exchange has flagged the stock as cautionary
+    and Angel One's order API will reject it with:
+    "The order cannot be processed as the token is categorised under
+    cautionary listings by the exchange."
+
+    Returns:
+        tuple: (tradable: bool, reason: str | None)
+               ``(True, None)`` if tradable;
+               ``(False, "Cautionary listing")`` if blocked.
+    """
+    df = load_master()
+    if df is None:
+        return True, None  # can't check — let order API decide
+
+    symbol_col = next((c for c in df.columns if 'symbol' in c.lower()), None)
+    exch_col   = next((c for c in df.columns if 'exch' in c.lower()), None)
+    cas_col    = next((c for c in df.columns if 'cas_enabled' in c.lower()), None)
+
+    if not symbol_col or cas_col is None:
+        return True, None
+
+    candidates = [symbol.upper(), f"{symbol.upper()}-EQ"]
+    for sym in candidates:
+        mask = df[symbol_col].astype(str).str.upper() == sym
+        if exch_col:
+            mask &= df[exch_col].astype(str).str.upper() == exchange.upper()
+        matched = df[mask]
+        if not matched.empty:
+            cas = matched.iloc[0].get(cas_col)
+            if cas is False or str(cas).lower() == "false":
+                return False, "Cautionary listing"
+            return True, None
+
+    return True, None  # not found in master — let order API decide
+
+
 def get_token(symbol, exchange="NSE"):
     """Get security token for symbol (kept for backward compatibility)."""
     sym, token = resolve_symbol_token(symbol, exchange)
