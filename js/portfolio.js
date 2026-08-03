@@ -40,9 +40,21 @@ async function loadPortfolio() {
 function renderPortfolio(funds, holdings, positions) {
     // --- Funds / Budget ---
     const availableCash = _extractAvailable(funds);
-    const totalInvested = positions.reduce((s, p) => s + (_getVal(p, 'buyAmount') + _getVal(p, 'sellAmount')), 0);
-    const totalMtmPnl = positions.reduce((s, p) => s + _getVal(p, 'mtm'), 0);
-    const dayPnl = positions.reduce((s, p) => s + (_getVal(p, 'realizedPnl') + _getVal(p, 'unrealizedPnl')), 0);
+    const totalInvested = positions.reduce((s, p) => s + (
+        _getVal(p, 'buyAmount') + _getVal(p, 'buyamount') +     // Angel One
+        _getVal(p, 'sellAmount') + _getVal(p, 'sellamount')     // Angel One
+    ), 0);
+    const totalMtmPnl = positions.reduce((s, p) => s + (
+        _getVal(p, 'mtm')
+        || _getVal(p, 'pnl')            // Angel One
+    ), 0);
+    const dayPnl = positions.reduce((s, p) => s + (
+        _getVal(p, 'realizedPnl')
+        || _getVal(p, 'realised')       // Angel One (British spelling)
+    ) + (
+        _getVal(p, 'unrealizedPnl')
+        || _getVal(p, 'unrealised')     // Angel One (British spelling)
+    ), 0);
     const dayPnlRaw = dayPnl || totalMtmPnl;
 
     const activePositions = positions.filter(p => _getQty(p) > 0);
