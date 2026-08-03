@@ -363,9 +363,14 @@ def on_open(wsapp):
             logger.warning("⚠️ WATCHLIST is empty! No subscriptions.")
             return
 
-        # Only subscribe to equity-safe tokens (exclude CDS/MCX collisions)
-        equity_tokens = _get_equity_only_tokens()
-        logger.info(f"📡 Subscribing to {len(equity_tokens)} equity-safe tokens...")
+        # Experiment: send every watchlist token to Angel One as NSE equity.
+        # The exchangeType in the subscription request is the segment filter;
+        # do not remove shared token numbers locally, because an NSE equity
+        # token may also be present in CDS/MCX in the master CSV.
+        logger.info(
+            f"📡 Subscribing to {len(WATCHLIST)} watchlist tokens as NSE equity "
+            "(exchangeType=1)..."
+        )
 
         # Collect ALL tokens as STRINGS — the SDK expects string tokens
         # in the subscription JSON (``"tokens": ["2885"]``, not ``[2885]``).
@@ -373,7 +378,7 @@ def on_open(wsapp):
         # (data_type == 2). Mode 1 / LTP sends *text* frames that the SDK
         # silently discards, so we must use Mode 2 (Quote) for **all**
         # subscriptions, indices included.
-        all_tokens = [str(t) for _, t, _ in WATCHLIST if str(t) in equity_tokens]
+        all_tokens = [str(t) for _, t, _ in WATCHLIST]
         has_index = any(k == "index" for _, _, k in WATCHLIST)
         has_stock = any(k == "stock" for _, _, k in WATCHLIST)
 
@@ -392,7 +397,7 @@ def on_open(wsapp):
             batch_num = (i // BATCH_SIZE) + 1
             logger.info(f"✓ Subscribed batch {batch_num}: {len(batch)} tokens in Mode 2")
 
-        logger.info(f"✅ Total subscribed: {len(WATCHLIST)} tokens")
+        logger.info(f"✅ Total subscribed: {len(all_tokens)} tokens as NSE equity")
 
     except Exception as e:
         logger.error(f"🔴 Subscribe error: {e}", exc_info=True)
