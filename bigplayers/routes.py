@@ -131,25 +131,20 @@ def get_big_players(budget: int = 100000, parts: int = 4):
             lambda s: opening_candle_map.get(s, (False, None, None, None))[3]
         )
 
-        # MaxQty — 65% entry + 5x leverage risk-based sizing
-        part_capital = budget / parts
+        # MaxQty from broker's real margin
+        _calc_qty_for_broker(df, budget, parts)
 
-        def _calc_risk_qty(row):
+        def _calc_entry_sl_risk(row):
             low = row.get('low915')
             high = row.get('high915')
-            close = row.get('close')
-            if pd.isna(low) or pd.isna(high) or pd.isna(close) or high <= low:
-                return 0, 0, 0, 0
+            if pd.isna(low) or pd.isna(high) or high <= low:
+                return 0, 0, 0
             entry_price = low + 0.65 * (high - low)
             sl_price = low
             risk_per_share = entry_price - sl_price
             if entry_price <= 0 or risk_per_share <= 0:
-                return 0, 0, 0, 0
-            budget_qty = int((part_capital * 5) / entry_price)
-            risk_qty = int((part_capital * 0.025) / risk_per_share) if risk_per_share > 0 else budget_qty
-            final_qty = min(budget_qty, risk_qty)
-            loss_if_stopped = round(final_qty * risk_per_share, 2)
-            return final_qty, round(entry_price, 2), round(sl_price, 2), loss_if_stopped
+                return 0, 0, 0
+            return round(entry_price, 2), round(sl_price, 2), round(risk_per_share, 2)
 
         # Evaluate Big Players strategy per stock
         bp_strategy = BigPlayersStrategy()
@@ -176,9 +171,11 @@ def get_big_players(budget: int = 100000, parts: int = 4):
                 'ema': row.get('ema'),
                 'todayLow': today_low,
             }
-            max_qty, entry_price, sl_price, risk_rs = _calc_risk_qty(row)
+            entry_price, sl_price, risk_per_share = _calc_entry_sl_risk(row)
             breakout_status = bp_strategy.calculate_breakout_status(row_dict)
             support_price = bp_strategy.calculate_support_price(row_dict)
+            broker_max_qty = int(row.get("MaxQty", 0))
+            loss_if_hit = round(broker_max_qty * risk_per_share, 2) if risk_per_share > 0 else 0
             result.append({
                 "Symbol": symbol,
                 "Price": round(row['close'], 2),
@@ -187,8 +184,8 @@ def get_big_players(budget: int = 100000, parts: int = 4):
                 "SupportPrice": support_price,
                 "EntryPrice": entry_price,
                 "SL": sl_price,
-                "MaxQty": max_qty,
-                "RiskRs": risk_rs,
+                "MaxQty": broker_max_qty,
+                "RiskRs": loss_if_hit,
                 "TodayLow": round(today_low, 2) if today_low else None,
                 "low915": round(row['low915'], 2) if pd.notna(row.get('low915')) else None,
                 "high915": round(row['high915'], 2) if pd.notna(row.get('high915')) else None,
