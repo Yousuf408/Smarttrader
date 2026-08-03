@@ -308,29 +308,37 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False):
             ws = ws_ticks.get(str(tok), {})
             cached = cache_data.get(sym, {})
 
-            # Skip if WS symbol doesn't match — token collisions cause
-            # Angel One to return currency derivative data instead of stock.
+            # Validate WS symbol — Angel One returns currency derivative data
+            # for tokens shared across NSE equity and CDS segments.
+            # If the symbol doesn't match {SYM}-EQ, fall back to yesterday's close.
             ws_symbol = (ws.get("symbol") or "").upper()
             expected_symbol = f"{sym}-EQ"
-            if ws_symbol and ws_symbol != expected_symbol.upper():
-                continue
-
             ltp = ws.get("ltp")
-            if ltp is None or float(ltp) <= 0:
-                continue
+            change_pct = ws.get("change_pct", 0)
 
-            yc = cached.get("yesterday_close")
-            gap_pct = ((float(ltp) - float(yc)) / float(yc) * 100) if yc and float(yc) > 0 else None
-
-            if not (PRICE_MIN < float(ltp) <= PRICE_MAX):
-                continue
-            if gap_pct is None or abs(gap_pct) >= GAP_THRESHOLD:
-                continue
+            if not ws_symbol or ws_symbol != expected_symbol.upper():
+                # Bad WS data — use yesterday's close as fallback price
+                yc = cached.get("yesterday_close")
+                if yc and float(yc) > 0 and PRICE_MIN < float(yc) <= PRICE_MAX:
+                    ltp = float(yc)
+                    change_pct = 0
+                    gap_pct = 0
+                else:
+                    continue
+            else:
+                if ltp is None or float(ltp) <= 0:
+                    continue
+                yc = cached.get("yesterday_close")
+                gap_pct = ((float(ltp) - float(yc)) / float(yc) * 100) if yc and float(yc) > 0 else None
+                if gap_pct is None or abs(gap_pct) >= GAP_THRESHOLD:
+                    continue
+                if not (PRICE_MIN < float(ltp) <= PRICE_MAX):
+                    continue
 
             raw_rows.append({
                 "name": sym,
                 "close": float(ltp),
-                "change": ws.get("change_pct", 0),
+                "change": change_pct,
                 "gap": gap_pct,
                 "volume": ws.get("volume", 0),
                 "relative_volume": 0.0,
