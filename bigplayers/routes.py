@@ -171,8 +171,11 @@ def get_big_players(budget: int = 100000, parts: int = 4):
 
             candle = opening_candle_map.get(symbol)
             close915 = candle[4] if candle and len(candle) >= 5 else None
-            open915 = candle[2] if candle and len(candle) >= 3 else None
-            if close915 is None or open915 is None or close915 >= open915:
+            ema = row.get('ema')
+            if close915 is None or ema is None or pd.isna(ema):
+                continue
+            pct_diff = abs((close915 - ema) / ema) * 100
+            if not (close915 > ema and pct_diff <= 2.0):
                 continue
 
             today_low = candle[6] if candle and len(candle) >= 7 else None
@@ -237,7 +240,7 @@ def get_big_players(budget: int = 100000, parts: int = 4):
                 "market_cap": f"> {MARKET_CAP_MIN/1e9:.0f}B INR",
                 "exchange": "NSE",
                 "small_candle": f"9:15 IST range <= {SMALL_CANDLE_THRESHOLD}%",
-                "red_candle": "9:15 candle close < open (must be red)",
+                "ema_condition": "9:15 close > 200 EMA & within 2%",
             }
         }
     except Exception as e:
@@ -279,11 +282,14 @@ def refresh_big_players(tickers: str = ""):
             if close is None or float(close) <= 0:
                 continue
 
-            # Red-candle rule: 9:15 close < open
+            # EMA rule: 9:15 close > 200 EMA within 2%
             candle = opening_candle_map.get(name)
             close915 = candle[4] if candle and len(candle) >= 5 else None
-            open915 = candle[2] if candle and len(candle) >= 3 else None
-            if close915 is None or open915 is None or close915 >= open915:
+            ema = ema_map.get(name)
+            if close915 is None or ema is None:
+                continue
+            pct_diff = abs((close915 - ema) / ema) * 100
+            if not (close915 > ema and pct_diff <= 2.0):
                 continue
 
             high915 = candle[1] if candle and len(candle) >= 2 else None
