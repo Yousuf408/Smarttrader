@@ -75,14 +75,12 @@ def _load_margin_cache():
             raw = json.load(f)
         now = time.time()
         loaded = 0
-        for key_str, vals in raw.items():
+        for sym, vals in raw.items():
             if isinstance(vals, list) and len(vals) == 2:
                 margin, ts = vals[0], vals[1]
                 if (now - ts) < MARGIN_CACHE_TTL_FILE:
-                    parts = key_str.rsplit("|", 1)
-                    if len(parts) == 2:
-                        MARGIN_CACHE[(parts[0], float(parts[1]))] = (margin, ts)
-                        loaded += 1
+                    MARGIN_CACHE[(sym,)] = (margin, ts)
+                    loaded += 1
         if loaded:
             print(f"📂 Loaded {loaded} cached margins from disk")
     except Exception as e:
@@ -90,18 +88,17 @@ def _load_margin_cache():
 
 
 def _save_margin_cache():
-    """Save in-memory margin cache to disk (single-line entries)."""
+    """Save in-memory margin cache to disk."""
     try:
         items = []
-        for (symbol, price), (margin, ts) in MARGIN_CACHE.items():
-            if isinstance(price, (int, float)):
-                key_str = f"{symbol}|{round(float(price), 2)}"
-                items.append((key_str, [margin, ts]))
+        for key, (margin, ts) in MARGIN_CACHE.items():
+            sym = key[0]
+            items.append((sym, [margin, ts]))
         with open(MARGIN_CACHE_FILE, "w") as f:
             f.write("{\n")
-            for i, (key, val) in enumerate(items):
+            for i, (sym, val) in enumerate(items):
                 comma = "," if i < len(items) - 1 else ""
-                f.write(f'  "{key}": {json.dumps(val)}{comma}\n')
+                f.write(f'  "{sym}": {json.dumps(val)}{comma}\n')
             f.write("}\n")
     except Exception as e:
         print(f"⚠️ Could not save margin cache: {e}")
@@ -395,9 +392,8 @@ def get_token(symbol, exchange="NSE"):
 
 def get_margin(symbol, price, quantity=1, exchange="NSE", product_type="INTRADAY"):
     """Get margin for a single stock."""
-    # Check positive cache
-    cache_key = (symbol, round(float(price), 2))
-    cached = MARGIN_CACHE.get(cache_key)
+    # Check positive cache (symbol-only key)
+    cached = MARGIN_CACHE.get((symbol,))
     if cached and (time.time() - cached[1]) < MARGIN_CACHE_TTL:
         return cached[0]
     # Check negative cache — rate-limited stocks skip retry for 30 s
@@ -450,7 +446,7 @@ def get_margin(symbol, price, quantity=1, exchange="NSE", product_type="INTRADAY
         if result and result.get("status") and result.get("data"):
             margin = result["data"].get("totalMarginRequired", 0)
             if margin > 0:
-                MARGIN_CACHE[cache_key] = (margin, time.time())
+                MARGIN_CACHE[(symbol,)] = (margin, time.time())
             return margin
 
         # Detect rate-limit / access-denied — negative-cache so we skip
@@ -469,7 +465,7 @@ def get_margin(symbol, price, quantity=1, exchange="NSE", product_type="INTRADAY
             if result and result.get("status") and result.get("data"):
                 margin = result["data"].get("totalMarginRequired", 0)
                 if margin > 0:
-                    MARGIN_CACHE[cache_key] = (margin, time.time())
+                    MARGIN_CACHE[(symbol,)] = (margin, time.time())
                 return margin
 
         return 0
@@ -514,9 +510,8 @@ def calculate_quantities(symbols, prices, total_capital=100000, num_parts=4, exc
     results: dict[str, int] = {}
     part_capital = total_capital / num_parts
 
-    for sym, price in zip(symbols, prices):
-        ck = (sym, round(float(price), 2))
-        cached = MARGIN_CACHE.get(ck)
+    for sym in symbols:
+        cached = MARGIN_CACHE.get((sym,))
         if cached and (time.time() - cached[1]) < MARGIN_CACHE_TTL:
             results[sym] = max(int(part_capital / cached[0]), 0)
         else:
@@ -564,7 +559,7 @@ def _thread_batch_fill(symbols, prices, exchange):
     # Build tokenised list of uncached stocks (inside thread — no HTTP delay)
     tokens: list[tuple[str, float, str]] = []
     for sym, price in zip(symbols, prices):
-        ck = (sym, round(float(price), 2))
+        ck = (sym,)
         neg_key = (sym, "NEG")
         if MARGIN_CACHE.get(ck) and (time.time() - MARGIN_CACHE[ck][1]) < MARGIN_CACHE_TTL:
             continue
