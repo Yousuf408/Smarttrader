@@ -191,6 +191,9 @@ def get_big_players(budget: int = 100000, parts: int = 4):
                 "high915": round(row['high915'], 2) if pd.notna(row.get('high915')) else None,
             })
 
+        # Sort by CHG% descending (highest gainers first)
+        result.sort(key=lambda x: x['CHG%'], reverse=True)
+
         # Save top 5 to Supabase for historical tracking
         try:
             save_top5_strategy("bigplayers", result[:5])

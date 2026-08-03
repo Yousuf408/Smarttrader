@@ -542,6 +542,9 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False):
 
             result.append(entry)
 
+        # Sort by CHG% descending (highest gainers first)
+        result.sort(key=lambda x: x['CHG%'], reverse=True)
+
         out_columns = GAP_UP_COLUMNS if gap_up else ADVANCE_ORB_COLUMNS
         conditions = {
             "price": f"{PRICE_MIN} to {PRICE_MAX} INR",
