@@ -8,6 +8,8 @@ import time
 import requests
 import json
 import math
+import os
+import threading
 import pandas as pd
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -55,11 +57,54 @@ ANGEL_SCRIP_MASTER_URL = "https://margincalculator.angelbroking.com/OpenAPI_File
 # CACHE
 # ================================================================
 MARGIN_CACHE = {}
-MARGIN_CACHE_TTL = 15 * 60  # 15 minutes
+MARGIN_CACHE_TTL = 24 * 3600  # 24 hours in-memory
+MARGIN_CACHE_FILE = "margin_cache.json"
+MARGIN_CACHE_TTL_FILE = 7 * 24 * 3600  # 7 days on disk
 SECURITY_CACHE = {}
 MASTER_CACHE = None
 MASTER_CACHE_TIME = 0
 MASTER_TTL = 24 * 60 * 60  # 24 hours
+
+
+def _load_margin_cache():
+    """Load margin cache from disk into memory."""
+    try:
+        if not os.path.exists(MARGIN_CACHE_FILE):
+            return
+        with open(MARGIN_CACHE_FILE) as f:
+            raw = json.load(f)
+        now = time.time()
+        loaded = 0
+        for key_str, vals in raw.items():
+            if isinstance(vals, list) and len(vals) == 2:
+                margin, ts = vals[0], vals[1]
+                if (now - ts) < MARGIN_CACHE_TTL_FILE:
+                    parts = key_str.rsplit("|", 1)
+                    if len(parts) == 2:
+                        MARGIN_CACHE[(parts[0], float(parts[1]))] = (margin, ts)
+                        loaded += 1
+        if loaded:
+            print(f"📂 Loaded {loaded} cached margins from disk")
+    except Exception as e:
+        print(f"⚠️ Could not load margin cache: {e}")
+
+
+def _save_margin_cache():
+    """Save in-memory margin cache to disk."""
+    try:
+        data = {}
+        for (symbol, price), (margin, ts) in MARGIN_CACHE.items():
+            if isinstance(price, (int, float)):
+                key_str = f"{symbol}|{round(float(price), 2)}"
+                data[key_str] = [margin, ts]
+        with open(MARGIN_CACHE_FILE, "w") as f:
+            json.dump(data, f, indent=2)
+    except Exception as e:
+        print(f"⚠️ Could not save margin cache: {e}")
+
+
+# Load cache on import
+_load_margin_cache()
 
 # ================================================================
 # CORE FUNCTIONS
@@ -396,7 +441,7 @@ def get_margin(symbol, price, quantity=1, exchange="NSE", product_type="INTRADAY
         import concurrent.futures as _cf
         with _cf.ThreadPoolExecutor(max_workers=1) as _pool:
             _fut = _pool.submit(_SMART_API.getMarginApi, payload)
-            result = _fut.result(timeout=15)
+            result = _fut.result(timeout=2)
 
         if result and result.get("status") and result.get("data"):
             margin = result["data"].get("totalMarginRequired", 0)
@@ -416,7 +461,7 @@ def get_margin(symbol, price, quantity=1, exchange="NSE", product_type="INTRADAY
         if auth_result.get("ok"):
             with _cf.ThreadPoolExecutor(max_workers=1) as _pool2:
                 _fut2 = _pool2.submit(_SMART_API.getMarginApi, payload)
-                result = _fut2.result(timeout=15)
+                result = _fut2.result(timeout=2)
             if result and result.get("status") and result.get("data"):
                 margin = result["data"].get("totalMarginRequired", 0)
                 if margin > 0:
@@ -432,8 +477,13 @@ def get_margin(symbol, price, quantity=1, exchange="NSE", product_type="INTRADAY
 # QUANTITY CALCULATION
 # ================================================================
 
+# ================================================================
+# QUANTITY CALCULATION
+# ================================================================
+
+
 def calculate_qty(symbol, price, total_capital, num_parts=4, exchange="NSE"):
-    """Calculate max quantity for a stock."""
+    """Calculate max quantity for a stock (fires individual margin API)."""
     if not symbol or not price or total_capital <= 0:
         return 0
 
@@ -445,52 +495,112 @@ def calculate_qty(symbol, price, total_capital, num_parts=4, exchange="NSE"):
     qty = math.floor(part_capital / margin)
     return max(qty, 0)
 
-def calculate_quantities(symbols, prices, total_capital=100000, num_parts=4, exchange="NSE"):
-    """Calculate quantities for multiple stocks in parallel (global timeout).
 
-    Runs up to 5 margin queries in parallel.  If the full set does not
-    finish within 12 seconds we return partial results — whatever margin
-    values were cached or computed so far.  Un-computed stocks get
-    quantity 0 on this pass but will be filled on the next page load as
-    the 15-minute positive cache persists.
+def calculate_quantities(symbols, prices, total_capital=100000, num_parts=4, exchange="NSE"):
+    """Calculate quantities using **cache only** — never blocks on API.
+
+    Returns instantly with whatever margins are already cached.
+    Uncached stocks get MaxQty=0 *on this request*.  Call
+    ``fill_margin_cache_async`` after the HTTP response to batch-fill
+    real margins in the background — the next page load picks them up.
     """
     if not symbols or not prices or len(symbols) != len(prices):
         return {}
 
-    results = {}
+    results: dict[str, int] = {}
+    part_capital = total_capital / num_parts
 
-    def fetch(symbol, price):
-        qty = calculate_qty(symbol, price, total_capital, num_parts, exchange)
-        return symbol, qty
-
-    with ThreadPoolExecutor(max_workers=5) as executor:
-        futures = {executor.submit(fetch, sym, price): sym 
-                  for sym, price in zip(symbols, prices)}
-        remaining = set(futures.keys())
-        deadline = time.monotonic() + 12.0
-
-        for future in as_completed(futures):
-            if time.monotonic() >= deadline:
-                remaining.discard(future)
-                break
-            remaining.discard(future)
-            try:
-                rem = max(0.1, deadline - time.monotonic())
-                symbol, qty = future.result(timeout=rem)
-                results[symbol] = qty
-            except Exception as e:
-                symbol = futures.get(future, "?")
-                print(f"❌ Error for {symbol}: {e}")
-                results[symbol] = 0
-
-        # Cancel stragglers and fill zeros
-        for fut in remaining:
-            fut.cancel()
-        for sym in symbols:
-            if sym not in results:
-                results[sym] = 0
+    for sym, price in zip(symbols, prices):
+        ck = (sym, round(float(price), 2))
+        cached = MARGIN_CACHE.get(ck)
+        if cached and (time.time() - cached[1]) < MARGIN_CACHE_TTL:
+            results[sym] = max(int(part_capital / cached[0]), 0)
+        else:
+            results[sym] = 0  # not cached yet — filler will populate
 
     return results
+
+
+def fill_margin_cache_async(symbols, prices, exchange="NSE"):
+    """Schedule a background thread to batch-fill margins for *symbols*.
+
+    Runs a single ``getMarginApi`` call with ALL uncached stocks in the
+    payload.  May take 30-60 seconds for 150+ stocks but runs **after**
+    the HTTP response has already been sent.  Results are saved to
+    ``margin_cache.json`` (7-day TTL).
+
+    Safe to call on every page load — a new thread is spawned only if
+    none is currently running.
+    """
+    if not symbols or not prices:
+        return
+
+    global _SMART_API
+    if _SMART_API is None:
+        return
+
+    # Build tokenised list of stocks not already cached
+    tokens: list[tuple[str, float, str]] = []
+    for sym, price in zip(symbols, prices):
+        ck = (sym, round(float(price), 2))
+        neg_key = (sym, "NEG")
+        if MARGIN_CACHE.get(ck) and (time.time() - MARGIN_CACHE[ck][1]) < MARGIN_CACHE_TTL:
+            continue  # already cached
+        if MARGIN_CACHE.get(neg_key) and (time.time() - MARGIN_CACHE[neg_key][1]) < 30:
+            continue  # rate-limited
+        token = get_token(sym, exchange)
+        if token:
+            tokens.append((sym, float(price), token))
+
+    if not tokens:
+        return
+
+    # Deduplicate — one thread at a time
+    if hasattr(fill_margin_cache_async, "_thread") and fill_margin_cache_async._thread and fill_margin_cache_async._thread.is_alive():
+        return
+    _thread = threading.Thread(
+        target=_run_batch_margin_fill,
+        args=(tokens,),
+        daemon=True,
+    )
+    fill_margin_cache_async._thread = _thread
+    _thread.start()
+
+
+def _run_batch_margin_fill(symbol_price_tokens):
+    """Internal: fetch margins via parallel individual calls (proven approach)."""
+    global _SMART_API
+    if not symbol_price_tokens or _SMART_API is None:
+        return
+
+    results: dict[str, int] = {}
+    part_capital = sum(float(p[1]) for p in symbol_price_tokens) / max(1, len(symbol_price_tokens))
+
+    def fetch(sym, price, token):
+        margin = get_margin(sym, price, 1, "NSE")
+        return (sym, max(int(part_capital / margin), 0)) if margin > 0 else (sym, 0)
+
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        fut_map = {pool.submit(fetch, s, p, t): s for s, p, t in symbol_price_tokens}
+        dl = time.monotonic() + 15.0
+        for fut in as_completed(fut_map):
+            if time.monotonic() >= dl:
+                break
+            try:
+                s, q = fut.result(timeout=3)
+                results[s] = q
+            except Exception:
+                s = fut_map.get(fut, "?")
+                results[s] = 0
+        # Cancel stragglers
+        for f in fut_map:
+            if not f.done():
+                f.cancel()
+
+    _save_margin_cache()
+    cached = sum(1 for v in results.values() if v > 0)
+    if cached:
+        print(f"✅ Background fill: cached {cached}/{len(symbol_price_tokens)} margins")
 
 # ================================================================
 # EXPORT FOR OTHER MODULES
@@ -510,6 +620,7 @@ __all__ = [
     'get_margin',
     'calculate_qty',
     'calculate_quantities',
+    'fill_margin_cache_async',
 ]
 
 # ================================================================

@@ -20,7 +20,10 @@ from advance_orb.common import (
     batch_opening_candle, compute_200_ema_batch, _calc_qty_for_broker,
     _build_ticks_by_symbol, ws_auto_subscribe,
 )
-from broker.angel_margin_calculator import is_connected as angel_is_connected
+from broker.angel_margin_calculator import (
+    is_connected as angel_is_connected,
+    fill_margin_cache_async,
+)
 from broker.angel_ws import (
     is_ws_connected as angel_ws_connected,
     get_latest_ticks as angel_ws_ticks,
@@ -172,6 +175,14 @@ def get_big_players(budget: int = 100000, parts: int = 4):
             save_top5_strategy("bigplayers", result[:5])
         except Exception:
             pass  # never break the screener over a DB hiccup
+
+        # Kick off background margin fill (non-blocking — response is sent first)
+        try:
+            syms = [r["Symbol"] for r in result]
+            prcs = [r["Price"] for r in result]
+            fill_margin_cache_async(syms, prcs)
+        except Exception:
+            pass
 
         return {
             "strategy": "bigplayers",
