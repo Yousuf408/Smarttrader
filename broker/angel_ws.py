@@ -206,9 +206,11 @@ def _seed_ticks_from_rest():
         sc.setFeedToken(get_feed_token())
         sc.setUserId(_CREDS.get("client_id", ""))
 
-        # Only seed equity-safe tokens (exclude CDS/MCX collisions)
-        equity_tokens = _get_equity_only_tokens()
-        stock_tokens = [str(t) for _, t, k in WATCHLIST if k == "stock" and str(t) in equity_tokens]
+        # Collect ALL stock tokens (including collision tokens). For each
+        # response we validate the trading symbol — only save if it ends
+        # with ``-EQ`` (NSE equity).  Collision tokens return CDS
+        # symbols like ``EURINR26828112.25CE`` → rejected.
+        stock_tokens = [str(t) for _, t, k in WATCHLIST if k == "stock"]
         batch_size = 50
         filled = 0
 
@@ -223,7 +225,11 @@ def _seed_ticks_from_rest():
                     tok = str(item.get("symbolToken", ""))
                     if not tok:
                         continue
-                    sym = _TOKEN_SYMBOL_MAP.get(tok, item.get("tradingSymbol", ""))
+                    # Reject tokens whose trading symbol doesn't end with -EQ
+                    trading_sym = (item.get("tradingSymbol") or "").strip()
+                    if not trading_sym.upper().endswith("-EQ"):
+                        continue
+                    sym = _TOKEN_SYMBOL_MAP.get(tok, trading_sym)
                     if str(item.get("ltp", 0)).replace(".", "").replace("-", "") == "0":
                         continue  # skip zero-LTP entries
                     latest_ticks[tok] = {
@@ -245,7 +251,6 @@ def _seed_ticks_from_rest():
 
         if filled:
             logger.info(f"📡 Seeded {filled}/{len(stock_tokens)} ticks from REST API")
-            _save_ticks()
     except Exception as e:
         logger.debug(f"REST tick seed error: {e}")
 
@@ -478,6 +483,38 @@ def start_websocket(feed_token=None, watchlist=None):
     # may be closed). WS ticks will overlay with real-time data as they
     # arrive.
     _seed_ticks_from_rest()
+
+    # Fill in missing tokens (collision tokens where REST returned CDS
+    # data instead of stock data) with yesterday_close from the cache.
+    # This way every watchlist stock has at least a stale baseline price.
+    missing_filled = 0
+    now_ts = datetime.now(IST).strftime("%H:%M:%S")
+    for name, token, kind in WATCHLIST:
+        tok = str(token)
+        if tok in latest_ticks:
+            continue
+        cache_entry = candle_tracker._cache.get(name, {})
+        yc = cache_entry.get("yesterday_close")
+        if yc and float(yc) > 0:
+            latest_ticks[tok] = {
+                "ltp": float(yc),
+                "open": float(yc),
+                "high": float(yc),
+                "low": float(yc),
+                "close": float(yc),
+                "volume": 0,
+                "change": 0,
+                "change_pct": 0,
+                "symbol": f"{name}-EQ",
+                "token": tok,
+                "timestamp": now_ts,
+            }
+            missing_filled += 1
+
+    if missing_filled:
+        logger.info(f"📂 Filled {missing_filled} missing tokens with yesterday_close")
+        _save_ticks()
+
     _connected = True
 
     logger.info("🚀 Initializing Angel One WebSocket...")
