@@ -79,6 +79,13 @@ def get_big_players(budget: int = 100000, parts: int = 4):
             ws = ws_ticks.get(str(tok), {})
             cached = cache_data.get(sym, {})
 
+            # Skip if WS symbol doesn't match — token collisions cause
+            # Angel One to return currency derivative data instead of stock.
+            ws_symbol = (ws.get("symbol") or "").upper()
+            expected_symbol = f"{sym}-EQ"
+            if ws_symbol and ws_symbol != expected_symbol.upper():
+                continue
+
             ltp = ws.get("ltp")
             if ltp is None or float(ltp) <= 0:
                 continue
