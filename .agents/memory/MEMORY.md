@@ -1,8 +1,0 @@
-- [Least-privilege frontend hosting](secure-static-hosting.md) — serve explicit frontend files and asset directories; never mount the repository root in a web app.
-- [Edit persistence on TradeAlgo Pro files](edits-revert-pattern.md) — broker/quantity_calculator.py and advance_orb/app.py edits revert silently; assert count + sed-verify before restart.
-- [Dhan margin-calc 429 + per-symbol cache](dhan-margin-calc-rate-limiting.md) — bulk calls throttle; working fix is MARGIN_CACHE[(security_id, rounded_price)] with 15 min TTL, never cache 429.
-- [Broker smoke-test safety](broker-smoke-test-safety.md) — /api/orders/place* fire LIVE Dhan orders; validate shape with 4xx inputs by default, never hit with valid payload without opt-in.
-- [Angel One WAF + margin API payload fields](angel-waf-margin-sdk.md) — use SmartConnect SDK, strip "Bearer " prefix from jwtToken, camelCase field names, token from -EQ scrip entry.
-- [CSS-driven auto-hide for time-bound UI](css-driven-auto-hide.md) — toasts/banners fade out via CSS animation + `animationend`, not JS setTimeout; JS event loop can starve the timer on heavy render paths.
-- [Replit `gitPush` callback works without local GitHub auth](replit-git-push-no-creds.md) — try the `git-remote` skill callback first, even when `gh auth status` says you're not logged in.
-- [Angel One WS auto-reconnect](angel-one-ws-reconnect.md) — on_close triggers exponential-backoff reconnect; each attempt re-auths stale tokens first.

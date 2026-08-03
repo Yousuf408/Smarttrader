@@ -1,8 +1,0 @@
-uploads = []
-generated = []
-
-[[outputs]]
-id = "avFQsqtTs9Si_Wx2Yg-XD"
-uri = "file://advance_orb/app.py"
-type = "unspecified"
-title = "Complete advance_orb/app.py (with refresh endpoint)"

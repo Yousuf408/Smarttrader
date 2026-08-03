@@ -1,3 +1,11 @@
+# Attached assets (user-uploaded files, images, screenshots)
+attached_assets/
+
+# Agent memory & skills (not project code)
+.agents/
+.canvas/
+.local/
+
 # Environment variables
 .env
 .env.local
