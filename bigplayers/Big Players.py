@@ -371,21 +371,23 @@ def get_big_players(budget: int = 100000, parts: int = 4):
         candidate_symbols = df['name'].dropna().astype(str).tolist()
         opening_candle_map = batch_opening_candle(candidate_symbols)
 
-        # Filter: small candle AND red candle (close < open) AND today's data exists
+        # Compute EMA for qualification
+        ema_map = compute_200_ema_batch(candidate_symbols)
+
+        # Filter: small candle + close above 200 EMA + within 2%
         qualified_symbols = set()
         for s, candle_data in opening_candle_map.items():
             if not isinstance(candle_data, tuple) or not candle_data:
                 continue
             is_small = candle_data[0]
-            open915 = candle_data[2]
             close915 = candle_data[4]
+            ema = ema_map.get(s)
 
-            # Only qualify if we have today's candle and it's small + red
-            if is_small and open915 is not None and close915 is not None and close915 < open915:
-                qualified_symbols.add(s)
-
-        # Compute EMA for support price
-        ema_map = compute_200_ema_batch(candidate_symbols)
+            # Only qualify if small candle AND close > 200 EMA within 2%
+            if is_small and close915 is not None and ema is not None:
+                pct_diff = abs((close915 - ema) / ema) * 100
+                if close915 > ema and pct_diff <= 2.0:
+                    qualified_symbols.add(s)
         df['ema'] = df['name'].map(ema_map)
 
         # Add high915/low915 for breakout calculation (only for qualified symbols)
@@ -415,7 +417,7 @@ def get_big_players(budget: int = 100000, parts: int = 4):
         for _, row in df.iterrows():
             symbol = row['name']
 
-            # Only include stocks that had a small + red candle today
+            # Only include stocks that meet all conditions (small candle + EMA)
             if symbol not in qualified_symbols:
                 continue
 
@@ -453,7 +455,7 @@ def get_big_players(budget: int = 100000, parts: int = 4):
                 "market_cap": f"> {MARKET_CAP_MIN/1e9:.0f}B INR",
                 "exchange": "NSE",
                 "small_candle": f"9:15 IST range <= {SMALL_CANDLE_THRESHOLD}%",
-                "red_candle": "9:15 IST close < open (today only)",
+                "ema_condition": "9:15 close > 200 EMA & within 2%",
             }
         }
 
@@ -496,16 +498,18 @@ def refresh_big_players(tickers: str = ""):
         opening_candle_map = batch_opening_candle(symbols)
         ema_map = compute_200_ema_batch(symbols)
 
-        # Build a set of symbols that still have a small + red candle today
+        # Build a set of symbols: small candle + close > 200 EMA within 2%
         valid_symbols = set()
         for s, candle_data in opening_candle_map.items():
             if not isinstance(candle_data, tuple) or not candle_data:
                 continue
             is_small = candle_data[0]
-            open915 = candle_data[2]
             close915 = candle_data[4]
-            if is_small and open915 is not None and close915 is not None and close915 < open915:
-                valid_symbols.add(s)
+            ema = ema_map.get(s)
+            if is_small and close915 is not None and ema is not None:
+                pct_diff = abs((close915 - ema) / ema) * 100
+                if close915 > ema and pct_diff <= 2.0:
+                    valid_symbols.add(s)
 
         bp_strategy = BigPlayersStrategy()
 
@@ -618,7 +622,7 @@ def root():
             "gap": f"< {GAP_THRESHOLD}%",
             "market_cap": f"> {MARKET_CAP_MIN/1e9:.0f}B INR",
             "exchange": "NSE",
-            "first_candle": "small (≤1.5%) and red (close < open) – today only",
+            "first_candle": "small (≤1.5%), close > 200 EMA within 2%",
         },
         "strategies": ["bigplayers"]
     }
