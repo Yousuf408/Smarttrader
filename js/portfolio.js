@@ -310,15 +310,31 @@ function _getVal(obj, key) {
 }
 
 function _getQty(p) {
-    return _getVal(p, 'netQty') || _getVal(p, 'quantity') || _getVal(p, 'buyQty') || _getVal(p, 'sellQty') || 0;
+    return _getVal(p, 'netQty')
+        || _getVal(p, 'netqty')        // Angel One (lowercase)
+        || _getVal(p, 'quantity')
+        || _getVal(p, 'buyQty')
+        || _getVal(p, 'buyqty')        // Angel One
+        || _getVal(p, 'sellQty')
+        || _getVal(p, 'sellqty')       // Angel One
+        || 0;
 }
 
 function _getSym(p) {
-    return p.tradingSymbol || p.symbol || p.TradingSymbol || '?';
+    return p.tradingSymbol
+        || p.tradingsymbol       // Angel One (lowercase)
+        || p.symbol
+        || p.symbolname          // Angel One
+        || p.TradingSymbol
+        || '?';
 }
 
 function _getPnl(p) {
-    return _getVal(p, 'mtm') || (_getVal(p, 'unrealizedPnl')) || 0;
+    return _getVal(p, 'mtm')
+        || _getVal(p, 'pnl')            // Angel One
+        || _getVal(p, 'unrealizedPnl')
+        || _getVal(p, 'unrealised')     // Angel One (British spelling)
+        || 0;
 }
 
 function _buildUnifiedRows(positions, holdings) {
@@ -332,8 +348,17 @@ function _buildUnifiedRows(positions, holdings) {
         if (!sym || sym === '?') continue;
         seen.add(sym);
         const qty = _getQty(p);
-        const buyAvg = _getVal(p, 'buyAvg') || _getVal(p, 'buyPrice') || _getVal(p, 'entryPrice') || 0;
-        const ltp = _getVal(p, 'ltp') || _getVal(p, 'marketValue') || _getVal(p, 'currentPrice') || _getVal(p, 'closePrice') || 0;
+        const buyAvg = _getVal(p, 'buyAvg')
+            || _getVal(p, 'buyavgprice')   // Angel One
+            || _getVal(p, 'buyPrice')
+            || _getVal(p, 'entryPrice')
+            || 0;
+        const ltp = _getVal(p, 'ltp')
+            || _getVal(p, 'marketValue')
+            || _getVal(p, 'currentPrice')
+            || _getVal(p, 'closePrice')
+            || _getVal(p, 'close')         // Angel One
+            || 0;
         const pnl = _getPnl(p);
         const pnlPct = buyAvg > 0 ? (pnl / (buyAvg * Math.abs(qty))) * 100 : 0;
         rows.push({
@@ -343,19 +368,33 @@ function _buildUnifiedRows(positions, holdings) {
             ltp: ltp,
             pnl: pnl,
             pnlPct: pnlPct,
-            product: _getVal(p, 'productType') ? String(p.productType) : 'INTRADAY',
+            product: _getVal(p, 'productType')
+                ? String(p.productType || p.producttype)
+                : 'INTRADAY',
             isSold: false,
         });
     }
 
     // Second: holdings not in positions (delivery holdings)
     for (const h of holdings) {
-        const sym = h.tradingSymbol || h.symbol || h.TradingSymbol || '';
+        const sym = h.tradingSymbol
+            || h.tradingsymbol       // Angel One
+            || h.symbol
+            || h.TradingSymbol
+            || '';
         if (!sym || seen.has(sym)) continue;
         seen.add(sym);
-        const qty = _getVal(h, 'totalQty') || _getVal(h, 'quantity') || _getVal(h, 'holdingQty') || 0;
-        const buyAvg = _getVal(h, 'averagePrice') || _getVal(h, 'buyPrice') || 0;
-        const ltp = _getVal(h, 'ltp') || _getVal(h, 'marketValue') || _getVal(h, 'currentPrice') || 0;
+        const qty = _getVal(h, 'totalQty')
+            || _getVal(h, 'quantity')
+            || _getVal(h, 'holdingQty')
+            || 0;
+        const buyAvg = _getVal(h, 'averagePrice')
+            || _getVal(h, 'buyPrice')
+            || 0;
+        const ltp = _getVal(h, 'ltp')
+            || _getVal(h, 'marketValue')
+            || _getVal(h, 'currentPrice')
+            || 0;
         const pnl = _getVal(h, 'pnl') || (ltp > 0 && buyAvg > 0 ? (ltp - buyAvg) * qty : 0);
         const pnlPct = buyAvg > 0 ? ((ltp - buyAvg) / buyAvg) * 100 : 0;
         rows.push({
@@ -394,6 +433,7 @@ function _extractMarginUsed(funds) {
         || _getVal(d, 'utilizedAmount')              // Dhan
         || _getVal(d, 'marginUsed')
         || _getVal(d, 'usedMargin')
+        || _getVal(d, 'utiliseddebits')              // Angel RMS
         || 0;
 }
 
