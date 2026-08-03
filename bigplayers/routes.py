@@ -176,11 +176,13 @@ def get_big_players(budget: int = 100000, parts: int = 4):
         except Exception:
             pass  # never break the screener over a DB hiccup
 
-        # Kick off background margin fill (non-blocking — response is sent first)
+        # Kick off background margin fill for ALL candidate stocks (~800)
+        # so the cache is fully populated for the weekly refresh cycle.
         try:
-            syms = [r["Symbol"] for r in result]
-            prcs = [r["Price"] for r in result]
-            fill_margin_cache_async(syms, prcs)
+            fill_margin_cache_async(
+                df['name'].dropna().astype(str).tolist(),
+                df['close'].dropna().astype(float).tolist(),
+            )
         except Exception:
             pass
 

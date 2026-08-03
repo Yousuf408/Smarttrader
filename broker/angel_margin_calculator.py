@@ -90,15 +90,19 @@ def _load_margin_cache():
 
 
 def _save_margin_cache():
-    """Save in-memory margin cache to disk."""
+    """Save in-memory margin cache to disk (single-line entries)."""
     try:
-        data = {}
+        items = []
         for (symbol, price), (margin, ts) in MARGIN_CACHE.items():
             if isinstance(price, (int, float)):
                 key_str = f"{symbol}|{round(float(price), 2)}"
-                data[key_str] = [margin, ts]
+                items.append((key_str, [margin, ts]))
         with open(MARGIN_CACHE_FILE, "w") as f:
-            json.dump(data, f, indent=2)
+            f.write("{\n")
+            for i, (key, val) in enumerate(items):
+                comma = "," if i < len(items) - 1 else ""
+                f.write(f'  "{key}": {json.dumps(val)}{comma}\n')
+            f.write("}\n")
     except Exception as e:
         print(f"⚠️ Could not save margin cache: {e}")
 
@@ -524,10 +528,9 @@ def calculate_quantities(symbols, prices, total_capital=100000, num_parts=4, exc
 def fill_margin_cache_async(symbols, prices, exchange="NSE"):
     """Schedule a background thread to batch-fill margins for *symbols*.
 
-    Runs a single ``getMarginApi`` call with ALL uncached stocks in the
-    payload.  May take 30-60 seconds for 150+ stocks but runs **after**
-    the HTTP response has already been sent.  Results are saved to
-    ``margin_cache.json`` (7-day TTL).
+    Gathers tokens **inside the thread** so the HTTP response is never
+    delayed.  Runs parallel API calls with 2 s per-call timeout / 15 s
+    deadline.  Results are saved to ``margin_cache.json`` (7-day TTL).
 
     Safe to call on every page load — a new thread is spawned only if
     none is currently running.
@@ -539,15 +542,34 @@ def fill_margin_cache_async(symbols, prices, exchange="NSE"):
     if _SMART_API is None:
         return
 
-    # Build tokenised list of stocks not already cached
+    # Deduplicate — one thread at a time
+    if hasattr(fill_margin_cache_async, "_thread") and fill_margin_cache_async._thread and fill_margin_cache_async._thread.is_alive():
+        return
+
+    _thread = threading.Thread(
+        target=_thread_batch_fill,
+        args=(list(symbols), list(prices), exchange),
+        daemon=True,
+    )
+    fill_margin_cache_async._thread = _thread
+    _thread.start()
+
+
+def _thread_batch_fill(symbols, prices, exchange):
+    """Background thread: gather tokens then fetch margins."""
+    global _SMART_API
+    if not symbols or not prices or _SMART_API is None:
+        return
+
+    # Build tokenised list of uncached stocks (inside thread — no HTTP delay)
     tokens: list[tuple[str, float, str]] = []
     for sym, price in zip(symbols, prices):
         ck = (sym, round(float(price), 2))
         neg_key = (sym, "NEG")
         if MARGIN_CACHE.get(ck) and (time.time() - MARGIN_CACHE[ck][1]) < MARGIN_CACHE_TTL:
-            continue  # already cached
+            continue
         if MARGIN_CACHE.get(neg_key) and (time.time() - MARGIN_CACHE[neg_key][1]) < 30:
-            continue  # rate-limited
+            continue
         token = get_token(sym, exchange)
         if token:
             tokens.append((sym, float(price), token))
@@ -555,16 +577,7 @@ def fill_margin_cache_async(symbols, prices, exchange="NSE"):
     if not tokens:
         return
 
-    # Deduplicate — one thread at a time
-    if hasattr(fill_margin_cache_async, "_thread") and fill_margin_cache_async._thread and fill_margin_cache_async._thread.is_alive():
-        return
-    _thread = threading.Thread(
-        target=_run_batch_margin_fill,
-        args=(tokens,),
-        daemon=True,
-    )
-    fill_margin_cache_async._thread = _thread
-    _thread.start()
+    _run_batch_margin_fill(tokens)
 
 
 def _run_batch_margin_fill(symbol_price_tokens):
