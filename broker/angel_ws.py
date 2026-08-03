@@ -77,6 +77,75 @@ WATCHLIST = [
 ]
 
 # ==============================================================================
+# EQUITY-ONLY TOKEN FILTER — prevent subscribing to tokens shared with
+# CDS/MCX segments (Angel One token collision bug)
+# ==============================================================================
+
+_equity_only_tokens = None  # cached set of tokens that are NSE-equity-only
+
+def _get_equity_only_tokens():
+    """Return a set of tokens from the watchlist that belong ONLY to NSE
+    equity (symbol ends with ``-EQ``) — NOT shared with CDS/MCX segments.
+
+    Uses the Angel One master CSV to detect token collisions.
+    """
+    global _equity_only_tokens
+    if _equity_only_tokens is not None:
+        return _equity_only_tokens
+
+    try:
+        df = load_master()
+        if df is None:
+            logger.warning("⚠️ Cannot load master for equity filtering — using all tokens")
+            _equity_only_tokens = {str(t) for _, t, _ in WATCHLIST}
+            return _equity_only_tokens
+
+        # Columns
+        token_col = next(c for c in df.columns if 'token' in c.lower())
+        exch_col = next(c for c in df.columns if 'exch_seg' in c.lower() or 'exch' in c.lower())
+        symbol_col = next(c for c in df.columns if 'symbol' in c.lower())
+
+        # Build: token → set of exchanges it appears in
+        token_exchanges = {}
+        token_symbols = {}
+        for _, row in df.iterrows():
+            tok = str(row[token_col]).strip()
+            exch = str(row[exch_col]).strip().upper()
+            sym = str(row[symbol_col]).strip().upper()
+            token_exchanges.setdefault(tok, set()).add(exch)
+            token_symbols[tok] = sym  # last seen symbol (usually fine)
+
+        # A token is "safe" if:
+        #  - Its symbol ends with -EQ
+        #  - It appears ONLY in NSE (not in CDS, MCX, NFO, etc.)
+        safe = set()
+        for tok, exchanges in token_exchanges.items():
+            sym = token_symbols.get(tok, "")
+            if sym.endswith("-EQ") and exchanges == {"NSE"}:
+                safe.add(tok)
+
+        # Now intersect with our watchlist tokens
+        watchlist_tokens = {str(t) for _, t, _ in WATCHLIST}
+        safe_intersection = safe & watchlist_tokens
+
+        excluded = watchlist_tokens - safe_intersection
+        if excluded:
+            logger.info(
+                f"🔒 Equity filter: {len(safe_intersection)} safe / "
+                f"{len(watchlist_tokens)} watchlist tokens "
+                f"(excluded {len(excluded)} collision tokens)"
+            )
+
+        _equity_only_tokens = safe_intersection
+        return _equity_only_tokens
+
+    except Exception as e:
+        logger.warning(f"⚠️ Equity filter error ({e}) — using all watchlist tokens")
+        _equity_only_tokens = {str(t) for _, t, _ in WATCHLIST}
+        return _equity_only_tokens
+
+
+# ==============================================================================
 # TICK PERSISTENCE — last-known prices survive restarts / disconnects
 # ==============================================================================
 
@@ -137,8 +206,9 @@ def _seed_ticks_from_rest():
         sc.setFeedToken(get_feed_token())
         sc.setUserId(_CREDS.get("client_id", ""))
 
-        # Collect all stock tokens, batch into groups of 50 (API limit)
-        stock_tokens = [str(t) for _, t, k in WATCHLIST if k == "stock"]
+        # Only seed equity-safe tokens (exclude CDS/MCX collisions)
+        equity_tokens = _get_equity_only_tokens()
+        stock_tokens = [str(t) for _, t, k in WATCHLIST if k == "stock" and str(t) in equity_tokens]
         batch_size = 50
         filled = 0
 
@@ -288,7 +358,9 @@ def on_open(wsapp):
             logger.warning("⚠️ WATCHLIST is empty! No subscriptions.")
             return
 
-        logger.info(f"📡 Subscribing to {len(WATCHLIST)} stocks...")
+        # Only subscribe to equity-safe tokens (exclude CDS/MCX collisions)
+        equity_tokens = _get_equity_only_tokens()
+        logger.info(f"📡 Subscribing to {len(equity_tokens)} equity-safe tokens...")
 
         # Collect ALL tokens as STRINGS — the SDK expects string tokens
         # in the subscription JSON (``"tokens": ["2885"]``, not ``[2885]``).
@@ -296,7 +368,7 @@ def on_open(wsapp):
         # (data_type == 2). Mode 1 / LTP sends *text* frames that the SDK
         # silently discards, so we must use Mode 2 (Quote) for **all**
         # subscriptions, indices included.
-        all_tokens = [str(t) for _, t, _ in WATCHLIST]
+        all_tokens = [str(t) for _, t, _ in WATCHLIST if str(t) in equity_tokens]
         has_index = any(k == "index" for _, _, k in WATCHLIST)
         has_stock = any(k == "stock" for _, _, k in WATCHLIST)
 
