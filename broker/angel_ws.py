@@ -29,6 +29,7 @@ from pathlib import Path
 from .angel_margin_calculator import (
     _CREDS,
     get_access_token,
+    get_feed_token,
     is_connected as is_api_connected,
     load_master,
     ANGEL_PROXIES

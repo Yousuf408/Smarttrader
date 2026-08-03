@@ -346,11 +346,16 @@ def get_token(symbol, exchange="NSE"):
 
 def get_margin(symbol, price, quantity=1, exchange="NSE", product_type="INTRADAY"):
     """Get margin for a single stock."""
-    # Check cache
+    # Check positive cache
     cache_key = (symbol, round(float(price), 2))
     cached = MARGIN_CACHE.get(cache_key)
     if cached and (time.time() - cached[1]) < MARGIN_CACHE_TTL:
         return cached[0]
+    # Check negative cache — rate-limited stocks skip retry for 30 s
+    neg_key = (symbol, "NEG")
+    neg = MARGIN_CACHE.get(neg_key)
+    if neg and (time.time() - neg[1]) < 30:
+        return 0
 
     # Check connection
     if not is_connected():
@@ -387,7 +392,11 @@ def get_margin(symbol, price, quantity=1, exchange="NSE", product_type="INTRADAY
             }]
         }
 
-        result = _SMART_API.getMarginApi(payload)
+        # Timeout so a hung API never stalls the entire page
+        import concurrent.futures as _cf
+        with _cf.ThreadPoolExecutor(max_workers=1) as _pool:
+            _fut = _pool.submit(_SMART_API.getMarginApi, payload)
+            result = _fut.result(timeout=15)
 
         if result and result.get("status") and result.get("data"):
             margin = result["data"].get("totalMarginRequired", 0)
@@ -395,11 +404,19 @@ def get_margin(symbol, price, quantity=1, exchange="NSE", product_type="INTRADAY
                 MARGIN_CACHE[cache_key] = (margin, time.time())
             return margin
 
+        # Detect rate-limit / access-denied — negative-cache so we skip
+        err_text = str(result.get("message") or result.get("error") or "") if result else ""
+        if "access rate" in err_text.lower() or "access denied" in err_text.lower():
+            MARGIN_CACHE[neg_key] = (0, time.time())
+            return 0
+
         # Token expired — re-auth and retry once
-        print("⚠️ Margin call failed, re-authenticating...")
+        print(f"⚠️ Margin call failed for {symbol} (not rate-limit), re-authenticating...")
         auth_result = authenticate()
         if auth_result.get("ok"):
-            result = _SMART_API.getMarginApi(payload)
+            with _cf.ThreadPoolExecutor(max_workers=1) as _pool2:
+                _fut2 = _pool2.submit(_SMART_API.getMarginApi, payload)
+                result = _fut2.result(timeout=15)
             if result and result.get("status") and result.get("data"):
                 margin = result["data"].get("totalMarginRequired", 0)
                 if margin > 0:
@@ -429,7 +446,14 @@ def calculate_qty(symbol, price, total_capital, num_parts=4, exchange="NSE"):
     return max(qty, 0)
 
 def calculate_quantities(symbols, prices, total_capital=100000, num_parts=4, exchange="NSE"):
-    """Calculate quantities for multiple stocks in parallel."""
+    """Calculate quantities for multiple stocks in parallel (global timeout).
+
+    Runs up to 5 margin queries in parallel.  If the full set does not
+    finish within 12 seconds we return partial results — whatever margin
+    values were cached or computed so far.  Un-computed stocks get
+    quantity 0 on this pass but will be filled on the next page load as
+    the 15-minute positive cache persists.
+    """
     if not symbols or not prices or len(symbols) != len(prices):
         return {}
 
@@ -439,18 +463,32 @@ def calculate_quantities(symbols, prices, total_capital=100000, num_parts=4, exc
         qty = calculate_qty(symbol, price, total_capital, num_parts, exchange)
         return symbol, qty
 
-    with ThreadPoolExecutor(max_workers=8) as executor:
+    with ThreadPoolExecutor(max_workers=5) as executor:
         futures = {executor.submit(fetch, sym, price): sym 
                   for sym, price in zip(symbols, prices)}
+        remaining = set(futures.keys())
+        deadline = time.monotonic() + 12.0
 
         for future in as_completed(futures):
+            if time.monotonic() >= deadline:
+                remaining.discard(future)
+                break
+            remaining.discard(future)
             try:
-                symbol, qty = future.result()
+                rem = max(0.1, deadline - time.monotonic())
+                symbol, qty = future.result(timeout=rem)
                 results[symbol] = qty
             except Exception as e:
-                symbol = futures[future]
+                symbol = futures.get(future, "?")
                 print(f"❌ Error for {symbol}: {e}")
                 results[symbol] = 0
+
+        # Cancel stragglers and fill zeros
+        for fut in remaining:
+            fut.cancel()
+        for sym in symbols:
+            if sym not in results:
+                results[sym] = 0
 
     return results
 
