@@ -92,15 +92,27 @@ def _save_ticks():
 
 def _load_saved_ticks():
     """Load last-known ticks from disk. Populates latest_ticks with
-    stale-but-better-than-nothing prices when the WS isn't connected."""
+    stale-but-better-than-nothing prices when the WS isn't connected.
+    Removes entries whose symbol doesn't end with '-EQ' — those were
+    CDS/currency derivative data from Angel One token collisions."""
     global latest_ticks
     try:
         if SAVED_TICKS_PATH.exists() and SAVED_TICKS_PATH.stat().st_size > 100:
             with open(SAVED_TICKS_PATH) as f:
                 saved = json.load(f)
+
             if saved:
-                latest_ticks = saved
-                logger.info(f"📂 Loaded {len(saved)} saved ticks from disk")
+                # Purge stale entries from token-collision stocks
+                cleaned = {
+                    tok: data for tok, data in saved.items()
+                    if (data.get("symbol") or "").upper().endswith("-EQ")
+                }
+                purged = len(saved) - len(cleaned)
+                latest_ticks = cleaned
+                logger.info(
+                    f"📂 Loaded {len(cleaned)} saved ticks from disk"
+                    + (f" (purged {purged} CDS/derivative entries)" if purged else "")
+                )
     except Exception:
         pass
 
@@ -194,6 +206,13 @@ def on_data(wsapp, message):
         _raw_messages.append(message)
         if len(_raw_messages) > 5:
             _raw_messages.pop(0)
+
+        # Only accept NSE Capital Market (equity) data — reject CDS (13),
+        # MCX (5), and other segments that share token numbers with equities.
+        exchange_type = message.get('exchange_type')
+        if exchange_type != 1:
+            logger.debug(f"on_data — token {message.get('token')} skipped (exchange_type={exchange_type})")
+            return
 
         token = str(message.get('token', ''))
         if not token and isinstance(message, dict):
