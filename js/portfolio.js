@@ -251,12 +251,17 @@ function renderPortfolioTable(positions, holdings) {
         return;
     }
 
+    // Compute totals
+    const totalPnl = items.reduce((s, item) => s + item.pnl, 0);
+    const totalInvested = items.reduce((s, item) => s + (item.buyAvg * Math.abs(item.qty)), 0);
+    const totalPnlPct = totalInvested > 0 ? (totalPnl / totalInvested) * 100 : 0;
+
     el.innerHTML = `
         <table class="table-modern">
             <thead>
                 <tr>
                     <th>Symbol</th>
-                    <th>Product</th>
+                    <th>Status</th>
                     <th>Qty</th>
                     <th>Buy Avg</th>
                     <th>LTP</th>
@@ -277,10 +282,11 @@ function renderPortfolioTable(positions, holdings) {
                                 <div style="display:flex;align-items:center;gap:4px;">
                                     <span class="status-dot ${isGainer ? 'green' : 'red'}"></span>
                                     <span class="symbol-highlight">${item.symbol}</span>
-                                    ${item.isSold ? '<span class="sold-badge">CLOSED</span>' : ''}
                                 </div>
                             </td>
-                            <td><span class="sector-tag ${isGainer ? 'positive' : 'negative'}">${item.product || 'INTRADAY'}</span></td>
+                            <td>
+                                <span class="sector-tag ${item.isSold ? 'negative' : 'positive'}">${item.isSold ? '🔴 Close' : '🟢 Active'}</span>
+                            </td>
                             <td>${displayQty}</td>
                             <td style="font-weight:600;font-size:11px;">${item.buyAvg > 0 ? '₹' + numberFmt(item.buyAvg) : '—'}</td>
                             <td style="font-weight:600;font-size:11px;">${item.ltp > 0 ? '₹' + numberFmt(item.ltp) : '—'}</td>
@@ -307,6 +313,22 @@ function renderPortfolioTable(positions, holdings) {
                     `;
                 }).join('')}
             </tbody>
+            <tfoot>
+                <tr style="background:rgba(255,255,255,0.03);font-weight:700;border-top:2px solid rgba(255,255,255,0.1);">
+                    <td style="padding:10px 8px;font-size:12px;text-transform:uppercase;letter-spacing:0.5px;opacity:0.7;">Total</td>
+                    <td style="padding:10px 8px;font-size:11px;">${items.length} trade(s)</td>
+                    <td style="padding:10px 8px;">—</td>
+                    <td style="padding:10px 8px;">—</td>
+                    <td style="padding:10px 8px;">—</td>
+                    <td style="color:${totalPnl > 0 ? 'var(--color-success)' : totalPnl < 0 ? 'var(--color-danger)' : 'var(--text-muted)'};padding:10px 8px;font-size:13px;">
+                        ${totalPnl > 0 ? '+' : ''}₹${numberFmt(Math.abs(totalPnl))}
+                    </td>
+                    <td style="color:${totalPnlPct > 0 ? 'var(--color-success)' : totalPnlPct < 0 ? 'var(--color-danger)' : 'var(--text-muted)'};padding:10px 8px;font-size:13px;">
+                        ${totalPnlPct !== 0 ? (totalPnlPct > 0 ? '+' : '') + totalPnlPct.toFixed(2) + '%' : '—'}
+                    </td>
+                    <td style="padding:10px 8px;">—</td>
+                </tr>
+            </tfoot>
         </table>
     `;
 }
@@ -373,6 +395,7 @@ function _buildUnifiedRows(positions, holdings) {
             || 0;
         const pnl = _getPnl(p);
         const pnlPct = buyAvg > 0 ? (pnl / (buyAvg * Math.abs(qty))) * 100 : 0;
+        const isSold = qty === 0;
         rows.push({
             symbol: sym,
             qty: qty,
@@ -383,7 +406,7 @@ function _buildUnifiedRows(positions, holdings) {
             product: _getVal(p, 'productType')
                 ? String(p.productType || p.producttype)
                 : 'INTRADAY',
-            isSold: false,
+            isSold: isSold,
         });
     }
 
