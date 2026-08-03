@@ -374,9 +374,18 @@ class CandleTracker:
         done = 0
         skipped = 0
 
-        # Yesterday's date string
+        # Yesterday's date string — use last TRADING day in the data
         today = datetime.now(IST).date()
-        yesterday_date = today - timedelta(days=1)
+
+        def _get_last_trading_day(df) -> datetime.date | None:
+            """Find the most recent complete day in *df* before today."""
+            idx = pd.DatetimeIndex(df.index)
+            if idx.tz is None:
+                idx = idx.tz_localize("UTC").tz_convert(IST)
+            else:
+                idx = idx.tz_convert(IST)
+            all_dates = sorted({d.date() for d in idx if d.date() < today})
+            return all_dates[-1] if all_dates else None
 
         def _process(sym: str) -> tuple[str, dict | None]:
             df = _yf_5min_df(sym)
@@ -396,15 +405,17 @@ class CandleTracker:
 
             ema = float(closes.ewm(span=EMA_SPAN, adjust=False).mean().iloc[-1])
 
-            # Yesterday's data
-            yesterday_data = df[df.index.date == yesterday_date]
+            # Yesterday's data — use the last trading day, not calendar yesterday
+            trade_date = _get_last_trading_day(df)
             yh = None
             yl = None
             yc = None
-            if not yesterday_data.empty:
-                yh = float(yesterday_data["High"].max())
-                yl = float(yesterday_data["Low"].min())
-                yc = float(yesterday_data["Close"].iloc[-1])
+            if trade_date is not None:
+                yesterday_data = df[df.index.date == trade_date]
+                if not yesterday_data.empty:
+                    yh = float(yesterday_data["High"].max())
+                    yl = float(yesterday_data["Low"].min())
+                    yc = float(yesterday_data["Close"].iloc[-1])
 
             result = {"ema": ema}
             if yh is not None:
