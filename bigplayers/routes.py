@@ -39,7 +39,10 @@ BIG_PLAYERS_COLUMNS = [
     "Support Price",
     "9:15 High",
     "9:15 Low",
+    "Entry Price",
+    "SL",
     "MaxQty",
+    "Risk ₹",
 ]
 
 
@@ -128,8 +131,25 @@ def get_big_players(budget: int = 100000, parts: int = 4):
             lambda s: opening_candle_map.get(s, (False, None, None, None))[3]
         )
 
-        # MaxQty
-        _calc_qty_for_broker(df, budget, parts)
+        # MaxQty — 65% entry + 5x leverage risk-based sizing
+        part_capital = budget / parts
+
+        def _calc_risk_qty(row):
+            low = row.get('low915')
+            high = row.get('high915')
+            close = row.get('close')
+            if pd.isna(low) or pd.isna(high) or pd.isna(close) or high <= low:
+                return 0, 0, 0, 0
+            entry_price = low + 0.65 * (high - low)
+            sl_price = low
+            risk_per_share = entry_price - sl_price
+            if entry_price <= 0 or risk_per_share <= 0:
+                return 0, 0, 0, 0
+            budget_qty = int((part_capital * 5) / entry_price)
+            risk_qty = int((part_capital * 0.025) / risk_per_share) if risk_per_share > 0 else budget_qty
+            final_qty = min(budget_qty, risk_qty)
+            loss_if_stopped = round(final_qty * risk_per_share, 2)
+            return final_qty, round(entry_price, 2), round(sl_price, 2), loss_if_stopped
 
         # Evaluate Big Players strategy per stock
         bp_strategy = BigPlayersStrategy()
@@ -156,6 +176,7 @@ def get_big_players(budget: int = 100000, parts: int = 4):
                 'ema': row.get('ema'),
                 'todayLow': today_low,
             }
+            max_qty, entry_price, sl_price, risk_rs = _calc_risk_qty(row)
             breakout_status = bp_strategy.calculate_breakout_status(row_dict)
             support_price = bp_strategy.calculate_support_price(row_dict)
             result.append({
@@ -164,7 +185,10 @@ def get_big_players(budget: int = 100000, parts: int = 4):
                 "CHG%": round(row['change'], 2),
                 "Breakout": breakout_status,
                 "SupportPrice": support_price,
-                "MaxQty": int(row.get("MaxQty", 0)),
+                "EntryPrice": entry_price,
+                "SL": sl_price,
+                "MaxQty": max_qty,
+                "RiskRs": risk_rs,
                 "TodayLow": round(today_low, 2) if today_low else None,
                 "low915": round(row['low915'], 2) if pd.notna(row.get('low915')) else None,
                 "high915": round(row['high915'], 2) if pd.notna(row.get('high915')) else None,
