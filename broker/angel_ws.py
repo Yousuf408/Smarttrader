@@ -155,12 +155,16 @@ def _save_ticks():
     Only equity ("-EQ") and known index symbols are written — never the
     CDS/currency derivative entries produced by Angel's token collisions,
     which would pollute the file and show up as stale junk.
+
+    Each entry is stamped with today's date so a new day purges old data.
     """
     global latest_ticks
     try:
+        today = datetime.now(IST).strftime("%Y-%m-%d")
         index_names = {nm for nm, _, kd in WATCHLIST if kd == "index"}
         clean = {
-            tok: data for tok, data in latest_ticks.items()
+            tok: dict(data, date=today)
+            for tok, data in latest_ticks.items()
             if (data.get("symbol") or "").upper().endswith("-EQ")
             or data.get("symbol") in index_names
         }
@@ -182,16 +186,19 @@ def _load_saved_ticks():
                 saved = json.load(f)
 
             if saved:
-                # Purge stale entries from token-collision stocks
+                today = datetime.now(IST).strftime("%Y-%m-%d")
+                # Purge CDS/derivative junk AND any old-day ticks — each day
+                # starts fresh; stale prior-day prices must not leak through.
                 cleaned = {
                     tok: data for tok, data in saved.items()
                     if (data.get("symbol") or "").upper().endswith("-EQ")
+                    and data.get("date") == today
                 }
                 purged = len(saved) - len(cleaned)
                 latest_ticks = cleaned
                 logger.info(
                     f"📂 Loaded {len(cleaned)} saved ticks from disk"
-                    + (f" (purged {purged} CDS/derivative entries)" if purged else "")
+                    + (f" (purged {purged} CDS/old-day entries)" if purged else "")
                 )
     except Exception:
         pass

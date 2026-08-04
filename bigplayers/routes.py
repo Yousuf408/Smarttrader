@@ -374,7 +374,11 @@ async def stream_bigplayers_ticks():
         last_digest = ""
         while True:
             try:
-                is_conn = angel_is_connected() and angel_ws_connected()
+                try:
+                    from broker.dhan_ws import is_ws_connected as dhan_feed_connected
+                except ImportError:
+                    dhan_feed_connected = lambda: False
+                is_conn = (angel_is_connected() and angel_ws_connected()) or dhan_feed_connected()
                 payload = _json.dumps({
                     "connected": is_conn,
                     "ticks": _build_ticks_by_symbol(),

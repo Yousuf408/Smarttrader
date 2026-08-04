@@ -50,6 +50,14 @@ from broker.angel_ws import (
     add_to_watchlist as angel_ws_add,
     get_subscription_status as angel_ws_status,
 )
+try:
+    from broker.dhan_ws import (
+        start_dhan_ws as dhan_feed_start,
+        is_ws_connected as dhan_feed_connected,
+    )
+except ImportError:
+    dhan_feed_start = None
+    dhan_feed_connected = lambda: False
 from advance_orb.supabase_db import save_top5_strategy, ensure_table
 from advance_orb.auth_routes import router as auth_router
 from server.candle_tracker import candle_tracker
@@ -921,7 +929,7 @@ def health():
 @app.get("/api/market/live-ticks")
 def get_live_ticks():
     """Return latest tick data for all subscribed symbols."""
-    is_conn = angel_is_connected() and angel_ws_connected()
+    is_conn = (angel_is_connected() and angel_ws_connected()) or dhan_feed_connected()
     return {"connected": is_conn, "ticks": _build_ticks_by_symbol()}
 
 
@@ -939,7 +947,7 @@ async def stream_live_ticks(request: Request):
         last_digest = ""
         while True:
             try:
-                is_conn = angel_is_connected() and angel_ws_connected()
+                is_conn = (angel_is_connected() and angel_ws_connected()) or dhan_feed_connected()
                 payload = _json.dumps({
                     "connected": is_conn,
                     "ticks": _build_ticks_by_symbol(),
@@ -1260,6 +1268,14 @@ def broker_connect(payload: dict):
                      or "").strip()
             if token:
                 set_dhan_access_token(token)
+                # Start the Dhan tick-by-tick market feed now that we have
+                # credentials. It auto-falls back to Angel WS if Dhan's
+                # Data API subscription is missing.
+                if dhan_feed_start:
+                    try:
+                        dhan_feed_start()
+                    except Exception as e:
+                        print(f"⚠️ Dhan feed start error: {e}")
                 return {"ok": True, "connected": True, "broker": "dhan"}
 
         return {
@@ -1311,6 +1327,13 @@ def broker_connect(payload: dict):
                     print("✅ WebSocket connected successfully")
                 else:
                     print(f"⚠️ WebSocket start: {ws_res.get('error')}")
+                # Also start the Dhan tick-by-tick feed (if creds exist) as
+                # the preferred source; Angel WS remains the automatic fallback.
+                if dhan_feed_start:
+                    try:
+                        dhan_feed_start()
+                    except Exception as e:
+                        print(f"⚠️ Dhan feed start error: {e}")
             except Exception as e:
                 print(f"⚠️ WebSocket start error: {e}")
 

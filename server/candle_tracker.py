@@ -465,16 +465,22 @@ class CandleTracker:
         logger.info(f"📋 Loaded {len(self.symbol_by_token)} stocks from watchlist.json")
 
     def _load_candles(self) -> None:
-        """Load today's completed candles from candles.json (if exists)."""
+        """Load TODAY's completed candles from candles.json (if exists).
+
+        Old-day data is purged on load — each day starts fresh.
+        """
         if not CANDLES_PATH.exists():
             return
         if CANDLES_PATH.stat().st_size > 50_000_000:  # corrupted
             CANDLES_PATH.unlink(missing_ok=True)
             return
         try:
+            today_str = _today_str()
             with open(CANDLES_PATH) as f:
                 data = json.load(f)
             for date_str, slots_raw in data.get("candles", {}).items():
+                if date_str != today_str:
+                    continue  # purge old-day data
                 self.completed[date_str] = {}
                 for slot_str, symbols in slots_raw.items():
                     self.completed[date_str][int(slot_str)] = symbols
@@ -484,13 +490,16 @@ class CandleTracker:
             logger.warning(f"⚠️ candles.json load failed: {e}")
 
     def _save_candles(self) -> None:
-        """Write today's completed candles to candles.json."""
+        """Write today's completed candles to candles.json (old days purged).
+
+        Old-day dates are dropped even when today has no data yet, so the
+        file never retains stale prior-day candles.
+        """
         today_str = _today_str()
-        today_data = {k: v for k, v in self.completed.items() if k == today_str}
-        if not today_data:
-            return
         out = {}
-        for date_str, slots in today_data.items():
+        for date_str, slots in self.completed.items():
+            if date_str != today_str:
+                continue  # never persist old days
             out[date_str] = {str(s): syms for s, syms in slots.items()}
         payload = {"last_updated": datetime.now(IST).isoformat(), "candles": out}
         CANDLES_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -511,6 +520,9 @@ class CandleTracker:
         try:
             updated = datetime.fromisoformat(self._cache_last_updated)
             now = datetime.now(IST)
+            # Stale on a new day — old data must be replaced with new-day data
+            if updated.date() != now.date():
+                return True
             # Stale if last update was before yesterday
             yesterday = (now - timedelta(days=1))
             if updated < yesterday:

@@ -22,11 +22,9 @@ function loadTestingData() {
             connEl.textContent = data.connected ? '🟢 Connected' : '🔴 Disconnected';
             connEl.style.color = data.connected ? 'var(--color-success)' : 'var(--color-danger)';
 
-            // Update count & timestamp
-            countEl.textContent = symbols.length + ' stocks';
-            updatedEl.textContent = new Date().toLocaleTimeString();
-
-            // Filter to unique symbols (prefer non -EQ versions)
+            // Filter to unique symbols (prefer non -EQ versions) — the API
+            // returns both "COLPAL-EQ" and "COLPAL" aliases, so the raw key
+            // count (~1400 for 727 stocks) is NOT the real stock count.
             const uniqueSymbols = [];
             const seen = new Set();
             for (const sym of symbols) {
@@ -36,6 +34,10 @@ function loadTestingData() {
                     uniqueSymbols.push(sym);
                 }
             }
+
+            // Update count & timestamp (deduped count == watchlist size)
+            countEl.textContent = uniqueSymbols.length + ' stocks';
+            updatedEl.textContent = new Date().toLocaleTimeString();
 
             if (uniqueSymbols.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:40px;opacity:0.5;">No tick data available</td></tr>';

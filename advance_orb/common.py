@@ -261,34 +261,51 @@ def _build_ticks_by_symbol():
 
     Filters out non-EQ instruments — derivatives (PE/CE), currency pairs
     (USDINR, EURINR, GBPINR, JPYINR) — so only equity segment stocks appear.
+
+    Source preference: Dhan market feed (tick-by-tick) when its WebSocket is
+    connected; the Angel One WebSocket fills any symbols Dhan doesn't cover.
     """
     import re as _re
     from broker.angel_ws import get_latest_ticks as angel_ws_ticks
-    ticks = angel_ws_ticks()
+    from broker.dhan_ws import (
+        get_latest_ticks as dhan_ws_ticks,
+        is_ws_connected as dhan_ws_connected,
+    )
 
     # Reject patterns: PE/CE suffix, currency pairs
     _NON_EQ_RE = _re.compile(r"(PE|CE)$|^(USD|EUR|GBP|JPY)INR", _re.IGNORECASE)
 
+    sources = []
+    if dhan_ws_connected():
+        dhan = dhan_ws_ticks()
+        if dhan:
+            sources.append(dhan)
+    sources.append(angel_ws_ticks())
+
     by_symbol = {}
-    for token, data in ticks.items():
-        sym = data.get("symbol", "") or ""
-        if not sym:
-            continue
-        if _NON_EQ_RE.search(sym):
-            continue
-        entry = {
-            "ltp": data.get("ltp"),
-            "change_pct": data.get("change_pct"),
-            "volume": data.get("volume"),
-            "high": data.get("high"),
-            "low": data.get("low"),
-            "open": data.get("open"),
-            "timestamp": data.get("timestamp"),
-        }
-        by_symbol[sym] = entry
-        base = sym.split("-")[0]
-        if base != sym and not _NON_EQ_RE.search(base):
-            by_symbol[base] = entry
+    for ticks in sources:
+        for token, data in ticks.items():
+            sym = (data.get("symbol") or "").strip()
+            if not sym:
+                continue
+            if _NON_EQ_RE.search(sym):
+                continue
+            if sym in by_symbol:
+                # Dhan is preferred — Angel only fills symbols Dhan doesn't have
+                continue
+            entry = {
+                "ltp": data.get("ltp"),
+                "change_pct": data.get("change_pct"),
+                "volume": data.get("volume"),
+                "high": data.get("high"),
+                "low": data.get("low"),
+                "open": data.get("open"),
+                "timestamp": data.get("timestamp"),
+            }
+            by_symbol[sym] = entry
+            base = sym.split("-")[0]
+            if base != sym and not _NON_EQ_RE.search(base):
+                by_symbol[base] = entry
     return by_symbol
 
 
