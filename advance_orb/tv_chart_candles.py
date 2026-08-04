@@ -13,6 +13,8 @@ import os
 import random
 import re
 import string
+import threading
+import time
 from typing import Any
 
 import requests
@@ -20,6 +22,11 @@ import websockets
 
 logger = logging.getLogger("advance_orb.tv_chart")
 IST = dt.timezone(dt.timedelta(hours=5, minutes=30))
+_TV_TOKEN_CACHE: tuple[float, str] | None = None
+_TV_CANDLE_CACHE: dict[tuple[str, str], tuple[float, tuple[float, float, float, float, float | None]] | None] = {}
+_TV_CACHE_LOCK = threading.Lock()
+_TV_TOKEN_TTL = 10 * 60
+_TV_CANDLE_TTL = 5 * 60
 
 
 def _frame(method: str, params: list[Any]) -> str:
@@ -129,19 +136,45 @@ def batch_tv_opening_candles(
     if not username or not password or not result:
         return result
 
-    try:
-        login = requests.post(
-            "https://www.tradingview.com/accounts/signin/",
-            data={"username": username, "password": password, "remember": "on"},
-            headers={"User-Agent": "Mozilla/5.0", "Referer": "https://www.tradingview.com"},
-            timeout=20,
-        ).json()
-        token = (login.get("user") or {}).get("auth_token", "")
-        if not token:
-            logger.warning("TradingView login did not return auth_token: %s", login.get("error", "unknown error"))
-            return result
+    today = now.strftime("%Y-%m-%d")
+    now_ts = time.time()
+    with _TV_CACHE_LOCK:
+        for symbol in list(result):
+            cached = _TV_CANDLE_CACHE.get((today, symbol))
+            if cached and now_ts - cached[0] < _TV_CANDLE_TTL:
+                result[symbol] = cached[1]
+        missing = {symbol: None for symbol, value in result.items() if value is None}
+    if not missing:
+        return result
 
-        asyncio.run(_batch_tv_opening_candles_async(result, token))
+    global _TV_TOKEN_CACHE
+    with _TV_CACHE_LOCK:
+        token = (
+            _TV_TOKEN_CACHE[1]
+            if _TV_TOKEN_CACHE and now_ts - _TV_TOKEN_CACHE[0] < _TV_TOKEN_TTL
+            else ""
+        )
+    try:
+        if not token:
+            login = requests.post(
+                "https://www.tradingview.com/accounts/signin/",
+                data={"username": username, "password": password, "remember": "on"},
+                headers={"User-Agent": "Mozilla/5.0", "Referer": "https://www.tradingview.com"},
+                timeout=20,
+            ).json()
+            token = (login.get("user") or {}).get("auth_token", "")
+            if not token:
+                logger.warning("TradingView login did not return auth_token: %s", login.get("error", "unknown error"))
+                return result
+            with _TV_CACHE_LOCK:
+                _TV_TOKEN_CACHE = (now_ts, token)
+
+        asyncio.run(_batch_tv_opening_candles_async(missing, token))
+        with _TV_CACHE_LOCK:
+            for symbol, value in missing.items():
+                if value is not None:
+                    _TV_CANDLE_CACHE[(today, symbol)] = (now_ts, value)
+                    result[symbol] = value
     except Exception as exc:
         logger.warning("TradingView 5-minute candle fetch failed: %s", exc)
     return result
