@@ -613,6 +613,7 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False,
             "price": f"{PRICE_MIN} to {PRICE_MAX} INR",
             "market_cap": f"> {MARKET_CAP_MIN/1e9:.0f}B INR",
             "exchange": "NSE",
+            "gap": f"TradingView absolute gap < {GAP_THRESHOLD}%",
         }
         if yf_filter:
             conditions["filter"] = (

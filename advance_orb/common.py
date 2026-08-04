@@ -117,11 +117,16 @@ def fetch_tradingview_stocks(max_results: int = TV_SCAN_MAX_RESULTS) -> list[dic
             continue
         if not (PRICE_MIN < close <= PRICE_MAX):
             continue
+        gap = float(d[4]) if isinstance(d[4], (int, float)) else 0.0
+        # Advance ORB uses TradingView's scanner gap value as the source of
+        # truth. Exclude both gap-ups and gap-downs at or beyond 2%.
+        if abs(gap) >= GAP_THRESHOLD:
+            continue
         rows.append({
             "name": name,
             "close": float(close),
             "change": float(d[3]) if isinstance(d[3], (int, float)) else 0.0,
-            "gap": float(d[4]) if isinstance(d[4], (int, float)) else 0.0,
+            "gap": gap,
             "volume": float(d[5]) if isinstance(d[5], (int, float)) else 0,
             "relative_volume": float(d[6]) if isinstance(d[6], (int, float)) else 0.0,
             "market_cap_basic": float(d[7]) if isinstance(d[7], (int, float)) else 0,
