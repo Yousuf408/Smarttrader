@@ -1424,6 +1424,19 @@ def cache_status():
     return _ct.get_cache_status()
 
 
+@app.post("/api/data/purge-old-day")
+def purge_old_day():
+    """Manually trigger the daily old-day purge: candles.json is rewritten
+    to contain today's data only, so prior-day rows are physically deleted.
+    Also runs automatically every morning at date rollover and at startup."""
+    from server.candle_tracker import candle_tracker as _ct
+    try:
+        result = _ct.purge_old_day_data()
+        return {"success": True, **result}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
 # =================================================================
 # SPA FALLBACK — any GET that doesn't match an explicit route or
 # a static-asset mount, and isn't under /api/ /js/ /style.css,

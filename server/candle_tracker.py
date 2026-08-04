@@ -159,9 +159,14 @@ class CandleTracker:
         #              "yesterday_low": float, "yesterday_close": float}}
         self._cache: dict[str, dict] = {}
         self._cache_last_updated: str | None = None  # ISO timestamp from __meta__
+        self._purged_date: str = ""  # last date candles.json was physically purged
 
         self._load_stocks()
         self._load_candles()
+        try:
+            self.purge_old_day_data()  # collapse file to today-only on every startup
+        except Exception as e:
+            logger.warning(f"⚠️ Startup candle purge error: {e}")
         self._load_cache()
 
         # ── bootstrap / daily refresh ────────────────────────────────
@@ -507,6 +512,42 @@ class CandleTracker:
             json.dump(payload, f, indent=2)
         self._last_save = time.time()
 
+    def purge_old_day_data(self) -> dict:
+        """Physically delete every non-today date from candles.json.
+
+        Called every morning (date rollover in the daily loop) and at startup,
+        so yesterday's rows can never survive into a new trading day — even
+        when no ticks have flowed yet (pre-market / weekend).  Today's data
+        (if any) is kept; the file is rewritten today-only, which is what
+        makes old rows disappear from disk.
+
+        Returns: {"purged_days": int, "purged_rows": int, "today_rows": int}
+        """
+        with self._lock:
+            today_str = _today_str()
+            old_dates = [d for d in self.completed if d != today_str]
+            purged_rows = 0
+            for d in old_dates:
+                for slot in self.completed[d].values():
+                    purged_rows += len(slot)  # each slot → {symbol: candle}
+            for d in old_dates:
+                del self.completed[d]
+            # Rewrite the file now — even an empty today payload is written,
+            # guaranteeing the old multi-day file is replaced on disk.
+            self._save_candles()
+            self._purged_date = today_str
+            if old_dates:
+                logger.info(
+                    f"🧹 Daily purge: removed {len(old_dates)} old day(s) / "
+                    f"{purged_rows} rows → candles.json holds today only"
+                )
+            today_slots = self.completed.get(today_str, {})
+            return {
+                "purged_days": len(old_dates),
+                "purged_rows": purged_rows,
+                "today_rows": sum(len(slot) for slot in today_slots.values()),
+            }
+
     def _is_cache_stale(self) -> bool:
         """Return True if cache needs refresh (empty, old format, or yesterday_data outdated)."""
         if not self._cache or len(self._cache) < 100:
@@ -532,9 +573,16 @@ class CandleTracker:
         return False
 
     def _daily_refresh_loop(self) -> None:
-        """Background thread: refresh cache at ~9:00 AM IST each trading day."""
+        """Background thread: purge old-day candles + refresh cache each day."""
         while True:
             now = datetime.now(IST)
+            # New IST day → physically delete old-day candles before market
+            # open so the file never accumulates prior-day rows.
+            try:
+                if self._purged_date != _today_str():
+                    self.purge_old_day_data()
+            except Exception as e:
+                logger.warning(f"⚠️ Daily candle purge error: {e}")
             # If it's between 8:30 AM and 9:15 AM on a weekday, refresh
             if now.weekday() < 5:
                 mins = now.hour * 60 + now.minute
