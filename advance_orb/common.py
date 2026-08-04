@@ -55,7 +55,12 @@ def fetch_tradingview_stocks(max_results: int = TV_SCAN_MAX_RESULTS) -> list[dic
             close 200–4000 INR AND market_cap_basic > 41B INR.
     Returns all matching rows as
         [{name, close, change, gap, volume, relative_volume,
-          market_cap_basic, sector}, ...]
+          market_cap_basic, sector, open, high, low}, ...]
+    WARNING: open/high/low here are the FULL-DAY bar (the scan's base
+    row is the daily snapshot, and the `interval` param is ignored), so
+    they must NEVER be used as the 9:15 opening candle.  The True 9:15
+    values in Advance ORB come from CandleTracker slot 0 or the Yahoo
+    5-min backfill in get_advance_orb().
     Results are cached for TV_SCAN_TTL seconds.  On network / API
     failure returns the stale cache if any, else an empty list (the
     caller falls back to the WebSocket watchlist path).
@@ -72,6 +77,7 @@ def fetch_tradingview_stocks(max_results: int = TV_SCAN_MAX_RESULTS) -> list[dic
             "name", "description", "close", "change", "gap",
             "volume", "relative_volume_10d_calc", "market_cap_basic",
             "sector",
+            "open", "high", "low",
         ],
         "filter": [
             {"left": "type", "operation": "equal", "right": "stock"},
@@ -120,6 +126,10 @@ def fetch_tradingview_stocks(max_results: int = TV_SCAN_MAX_RESULTS) -> list[dic
             "relative_volume": float(d[6]) if isinstance(d[6], (int, float)) else 0.0,
             "market_cap_basic": float(d[7]) if isinstance(d[7], (int, float)) else 0,
             "sector": str(d[8]) if d[8] else "N/A",
+            # 9:15 IST opening bar OHLC straight from TradingView.
+            "open": float(d[9]) if len(d) > 9 and isinstance(d[9], (int, float)) else None,
+            "high": float(d[10]) if len(d) > 10 and isinstance(d[10], (int, float)) else None,
+            "low": float(d[11]) if len(d) > 11 and isinstance(d[11], (int, float)) else None,
         })
     rows.sort(key=lambda r: -r["market_cap_basic"])
 

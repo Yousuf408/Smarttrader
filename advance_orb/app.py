@@ -435,6 +435,39 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False,
             small_candle_symbols: set[str] = set()
         else:
             opening_candle_map = batch_opening_candle(candidate_symbols)
+            # ── True 9:15 candle fallback (Yahoo 5-min bars) ──────────
+            # CandleTracker builds slot 0 (09:15–09:20) from WS ticks,
+            # but slot 0 is permanently lost if the server (re)starts
+            # after 09:20 — the 0→1 transition that snapshots it never
+            # fires.  In that case fall back to Yahoo's real 5-min bars
+            # so high915/low915 are the TRUE 09:15–09:20 candle, NOT the
+            # TradingView day bar (the TV scan's open/high/low are the
+            # full-day bar and are never used for the 9:15 values).
+            # Same 10-tuple shape as batch_opening_candle.
+            if not any(
+                isinstance(t, tuple) and t and t[2] for t in opening_candle_map.values()
+            ):
+                _yf_fill = batch_yahoo_orb_data(candidate_symbols)
+                for _s in candidate_symbols:
+                    _y = _yf_fill.get(_s)
+                    if _y and _y.get("high915") and _y.get("low915") and _y.get("close915"):
+                        _hi = _y["high915"]
+                        _lo = _y["low915"]
+                        _rng = ((_hi - _lo) / _lo) * 100
+                        _c920 = _y.get("close920")
+                        _inside = bool(_c920 is not None and _lo <= _c920 <= _hi)
+                        opening_candle_map[_s] = (
+                            _rng <= SMALL_CANDLE_THRESHOLD, _hi, _y["open915"],
+                            _lo, _y["close915"], _rng, _y.get("day_low"),
+                            _y.get("yesterday_high"), _c920, _inside,
+                        )
+                if any(
+                    isinstance(t, tuple) and t and t[2] for t in opening_candle_map.values()
+                ):
+                    logger.info(
+                        "advanceorb: CandleTracker slot-0 missing → "
+                        "9:15 candle backfilled from Yahoo 5-min bars"
+                    )
             small_candle_symbols = {
                 s for s, t in opening_candle_map.items()
                 if isinstance(t, tuple) and t and t[0]
@@ -461,8 +494,12 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False,
                 isinstance(t, tuple) and t and t[2] for t in opening_candle_map.values()
             )
         else:
-            has_candle_data = bool(
-                candle_tracker.completed.get(_today_str_check, {}).get(0)
+            # Candle data is "available" when the map holds real 9:15
+            # values — either from CandleTracker slot 0 (WS ticks) or
+            # backfilled from Yahoo 5-min bars above when slot 0 was
+            # lost to a post-09:20 restart.
+            has_candle_data = any(
+                isinstance(t, tuple) and t and t[2] for t in opening_candle_map.values()
             )
 
         # "open915" = today's OPEN price (= the first 5-min candle's Open).
@@ -513,6 +550,12 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False,
         df['inside_915'] = df['name'].map(
             lambda s: opening_candle_map.get(s, (False, None, None, None, None, None, None, None, None, None))[9]
         )
+        # NOTE: the TradingView scan's open/high/low are the FULL-DAY bar,
+        # not the 9:15 candle — they were once used to override high915/
+        # low915 and produced nonsense ranges (e.g. a stock's whole-day
+        # range shown as its "9:15 range").  The TV day bar is NEVER used
+        # for the 9:15 values; those come from CandleTracker slot 0 or the
+        # Yahoo 5-min backfill above.
         # Compute 200-period EMA per candidate in parallel; surface
         # in df['ema']. NOT a screener filter — the auto-buy frontend
         # has the additional `price > ema` gate. Missing EMA simply
