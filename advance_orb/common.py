@@ -4,11 +4,14 @@ Shared constants and helper functions used by Advance ORB and Big Players strate
 
 from zoneinfo import ZoneInfo
 import datetime
+import logging
 import threading
 import time
 import pandas as pd
 import yfinance as yf
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+logger = logging.getLogger("advance_orb")
 
 from server.candle_tracker import candle_tracker
 
@@ -23,7 +26,7 @@ from broker.angel_margin_calculator import (
 
 # ─── HARDCODED CONDITIONS ───
 PRICE_MIN = 200
-PRICE_MAX = 3000
+PRICE_MAX = 4000  # 200 to 4000 INR per user's old-condition spec
 GAP_THRESHOLD = 2.0
 MARKET_CAP_MIN = 41_000_000_000  # 41 Billion INR
 SMALL_CANDLE_THRESHOLD = 1.5
@@ -35,6 +38,96 @@ EMA_LOOKBACK_DAYS = 4
 IST = ZoneInfo("Asia/Kolkata")
 MAX_TV_STOCKS = 100
 YFINANCE_WORKERS = 8
+
+# ── TradingView scanner (Advance ORB universe) ─────────────────────
+TV_SCAN_URL = "https://scanner.tradingview.com/india/scan"
+TV_SCAN_TTL = 600          # 10 minutes — don't hammer the free endpoint
+TV_SCAN_MAX_RESULTS = 1500
+_tv_scan_lock = threading.Lock()
+_tv_scan_cache: list[dict] = []
+_tv_scan_cached_at = 0.0
+
+
+def fetch_tradingview_stocks(max_results: int = TV_SCAN_MAX_RESULTS) -> list[dict]:
+    """NSE universe straight from TradingView (not the local watchlist).
+
+    Screen: type=stock AND exchange=NSE AND
+            close 200–4000 INR AND market_cap_basic > 41B INR.
+    Returns all matching rows as
+        [{name, close, change, gap, volume, relative_volume,
+          market_cap_basic, sector}, ...]
+    Results are cached for TV_SCAN_TTL seconds.  On network / API
+    failure returns the stale cache if any, else an empty list (the
+    caller falls back to the WebSocket watchlist path).
+    """
+    global _tv_scan_cache, _tv_scan_cached_at
+    now = time.time()
+    with _tv_scan_lock:
+        if _tv_scan_cache and (now - _tv_scan_cached_at) < TV_SCAN_TTL:
+            return _tv_scan_cache
+
+    payload = {
+        "symbols": {"tickers": [], "query": {"types": []}},
+        "columns": [
+            "name", "description", "close", "change", "gap",
+            "volume", "relative_volume_10d_calc", "market_cap_basic",
+            "sector",
+        ],
+        "filter": [
+            {"left": "type", "operation": "equal", "right": "stock"},
+            {"left": "exchange", "operation": "equal", "right": "NSE"},
+            {"left": "close", "operation": "greater", "right": PRICE_MIN},
+            {"left": "close", "operation": "less", "right": PRICE_MAX},
+            {"left": "market_cap_basic", "operation": "greater", "right": MARKET_CAP_MIN},
+        ],
+        "sort": {"sortBy": "market_cap_basic", "sortOrder": "desc"},
+        "range": [0, max_results],
+    }
+    headers = {
+        "Content-Type": "application/json",
+        "User-Agent": (
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/126.0 Safari/537.36"
+        ),
+    }
+    try:
+        import requests
+        resp = requests.post(TV_SCAN_URL, json=payload, headers=headers, timeout=30)
+        resp.raise_for_status()
+        body = resp.json()
+    except Exception as e:
+        logger.warning("tv-scan: TradingView scan failed: %s", e)
+        with _tv_scan_lock:
+            return _tv_scan_cache  # stale data beats an empty tab
+
+    rows: list[dict] = []
+    for item in body.get("data", []):
+        d = item.get("d") or []
+        if len(d) < 9:
+            continue
+        name = str(d[0] or "").strip().upper()
+        close = d[2]
+        if not name or not isinstance(close, (int, float)) or close <= 0:
+            continue
+        if not (PRICE_MIN < close <= PRICE_MAX):
+            continue
+        rows.append({
+            "name": name,
+            "close": float(close),
+            "change": float(d[3]) if isinstance(d[3], (int, float)) else 0.0,
+            "gap": float(d[4]) if isinstance(d[4], (int, float)) else 0.0,
+            "volume": float(d[5]) if isinstance(d[5], (int, float)) else 0,
+            "relative_volume": float(d[6]) if isinstance(d[6], (int, float)) else 0.0,
+            "market_cap_basic": float(d[7]) if isinstance(d[7], (int, float)) else 0,
+            "sector": str(d[8]) if d[8] else "N/A",
+        })
+    rows.sort(key=lambda r: -r["market_cap_basic"])
+
+    with _tv_scan_lock:
+        _tv_scan_cache = rows
+        _tv_scan_cached_at = time.time()
+    logger.info("tv-scan: %d NSE stocks (200–4000 INR, mcap > 41B)", len(rows))
+    return rows
 
 
 def has_small_opening_candle(symbol: str) -> bool:

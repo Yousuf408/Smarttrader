@@ -221,6 +221,7 @@ from advance_orb.common import (
     has_small_opening_candle, compute_200_ema, compute_200_ema_batch,
     batch_opening_candle, filter_small_opening_candles,
     batch_yahoo_orb_data,
+    fetch_tradingview_stocks,
     _detect_trading_date, _calc_qty_for_broker,
     _build_ticks_by_symbol, ws_auto_subscribe,
 )
@@ -279,11 +280,13 @@ def root():
 def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False,
                     yf_filter: bool = False):
     """
-    Fetch stocks from TradingView with 4 conditions:
-    1. Price: 200 to 3000 INR
-    2. Gap: < 2%
-    3. Market Cap: > 41B INR
-    4. Exchange: NSE
+    Fetch the NSE universe straight from TradingView:
+    1. Price: 200 to 4000 INR
+    2. Market Cap: > 41B INR
+    3. Exchange: NSE
+
+    All matching stocks are shown (candle/inside-9:15 conditions are
+    re-applied in later design steps).
 
     Query params:
       budget: total capital in INR (default 100000)
@@ -294,72 +297,85 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False,
     if parts < 1 or parts > 20:
         raise HTTPException(status_code=400, detail="parts must be between 1 and 20")
     try:
-        # ─── Step 1: Build candidate list from watchlist + WebSocket ───
-        # TV SCAN COMMENTED OUT for WS-only testing (Jul 31).
-        # Re-enable if you need the market-cap / exchange / sector filters.
-        # tv_query = (Query().select(...)...)
-        # response = requests.post(tv_query.url, ...)
-        #
-        # Instead: use the 727-stock watchlist directly. Gap% is computed
-        # from WebSocket LTP and cache's yesterday_close. Price filter
-        # uses WebSocket LTP. TV-only fields (volume, relvol, sector) are
-        # set to defaults since they aren't available from the WebSocket.
-        # Always use latest_ticks (loaded from saved file at startup, plus
-        # live WS ticks as they arrive).  The old guard
-        # ``angel_is_connected() and angel_ws_connected()`` caused the
-        # strategy to return empty when the WS was disconnected, even though
-        # the saved ticks file has all 700+ stocks' last-known prices.
-        ws_ticks = angel_ws_ticks()
+        # ─── Step 1: Universe — TradingView scan (primary) ──────────────
+        # Fetch ALL NSE stocks straight from TradingView:
+        #   type=stock, exchange=NSE, close 200–4000 INR, mcap > 41B INR.
+        # Every returned stock is shown — refinement conditions come in
+        # later steps and via the toggles (Gap-Up / Yahoo filter).
+        # Falls back to the watchlist + WebSocket path if the scanner
+        # is unreachable so the tab never goes empty.
+        tv_rows = fetch_tradingview_stocks()
         cache_data = candle_tracker._cache if hasattr(candle_tracker, '_cache') else {}
+        if tv_rows:
+            raw_rows = [
+                {
+                    "name": t["name"],
+                    "close": t["close"],
+                    "change": t["change"],
+                    "gap": t["gap"],
+                    "volume": t["volume"],
+                    "relative_volume": t["relative_volume"],
+                    "market_cap_basic": t["market_cap_basic"],
+                    "sector": t["sector"],
+                    # day-open isn't available from the TV scan; open915
+                    # falls back to CandleTracker candles when present.
+                    "tick_open": None,
+                }
+                for t in tv_rows
+            ]
+        else:
+            # ── Fallback: 727-stock watchlist + WebSocket ticks ──
+            ws_ticks = angel_ws_ticks()
 
-        raw_rows: list[dict] = []
-        for sym in candle_tracker.token_by_symbol:
-            tok = candle_tracker.token_by_symbol[sym]
-            ws = ws_ticks.get(str(tok), {})
-            cached = cache_data.get(sym, {})
+            raw_rows: list[dict] = []
+            for sym in candle_tracker.token_by_symbol:
+                tok = candle_tracker.token_by_symbol[sym]
+                ws = ws_ticks.get(str(tok), {})
+                cached = cache_data.get(sym, {})
 
-            # Validate WS symbol — Angel One returns currency derivative data
-            # for tokens shared across NSE equity and CDS segments.
-            # If the symbol doesn't match {SYM}-EQ, fall back to yesterday's close.
-            ws_symbol = (ws.get("symbol") or "").upper()
-            expected_symbol = f"{sym}-EQ"
-            ltp = ws.get("ltp")
-            change_pct = ws.get("change_pct", 0)
+                # Validate WS symbol — Angel One returns currency derivative
+                # data for tokens shared across NSE equity and CDS segments.
+                # If the symbol doesn't match {SYM}-EQ, fall back to
+                # yesterday's close.
+                ws_symbol = (ws.get("symbol") or "").upper()
+                expected_symbol = f"{sym}-EQ"
+                ltp = ws.get("ltp")
+                change_pct = ws.get("change_pct", 0)
 
-            if not ws_symbol or ws_symbol != expected_symbol.upper():
-                # Bad WS data — use yesterday's close as fallback price
-                yc = cached.get("yesterday_close")
-                if yc and float(yc) > 0 and PRICE_MIN < float(yc) <= PRICE_MAX:
-                    ltp = float(yc)
-                    change_pct = 0
-                    gap_pct = 0
+                if not ws_symbol or ws_symbol != expected_symbol.upper():
+                    # Bad WS data — use yesterday's close as fallback price
+                    yc = cached.get("yesterday_close")
+                    if yc and float(yc) > 0 and PRICE_MIN < float(yc) <= PRICE_MAX:
+                        ltp = float(yc)
+                        change_pct = 0
+                        gap_pct = 0
+                    else:
+                        continue
                 else:
-                    continue
-            else:
-                if ltp is None or float(ltp) <= 0:
-                    continue
-                yc = cached.get("yesterday_close")
-                gap_pct = ((float(ltp) - float(yc)) / float(yc) * 100) if yc and float(yc) > 0 else None
-                if gap_pct is None or abs(gap_pct) >= GAP_THRESHOLD:
-                    continue
-                if not (PRICE_MIN < float(ltp) <= PRICE_MAX):
-                    continue
+                    if ltp is None or float(ltp) <= 0:
+                        continue
+                    yc = cached.get("yesterday_close")
+                    gap_pct = ((float(ltp) - float(yc)) / float(yc) * 100) if yc and float(yc) > 0 else None
+                    if gap_pct is None or abs(gap_pct) >= GAP_THRESHOLD:
+                        continue
+                    if not (PRICE_MIN < float(ltp) <= PRICE_MAX):
+                        continue
 
-            raw_rows.append({
-                "name": sym,
-                "close": float(ltp),
-                "change": change_pct,
-                "gap": gap_pct,
-                "volume": ws.get("volume", 0),
-                "relative_volume": 0.0,
-                "market_cap_basic": 0,
-                "sector": "N/A",
-                # day-open from Angel One tick (= NSE 9:15 open price).
-                # Used as open915 fallback when CandleTracker has no
-                # completed slot-0 data (e.g. after a server restart
-                # before the first 5-min boundary fires).
-                "tick_open": ws.get("open"),
-            })
+                raw_rows.append({
+                    "name": sym,
+                    "close": float(ltp),
+                    "change": change_pct,
+                    "gap": gap_pct,
+                    "volume": ws.get("volume", 0),
+                    "relative_volume": 0.0,
+                    "market_cap_basic": 0,
+                    "sector": "N/A",
+                    # day-open from Angel One tick (= NSE 9:15 open price).
+                    # Used as open915 fallback when CandleTracker has no
+                    # completed slot-0 data (e.g. after a server restart
+                    # before the first 5-min boundary fires).
+                    "tick_open": ws.get("open"),
+                })
 
         df = pd.DataFrame(raw_rows) if raw_rows else pd.DataFrame()
         count = len(df)
@@ -414,7 +430,7 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False,
                     rng <= SMALL_CANDLE_THRESHOLD, high, opn, low, close915, rng,
                     y.get("day_low"), yh, close920, inside,
                 )
-                if inside and near:
+                if inside and near and rng <= SMALL_CANDLE_THRESHOLD:
                     yf_pass_symbols.add(_s)
             small_candle_symbols: set[str] = set()
         else:
@@ -422,6 +438,12 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False,
             small_candle_symbols = {
                 s for s, t in opening_candle_map.items()
                 if isinstance(t, tuple) and t and t[0]
+            }
+            # Rule: 9:20 CLOSE must be inside the 9:15 high-low range.
+            # Tuple index 9 = inside_915 (low915 <= close920 <= high915).
+            inside915_symbols = {
+                s for s, t in opening_candle_map.items()
+                if isinstance(t, tuple) and len(t) > 9 and t[9]
             }
 
         # Detect whether CandleTracker has completed slot-0 data for today.
@@ -532,14 +554,11 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False,
                 if symbol not in yf_pass_symbols:
                     continue
             else:
-                # Normal mode: filter by small 9:15 candle (≤1.5% range).
-                # Skip this gate when no CandleTracker slot-0 data is
-                # available yet (server restarted after hours, or before
-                # 9:20 IST on a trading day).  Stocks are surfaced based on
-                # price/gap% alone; candle columns fill in once the first
-                # 5-min boundary completes.
-                if has_candle_data and symbol not in small_candle_symbols:
-                    continue
+                # Normal mode: show ALL stocks from the TradingView scan
+                # (NSE · 200–4000 INR · mcap > 41B).  Candle/inside-9:15
+                # conditions are re-added in later design steps; the full
+                # universe is surfaced for now so nothing is hidden.
+                pass
 
             # Format volume
             vol = row.get('volume', 0)
@@ -622,19 +641,20 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False,
         out_columns = GAP_UP_COLUMNS if gap_up else ADVANCE_ORB_COLUMNS
         conditions = {
             "price": f"{PRICE_MIN} to {PRICE_MAX} INR",
-            "gap": f"< {GAP_THRESHOLD}%",
             "market_cap": f"> {MARKET_CAP_MIN/1e9:.0f}B INR",
             "exchange": "NSE",
         }
         if yf_filter:
             conditions["filter"] = (
-                "Yahoo: 1st & 2nd close inside 9:15 range AND "
-                "9:15 close within 0.5% of yesterday high"
+                "Yahoo: 9:15 range <= 1.5% AND 1st & 2nd close inside "
+                "9:15 range AND 9:15 close within 0.5% of yesterday high"
             )
         elif gap_up:
             conditions["filter"] = "Price > 200 EMA AND Price > Prev High"
         else:
-            conditions["small_candle"] = f"9:15 IST range <= {SMALL_CANDLE_THRESHOLD}%"
+            conditions["universe"] = (
+                "TradingView · all NSE stocks · 200–4000 INR · mcap > 41B"
+            )
 
         # Save top 5 to Supabase for historical tracking
         try:
