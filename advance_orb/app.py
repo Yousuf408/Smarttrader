@@ -220,8 +220,7 @@ from advance_orb.common import (
     SMALL_CANDLE_THRESHOLD, EMA_SPAN, EMA_LOOKBACK_DAYS,
     IST, MAX_TV_STOCKS, YFINANCE_WORKERS,
     has_small_opening_candle, compute_200_ema, compute_200_ema_batch,
-    batch_opening_candle, filter_small_opening_candles,
-    batch_yahoo_orb_data,
+    filter_small_opening_candles,
     fetch_tradingview_stocks,
     _detect_trading_date, _calc_qty_for_broker,
     _build_ticks_by_symbol, ws_auto_subscribe,
@@ -403,106 +402,35 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False,
         #   * is_small   — used by the small-open-candle gate below
         #   * high915    — read by the auto-buy band-filter on the frontend
         # (open_val is returned for future use but no longer consumed here.)
-        if yf_filter:
-            # ── Yahoo Finance mode ────────────────────────────────────
-            # Candle conditions come from Yahoo, not the WS candle tracker:
-            #   1) 1st (9:15) AND 2nd (9:20) candle closes inside the
-            #      9:15 high-low range
-            #   2) 9:15 close within 0.5% of yesterday's high
-            yahoo_map = batch_yahoo_orb_data(candidate_symbols)
-            yf_pass_symbols: set[str] = set()
-            _def = (False, None, None, None, None, None, None, None, None, None)
-            opening_candle_map = {}
-            for _s in candidate_symbols:
-                y = yahoo_map.get(_s)
-                if not y or not y.get("high915") or not y.get("low915") or not y.get("close915"):
-                    opening_candle_map[_s] = _def
-                    continue
-                high = y["high915"]
-                low = y["low915"]
-                opn = y["open915"]
-                close915 = y["close915"]
-                close920 = y.get("close920")
-                rng = ((high - low) / low) * 100
-                # Both closes inside the 9:15 range (2nd close may not
-                # exist yet if the 9:20 bar hasn't completed → fail-safe).
-                inside = (low <= close915 <= high) and (
-                    close920 is not None and low <= close920 <= high
-                )
-                yh = y.get("yesterday_high")
-                near = bool(yh and yh > 0 and abs(close915 - yh) / yh * 100 <= 0.5)
+        # TradingView authenticated chart feed is the sole source for the
+        # Advance ORB opening candle. Angel/CandleTracker and Yahoo are not
+        # used for high915, low915, open915, or close915.
+        opening_candle_map = {}
+        _tv_fill = batch_tv_opening_candles(candidate_symbols)
+        for _s in candidate_symbols:
+            _tv = _tv_fill.get(_s)
+            if _tv:
+                _opn, _hi, _lo, _close = _tv
+                _rng = ((_hi - _lo) / _lo) * 100
                 opening_candle_map[_s] = (
-                    rng <= SMALL_CANDLE_THRESHOLD, high, opn, low, close915, rng,
-                    y.get("day_low"), yh, close920, inside,
+                    _rng <= SMALL_CANDLE_THRESHOLD, _hi, _opn, _lo,
+                    _close, _rng, None, None, None, None,
                 )
-                if inside and near and rng <= SMALL_CANDLE_THRESHOLD:
-                    yf_pass_symbols.add(_s)
-            small_candle_symbols: set[str] = set()
-        else:
-            opening_candle_map = batch_opening_candle(candidate_symbols)
-            # ── True 9:15 candle fallback (authenticated TV chart feed) ─
-            # CandleTracker builds slot 0 (09:15–09:20) from WS ticks,
-            # but slot 0 is permanently lost if the server (re)starts
-            # after 09:20 — the 0→1 transition that snapshots it never
-            # fires. In that case use TradingView's authenticated 5-min bars
-            # so high915/low915 are the TRUE 09:15–09:20 candle, NOT the
-            # TradingView day bar (the TV scan's open/high/low are the
-            # full-day bar and are never used for the 9:15 values).
-            # Same 10-tuple shape as batch_opening_candle.
-            if not any(
-                isinstance(t, tuple) and t and t[2] for t in opening_candle_map.values()
-            ):
-                _tv_fill = batch_tv_opening_candles(candidate_symbols)
-                for _s in candidate_symbols:
-                    _tv = _tv_fill.get(_s)
-                    if _tv:
-                        _opn, _hi, _lo, _close = _tv
-                        _rng = ((_hi - _lo) / _lo) * 100
-                        _inside = None
-                        opening_candle_map[_s] = (
-                            _rng <= SMALL_CANDLE_THRESHOLD, _hi, _opn,
-                            _lo, _close, _rng, None, None, None, _inside,
-                        )
-                if any(
-                    isinstance(t, tuple) and t and t[2] for t in opening_candle_map.values()
-                ):
-                    logger.info(
-                        "advanceorb: CandleTracker slot-0 missing → "
-                        "9:15 candle backfilled from TradingView 5-min chart"
-                    )
-            small_candle_symbols = {
-                s for s, t in opening_candle_map.items()
-                if isinstance(t, tuple) and t and t[0]
-            }
-            # Rule: 9:20 CLOSE must be inside the 9:15 high-low range.
-            # Tuple index 9 = inside_915 (low915 <= close920 <= high915).
-            inside915_symbols = {
-                s for s, t in opening_candle_map.items()
-                if isinstance(t, tuple) and len(t) > 9 and t[9]
-            }
+            else:
+                opening_candle_map[_s] = (
+                    False, None, None, None, None, None, None, None, None, None
+                )
+        small_candle_symbols = {
+            s for s, t in opening_candle_map.items()
+            if isinstance(t, tuple) and t and t[0]
+        }
+        inside915_symbols = set()
 
-        # Detect whether CandleTracker has completed slot-0 data for today.
-        # When the server restarts after hours (or before 9:20 IST on a
-        # trading day), candles.json may be absent / stale, so slot 0 is
-        # empty and batch_opening_candle returns all-None tuples.
-        # We use this flag to skip the small-candle filter in that case
-        # so stocks are still shown based on price/gap% alone.
-        import datetime as _dt
-        _today_str_check = _dt.datetime.now(IST).strftime("%Y-%m-%d")
-        if yf_filter:
-            # Yahoo mode: candle data comes from the Yahoo map, so treat it
-            # as available whenever Yahoo returned 9:15 data for any symbol.
-            has_candle_data = any(
-                isinstance(t, tuple) and t and t[2] for t in opening_candle_map.values()
-            )
-        else:
-            # Candle data is "available" when the map holds real 9:15
-            # values — either from CandleTracker slot 0 (WS ticks) or
-            # backfilled from Yahoo 5-min bars above when slot 0 was
-            # lost to a post-09:20 restart.
-            has_candle_data = any(
-                isinstance(t, tuple) and t and t[2] for t in opening_candle_map.values()
-            )
+        # Only authenticated TradingView chart candles count as ORB candle
+        # data. Angel/CandleTracker and Yahoo are deliberately excluded.
+        has_candle_data = any(
+            isinstance(t, tuple) and t and t[2] for t in opening_candle_map.values()
+        )
 
         # "open915" = today's OPEN price (= the first 5-min candle's Open).
         # Used for the 200-EMA distance check instead of the live close,
@@ -511,9 +439,6 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False,
         # Mirror: assign df['high915'] = today's 9:15 IST candle HIGH
         # (= first 5-min candle's High). Read by the JS band-filter
         # in autoBuyAllStocks — NOT part of any screener-side filter.
-        # Fallback: when no CandleTracker data yet, use the day-open
-        # from the Angel One tick (open_price_of_the_day), which equals
-        # the NSE 9:15 opening price.
         df['high915'] = df['name'].map(
             lambda s: opening_candle_map.get(s, (False, None, None))[1]
         )
@@ -528,9 +453,9 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False,
                 lambda s: opening_candle_map.get(s, (False, None, None, None, None, None, None, None))[2]
             )
         else:
-            # No slot-0 candle data — fall back to the tick's day-open
-            # (Angel One open_price_of_the_day == NSE 9:15 open price).
-            df['open915'] = df['tick_open']
+            # No authenticated TradingView candle yet: remain explicitly
+            # empty rather than substituting a broker tick/day-open value.
+            df['open915'] = None
         df['candle_range_pct'] = df['name'].map(
             lambda s: opening_candle_map.get(s, (False, None, None, None, None, None, None, None))[5]
         )
@@ -556,8 +481,8 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False,
         # not the 9:15 candle — they were once used to override high915/
         # low915 and produced nonsense ranges (e.g. a stock's whole-day
         # range shown as its "9:15 range").  The TV day bar is NEVER used
-        # for the 9:15 values; those come from CandleTracker slot 0 or the
-        # authenticated TradingView 5-min chart feed above.
+        # for the 9:15 values; they come only from the authenticated
+        # TradingView 5-min chart feed above.
         # Compute 200-period EMA per candidate in parallel; surface
         # in df['ema']. NOT a screener filter — the auto-buy frontend
         # has the additional `price > ema` gate. Missing EMA simply
@@ -1117,7 +1042,21 @@ def refresh_advance_orb(tickers: str = "", gap_up: bool = False):
             valid_symbols = set(symbols)
         else:
             # Normal mode: re-check ≤1.5% opening-candle rule
-            opening_candle_map = batch_opening_candle(symbols)
+            tv_candles = batch_tv_opening_candles(symbols)
+            opening_candle_map = {}
+            for symbol in symbols:
+                candle = tv_candles.get(symbol)
+                if candle:
+                    opn, high, low, close = candle
+                    rng = ((high - low) / low) * 100
+                    opening_candle_map[symbol] = (
+                        rng <= SMALL_CANDLE_THRESHOLD, high, opn, low,
+                        close, rng, None, None, None, None,
+                    )
+                else:
+                    opening_candle_map[symbol] = (
+                        False, None, None, None, None, None, None, None, None, None
+                    )
             valid_symbols = {
                 symbol for symbol, candle in opening_candle_map.items()
                 if isinstance(candle, tuple) and candle and candle[0]
