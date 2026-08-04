@@ -57,6 +57,22 @@ def _first_candle(rows: list[list[float]]) -> tuple[float, float, float, float] 
     return None
 
 
+def _yesterday_high(rows: list[list[float]]) -> float | None:
+    """Max 5-min bar high of the previous trading day (= that day's daily
+    high on the daily timeframe) — computed from TradingView's own bars."""
+    today = dt.datetime.now(IST).date()
+    day_highs: dict[dt.date, float] = {}
+    for row in sorted(rows, key=lambda x: x[0]):
+        stamp = dt.datetime.fromtimestamp(row[0], IST)
+        if stamp.date() >= today:
+            continue
+        day_highs[stamp.date()] = max(day_highs.get(stamp.date(), 0.0), row[2])
+    if not day_highs:
+        return None
+    prev_day = max(day_highs)  # most recent completed session before today
+    return day_highs[prev_day]
+
+
 async def _batch_tv_opening_candles_async(
     result: dict[str, tuple[float, float, float, float] | None],
     token: str,
@@ -87,13 +103,22 @@ async def _batch_tv_opening_candles_async(
                 raw += message
                 if "series_completed" in message:
                     break
-            candle = _first_candle(_series_rows(raw))
+            rows = _series_rows(raw)
+            candle = _first_candle(rows)
             if candle:
-                result[symbol] = candle
+                result[symbol] = (*candle, _yesterday_high(rows))
 
 
-def batch_tv_opening_candles(symbols: list[str]) -> dict[str, tuple[float, float, float, float] | None]:
-    """Fetch today's exact 09:15–09:20 bar for symbols in one TV session."""
+def batch_tv_opening_candles(
+    symbols: list[str],
+) -> dict[str, tuple[float, float, float, float, float | None] | None]:
+    """Fetch today's exact 09:15–09:20 bar + yesterday's daily high (TV only).
+
+    Returns a 5-tuple per symbol: (open, high, low, close, yesterday_high).
+    The last element is the previous trading day's high (max of that day's
+    5-min bar highs = daily-timeframe high).  All values come straight from
+    the authenticated TradingView chart feed — never Yahoo or Angel One.
+    """
     result = {str(s).strip().upper(): None for s in symbols if s}
     # Before the first candle closes there is nothing valid to fetch.
     now = dt.datetime.now(IST)

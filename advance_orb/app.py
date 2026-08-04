@@ -410,11 +410,11 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False,
         for _s in candidate_symbols:
             _tv = _tv_fill.get(_s)
             if _tv:
-                _opn, _hi, _lo, _close = _tv
+                _opn, _hi, _lo, _close, _yh = _tv
                 _rng = ((_hi - _lo) / _lo) * 100
                 opening_candle_map[_s] = (
                     _rng <= SMALL_CANDLE_THRESHOLD, _hi, _opn, _lo,
-                    _close, _rng, None, None, None, None,
+                    _close, _rng, None, _yh, None, None,
                 )
             else:
                 opening_candle_map[_s] = (
@@ -524,11 +524,16 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False,
                 if symbol not in yf_pass_symbols:
                     continue
             else:
-                # Normal mode: show ALL stocks from the TradingView scan
-                # (NSE · 200–4000 INR · mcap > 41B).  Candle/inside-9:15
-                # conditions are re-added in later design steps; the full
-                # universe is surfaced for now so nothing is hidden.
-                pass
+                # Normal mode: open must be within ±2% of yesterday's high
+                # (TV daily high).  Only evaluated when both values exist —
+                # the TV candle completes ~09:20 — otherwise keep pending.
+                _open = row.get("open915")
+                _yh = row.get("yesterday_high")
+                if pd.notna(_open) and pd.notna(_yh) and float(_yh) > 0:
+                    _lo_b = 0.98 * float(_yh)
+                    _hi_b = 1.02 * float(_yh)
+                    if not (_lo_b <= float(_open) <= _hi_b):
+                        continue
 
             # Format volume
             vol = row.get('volume', 0)
@@ -614,6 +619,10 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False,
             "market_cap": f"> {MARKET_CAP_MIN/1e9:.0f}B INR",
             "exchange": "NSE",
             "gap": f"TradingView absolute gap < {GAP_THRESHOLD}%",
+            "open_near_prev_high": (
+                "TradingView: open within ±2% of yesterday's high (daily"
+                " high from TV 5-min bars)"
+            ),
         }
         if yf_filter:
             conditions["filter"] = (
@@ -1048,20 +1057,29 @@ def refresh_advance_orb(tickers: str = "", gap_up: bool = False):
             for symbol in symbols:
                 candle = tv_candles.get(symbol)
                 if candle:
-                    opn, high, low, close = candle
+                    opn, high, low, close, yh = candle
                     rng = ((high - low) / low) * 100
                     opening_candle_map[symbol] = (
                         rng <= SMALL_CANDLE_THRESHOLD, high, opn, low,
-                        close, rng, None, None, None, None,
+                        close, rng, None, yh, None, None,
                     )
                 else:
                     opening_candle_map[symbol] = (
                         False, None, None, None, None, None, None, None, None, None
                     )
-            valid_symbols = {
-                symbol for symbol, candle in opening_candle_map.items()
-                if isinstance(candle, tuple) and candle and candle[0]
-            }
+            # Eligibility = small 9:15 candle AND open within ±2% of
+            # yesterday's high (TV daily high).  Same rule as the table.
+            valid_symbols = set()
+            for symbol, candle in opening_candle_map.items():
+                if not (isinstance(candle, tuple) and candle and candle[0]):
+                    continue
+                opn_v, yh_v = candle[2], candle[7]
+                if pd.notna(opn_v) and pd.notna(yh_v) and yh_v and float(yh_v) > 0:
+                    lo_b = 0.98 * float(yh_v)
+                    hi_b = 1.02 * float(yh_v)
+                    if not (lo_b <= float(opn_v) <= hi_b):
+                        continue
+                valid_symbols.add(symbol)
 
         # TV SCAN COMMENTED OUT for WS-only testing (Jul 31).
         # tv_query = (Query().select(...)...)
@@ -1105,7 +1123,7 @@ def refresh_advance_orb(tickers: str = "", gap_up: bool = False):
                 volume_str = "0"
             relvol_str = f"{values[4]:.2f}x" if len(values) > 4 and pd.notna(values[4]) else "0x"
 
-            # Pull live 9:20 candle data from yfinance (re-fetched above)
+            # Pull live 9:20 candle data from the TradingView 5-min map
             candle = (opening_candle_map or {}).get(name)
             inside_915_val = False
             close920_val = None
