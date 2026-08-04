@@ -61,6 +61,7 @@ except ImportError:
 from advance_orb.supabase_db import save_top5_strategy, ensure_table
 from advance_orb.auth_routes import router as auth_router
 from server.candle_tracker import candle_tracker
+from advance_orb.tv_chart_candles import batch_tv_opening_candles
 
 # Ensure the strategy_trades table exists (run once at startup)
 ensure_table()
@@ -296,6 +297,10 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False,
         raise HTTPException(status_code=400, detail="budget must be > 0")
     if parts < 1 or parts > 20:
         raise HTTPException(status_code=400, detail="parts must be between 1 and 20")
+    # Yahoo Finance is intentionally not a source for ORB candle data.
+    # Keep the legacy query parameter accepted for old clients, but force
+    # the authenticated TradingView/CandleTracker path below.
+    yf_filter = False
     try:
         # ─── Step 1: Universe — TradingView scan (primary) ──────────────
         # Fetch ALL NSE stocks straight from TradingView:
@@ -435,11 +440,11 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False,
             small_candle_symbols: set[str] = set()
         else:
             opening_candle_map = batch_opening_candle(candidate_symbols)
-            # ── True 9:15 candle fallback (Yahoo 5-min bars) ──────────
+            # ── True 9:15 candle fallback (authenticated TV chart feed) ─
             # CandleTracker builds slot 0 (09:15–09:20) from WS ticks,
             # but slot 0 is permanently lost if the server (re)starts
             # after 09:20 — the 0→1 transition that snapshots it never
-            # fires.  In that case fall back to Yahoo's real 5-min bars
+            # fires. In that case use TradingView's authenticated 5-min bars
             # so high915/low915 are the TRUE 09:15–09:20 candle, NOT the
             # TradingView day bar (the TV scan's open/high/low are the
             # full-day bar and are never used for the 9:15 values).
@@ -447,26 +452,23 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False,
             if not any(
                 isinstance(t, tuple) and t and t[2] for t in opening_candle_map.values()
             ):
-                _yf_fill = batch_yahoo_orb_data(candidate_symbols)
+                _tv_fill = batch_tv_opening_candles(candidate_symbols)
                 for _s in candidate_symbols:
-                    _y = _yf_fill.get(_s)
-                    if _y and _y.get("high915") and _y.get("low915") and _y.get("close915"):
-                        _hi = _y["high915"]
-                        _lo = _y["low915"]
+                    _tv = _tv_fill.get(_s)
+                    if _tv:
+                        _opn, _hi, _lo, _close = _tv
                         _rng = ((_hi - _lo) / _lo) * 100
-                        _c920 = _y.get("close920")
-                        _inside = bool(_c920 is not None and _lo <= _c920 <= _hi)
+                        _inside = None
                         opening_candle_map[_s] = (
-                            _rng <= SMALL_CANDLE_THRESHOLD, _hi, _y["open915"],
-                            _lo, _y["close915"], _rng, _y.get("day_low"),
-                            _y.get("yesterday_high"), _c920, _inside,
+                            _rng <= SMALL_CANDLE_THRESHOLD, _hi, _opn,
+                            _lo, _close, _rng, None, None, None, _inside,
                         )
                 if any(
                     isinstance(t, tuple) and t and t[2] for t in opening_candle_map.values()
                 ):
                     logger.info(
                         "advanceorb: CandleTracker slot-0 missing → "
-                        "9:15 candle backfilled from Yahoo 5-min bars"
+                        "9:15 candle backfilled from TradingView 5-min chart"
                     )
             small_candle_symbols = {
                 s for s, t in opening_candle_map.items()
@@ -555,7 +557,7 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False,
         # low915 and produced nonsense ranges (e.g. a stock's whole-day
         # range shown as its "9:15 range").  The TV day bar is NEVER used
         # for the 9:15 values; those come from CandleTracker slot 0 or the
-        # Yahoo 5-min backfill above.
+        # authenticated TradingView 5-min chart feed above.
         # Compute 200-period EMA per candidate in parallel; surface
         # in df['ema']. NOT a screener filter — the auto-buy frontend
         # has the additional `price > ema` gate. Missing EMA simply

@@ -59,8 +59,8 @@ def fetch_tradingview_stocks(max_results: int = TV_SCAN_MAX_RESULTS) -> list[dic
     WARNING: open/high/low here are the FULL-DAY bar (the scan's base
     row is the daily snapshot, and the `interval` param is ignored), so
     they must NEVER be used as the 9:15 opening candle.  The True 9:15
-    values in Advance ORB come from CandleTracker slot 0 or the Yahoo
-    5-min backfill in get_advance_orb().
+    values in Advance ORB come from CandleTracker slot 0 or the authenticated
+    TradingView chart feed in get_advance_orb().
     Results are cached for TV_SCAN_TTL seconds.  On network / API
     failure returns the stale cache if any, else an empty list (the
     caller falls back to the WebSocket watchlist path).
