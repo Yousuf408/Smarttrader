@@ -242,6 +242,21 @@ document.addEventListener("DOMContentLoaded", () => {
 // ================================================================
 let gapUpEnabled = false;
 let _inside915Only = false;
+let yahooFilterEnabled = false;
+
+function toggleYahooFilter() {
+    const toggle = document.getElementById('yahooFilterToggle');
+    const status = document.getElementById('yahooFilterStatus');
+    yahooFilterEnabled = toggle.checked;
+    status.textContent = yahooFilterEnabled ? 'ON' : 'OFF';
+    status.classList.toggle('active', yahooFilterEnabled);
+    showToast(yahooFilterEnabled ? '📈 Yahoo Filter ON' : '📈 Yahoo Filter OFF',
+        yahooFilterEnabled
+            ? 'Checking 1st & 2nd close inside 9:15 range + within 0.5% of yesterday high (Yahoo Finance)'
+            : 'Normal ORB mode (WebSocket candle data)');
+    // Re-fetch with the new mode
+    onStrategyChange();
+}
 
 function toggleInside915() {
     const toggle = document.getElementById('inside915Toggle');
@@ -275,9 +290,10 @@ async function fetchAdvanceORB() {
     const budget = _readBudget();
     const parts  = _readParts();
     const gapUp = gapUpEnabled ? '&gap_up=true' : '';
+    const yf = yahooFilterEnabled ? '&yf_filter=true' : '';
     try {
         const response = await fetch(
-            `/api/strategies/advanceorb?budget=${budget}&parts=${parts}${gapUp}`
+            `/api/strategies/advanceorb?budget=${budget}&parts=${parts}${gapUp}${yf}`
         );
         if (!response.ok) {
             throw new Error(`API returned ${response.status}`);

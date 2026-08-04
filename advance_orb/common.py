@@ -4,6 +4,7 @@ Shared constants and helper functions used by Advance ORB and Big Players strate
 
 from zoneinfo import ZoneInfo
 import datetime
+import threading
 import time
 import pandas as pd
 import yfinance as yf
@@ -204,6 +205,138 @@ def filter_small_opening_candles(symbols: list[str]) -> set[str]:
             except Exception:
                 continue
     return matches
+
+
+# ── Yahoo Finance ORB candle data (independent of the WebSocket) ────
+# Used by the "Yahoo Filter" toggle on Advance ORB: today's 9:15 + 9:20
+# candles and yesterday's high are fetched straight from Yahoo Finance.
+# Cached briefly so the frontend's auto-refresh doesn't hammer Yahoo.
+_YF_ORB_CACHE: dict[str, tuple[float, dict | None]] = {}
+_YF_ORB_CACHE_TTL = 300.0   # 5-min cache for successful fetches
+_YF_ORB_FAIL_TTL = 60.0     # failed fetches retried after 1 min
+_YF_ORB_LOCK = threading.Lock()
+
+
+def fetch_yahoo_orb_data(symbol: str) -> dict | None:
+    """Fetch today's 9:15/9:20 5-min candles + yesterday's high from Yahoo.
+
+    Returns dict with keys:
+      open915, high915, low915, close915, close920 (| None),
+      yesterday_high, day_low, near_high_pct (| None)
+    or None when Yahoo has no usable data (delisted / no bars today yet).
+    """
+    sym = str(symbol).strip().upper().replace(".NS", "")
+    ticker = f"{sym}.NS"
+    now = time.time()
+    with _YF_ORB_LOCK:
+        hit = _YF_ORB_CACHE.get(sym)
+        if hit:
+            ttl = _YF_ORB_CACHE_TTL if hit[1] is not None else _YF_ORB_FAIL_TTL
+            if now - hit[0] < ttl:
+                return hit[1]
+    try:
+        candles = yf.download(
+            tickers=ticker,
+            period="4d",
+            interval="5m",
+            progress=False,
+            auto_adjust=False,
+            prepost=False,
+            threads=False,
+        )
+    except Exception:
+        with _YF_ORB_LOCK:
+            _YF_ORB_CACHE[sym] = (time.time(), None)
+        return None
+    if candles is None or candles.empty:
+        with _YF_ORB_LOCK:
+            _YF_ORB_CACHE[sym] = (time.time(), None)
+        return None
+    if isinstance(candles.columns, pd.MultiIndex):
+        try:
+            candles = candles.xs(ticker, axis=1, level=-1)
+        except (KeyError, IndexError):
+            try:
+                candles = candles.xs(ticker, axis=1, level=0)
+            except (KeyError, IndexError):
+                return None
+    for col in ("Open", "High", "Low", "Close"):
+        if col not in candles.columns:
+            return None
+
+    idx = pd.DatetimeIndex(candles.index)
+    if idx.tz is None:
+        idx = idx.tz_localize("UTC").tz_convert(IST)
+    else:
+        idx = idx.tz_convert(IST)
+    candles = candles.copy()
+    candles.index = idx
+    today = pd.Timestamp.now(tz=IST).date()
+
+    today_rows = candles[candles.index.date == today]
+    if today_rows.empty:
+        return None  # no Yahoo bars for today yet (pre-market / holiday)
+
+    # 1st candle = the 09:15 IST 5-min bar (first row at minute >= 15)
+    opening = today_rows[(today_rows.index.hour == 9) & (today_rows.index.minute >= 15)]
+    if opening.empty:
+        return None
+    c1 = opening.iloc[0]
+    high = float(c1["High"])
+    low = float(c1["Low"])
+    if not high or not low or low <= 0:
+        return None
+    open_ = float(c1["Open"])
+    close = float(c1["Close"])
+
+    # 2nd candle = the 09:20 IST bar (first row at minute >= 20)
+    c2_rows = today_rows[(today_rows.index.hour == 9) & (today_rows.index.minute >= 20)]
+    close920 = float(c2_rows.iloc[0]["Close"]) if not c2_rows.empty else None
+
+    # Yesterday's high = max High of the most recent prior trading day's bars
+    past = candles[candles.index.date < today]
+    yesterday_high = None
+    if not past.empty:
+        prev_day = max(past.index.date)
+        prev_rows = candles[candles.index.date == prev_day]
+        if not prev_rows.empty:
+            yesterday_high = float(prev_rows["High"].max())
+
+    near_high_pct = (
+        abs(close - yesterday_high) / yesterday_high * 100
+        if yesterday_high and yesterday_high > 0
+        else None
+    )
+    result = {
+        "open915": open_,
+        "high915": high,
+        "low915": low,
+        "close915": close,
+        "close920": close920,
+        "yesterday_high": yesterday_high,
+        "day_low": float(today_rows["Low"].min()),
+        "near_high_pct": near_high_pct,
+    }
+    with _YF_ORB_LOCK:
+        _YF_ORB_CACHE[sym] = (time.time(), result)
+    return result
+
+
+def batch_yahoo_orb_data(symbols: list[str]) -> dict:
+    """Fetch Yahoo candle data for many symbols in parallel."""
+    unique = [str(s).strip().upper() for s in symbols if s]
+    results: dict[str, dict | None] = {}
+    if not unique:
+        return results
+    with ThreadPoolExecutor(max_workers=YFINANCE_WORKERS) as pool:
+        futures = {pool.submit(fetch_yahoo_orb_data, sym): sym for sym in unique}
+        for future in as_completed(futures):
+            sym = futures[future]
+            try:
+                results[sym] = future.result()
+            except Exception:
+                results[sym] = None
+    return results
 
 
 def _calc_qty_for_broker(df, budget, parts):

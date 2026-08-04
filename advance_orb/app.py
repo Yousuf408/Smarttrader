@@ -220,6 +220,7 @@ from advance_orb.common import (
     IST, MAX_TV_STOCKS, YFINANCE_WORKERS,
     has_small_opening_candle, compute_200_ema, compute_200_ema_batch,
     batch_opening_candle, filter_small_opening_candles,
+    batch_yahoo_orb_data,
     _detect_trading_date, _calc_qty_for_broker,
     _build_ticks_by_symbol, ws_auto_subscribe,
 )
@@ -275,7 +276,8 @@ def root():
 
 
 @app.get("/api/strategies/advanceorb")
-def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False):
+def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False,
+                    yf_filter: bool = False):
     """
     Fetch stocks from TradingView with 4 conditions:
     1. Price: 200 to 3000 INR
@@ -380,11 +382,47 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False):
         #   * is_small   — used by the small-open-candle gate below
         #   * high915    — read by the auto-buy band-filter on the frontend
         # (open_val is returned for future use but no longer consumed here.)
-        opening_candle_map = batch_opening_candle(candidate_symbols)
-        small_candle_symbols = {
-            s for s, t in opening_candle_map.items()
-            if isinstance(t, tuple) and t and t[0]
-        }
+        if yf_filter:
+            # ── Yahoo Finance mode ────────────────────────────────────
+            # Candle conditions come from Yahoo, not the WS candle tracker:
+            #   1) 1st (9:15) AND 2nd (9:20) candle closes inside the
+            #      9:15 high-low range
+            #   2) 9:15 close within 0.5% of yesterday's high
+            yahoo_map = batch_yahoo_orb_data(candidate_symbols)
+            yf_pass_symbols: set[str] = set()
+            _def = (False, None, None, None, None, None, None, None, None, None)
+            opening_candle_map = {}
+            for _s in candidate_symbols:
+                y = yahoo_map.get(_s)
+                if not y or not y.get("high915") or not y.get("low915") or not y.get("close915"):
+                    opening_candle_map[_s] = _def
+                    continue
+                high = y["high915"]
+                low = y["low915"]
+                opn = y["open915"]
+                close915 = y["close915"]
+                close920 = y.get("close920")
+                rng = ((high - low) / low) * 100
+                # Both closes inside the 9:15 range (2nd close may not
+                # exist yet if the 9:20 bar hasn't completed → fail-safe).
+                inside = (low <= close915 <= high) and (
+                    close920 is not None and low <= close920 <= high
+                )
+                yh = y.get("yesterday_high")
+                near = bool(yh and yh > 0 and abs(close915 - yh) / yh * 100 <= 0.5)
+                opening_candle_map[_s] = (
+                    rng <= SMALL_CANDLE_THRESHOLD, high, opn, low, close915, rng,
+                    y.get("day_low"), yh, close920, inside,
+                )
+                if inside and near:
+                    yf_pass_symbols.add(_s)
+            small_candle_symbols: set[str] = set()
+        else:
+            opening_candle_map = batch_opening_candle(candidate_symbols)
+            small_candle_symbols = {
+                s for s, t in opening_candle_map.items()
+                if isinstance(t, tuple) and t and t[0]
+            }
 
         # Detect whether CandleTracker has completed slot-0 data for today.
         # When the server restarts after hours (or before 9:20 IST on a
@@ -394,9 +432,16 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False):
         # so stocks are still shown based on price/gap% alone.
         import datetime as _dt
         _today_str_check = _dt.datetime.now(IST).strftime("%Y-%m-%d")
-        has_candle_data = bool(
-            candle_tracker.completed.get(_today_str_check, {}).get(0)
-        )
+        if yf_filter:
+            # Yahoo mode: candle data comes from the Yahoo map, so treat it
+            # as available whenever Yahoo returned 9:15 data for any symbol.
+            has_candle_data = any(
+                isinstance(t, tuple) and t and t[2] for t in opening_candle_map.values()
+            )
+        else:
+            has_candle_data = bool(
+                candle_tracker.completed.get(_today_str_check, {}).get(0)
+            )
 
         # "open915" = today's OPEN price (= the first 5-min candle's Open).
         # Used for the 200-EMA distance check instead of the live close,
@@ -479,6 +524,12 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False):
                 if not pd.notna(ema_val) or not pd.notna(yh):
                     continue
                 if float(open915) <= float(ema_val) or float(open915) <= float(yh):
+                    continue
+            elif yf_filter:
+                # Yahoo Finance mode: require both closes inside the 9:15
+                # range AND 9:15 close within 0.5% of yesterday's high
+                # (computed from Yahoo's own candles + yesterday data).
+                if symbol not in yf_pass_symbols:
                     continue
             else:
                 # Normal mode: filter by small 9:15 candle (≤1.5% range).
@@ -575,7 +626,12 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False):
             "market_cap": f"> {MARKET_CAP_MIN/1e9:.0f}B INR",
             "exchange": "NSE",
         }
-        if gap_up:
+        if yf_filter:
+            conditions["filter"] = (
+                "Yahoo: 1st & 2nd close inside 9:15 range AND "
+                "9:15 close within 0.5% of yesterday high"
+            )
+        elif gap_up:
             conditions["filter"] = "Price > 200 EMA AND Price > Prev High"
         else:
             conditions["small_candle"] = f"9:15 IST range <= {SMALL_CANDLE_THRESHOLD}%"
