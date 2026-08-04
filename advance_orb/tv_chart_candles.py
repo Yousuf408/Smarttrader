@@ -26,7 +26,11 @@ _TV_TOKEN_CACHE: tuple[float, str] | None = None
 _TV_CANDLE_CACHE: dict[tuple[str, str], tuple[float, tuple[float, float, float, float, float | None]] | None] = {}
 _TV_CACHE_LOCK = threading.Lock()
 _TV_TOKEN_TTL = 10 * 60
-_TV_CANDLE_TTL = 5 * 60
+# These values are immutable for the trading session: yesterday's high and
+# the completed 09:15-09:20 candle do not change after they are published.
+# Keep them in process memory for the rest of the session so 30-second UI
+# refreshes never re-query the chart feed.
+_TV_CANDLE_TTL = 20 * 60 * 60
 
 
 def _frame(method: str, params: list[Any]) -> str:
