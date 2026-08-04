@@ -150,12 +150,23 @@ def _get_equity_only_tokens():
 # ==============================================================================
 
 def _save_ticks():
-    """Persist latest_ticks to disk so they survive server restarts."""
+    """Persist latest_ticks to disk so they survive server restarts.
+
+    Only equity ("-EQ") and known index symbols are written — never the
+    CDS/currency derivative entries produced by Angel's token collisions,
+    which would pollute the file and show up as stale junk.
+    """
     global latest_ticks
     try:
+        index_names = {nm for nm, _, kd in WATCHLIST if kd == "index"}
+        clean = {
+            tok: data for tok, data in latest_ticks.items()
+            if (data.get("symbol") or "").upper().endswith("-EQ")
+            or data.get("symbol") in index_names
+        }
         SAVED_TICKS_PATH.parent.mkdir(parents=True, exist_ok=True)
         with open(SAVED_TICKS_PATH, "w") as f:
-            json.dump(latest_ticks, f, indent=2)
+            json.dump(clean, f, indent=2)
     except Exception:
         pass
 
@@ -302,6 +313,14 @@ def on_data(wsapp, message):
         if not token:
             logger.warning(f"🔴 No token in message!")
             return
+
+        # Safety net: reject ticks for non-equity symbols (CDS/currency
+        # derivatives that share token numbers with NSE equities).  Allow
+        # only "-EQ" symbols plus known index tokens (NIFTY, BANKNIFTY...).
+        if symbol and not symbol.upper().endswith("-EQ"):
+            if not any(symbol == nm for nm, _, kd in WATCHLIST if kd == "index"):
+                logger.debug(f"on_data — token {token} ({symbol}) isn't NSE equity, skipping")
+                return
 
         # Angel One sends prices in paise → divide by 100
         ltp = message.get('last_traded_price', 0) / 100
@@ -772,10 +791,21 @@ def _build_token_map():
         token_col  = next((c for c in df.columns if 'token'  in c.lower()), None)
         if not symbol_col or not token_col:
             return
-        _TOKEN_SYMBOL_MAP = {
-            str(row[token_col]): str(row[symbol_col])
-            for _, row in df.iterrows()
-        }
+        # Prefer the NSE-equity symbol ("-EQ") when a token number is shared
+        # between NSE equity and CDS/MCX segments (Angel token-collision bug).
+        # A naive dict-comprehension lets the *last* master row win, which for
+        # collision tokens is frequently a currency/commodity derivative symbol.
+        _TOKEN_SYMBOL_MAP = {}
+        for _, row in df.iterrows():
+            tok = str(row[token_col])
+            sym = str(row[symbol_col])
+            cur = _TOKEN_SYMBOL_MAP.get(tok)
+            if cur is None:
+                _TOKEN_SYMBOL_MAP[tok] = sym
+            elif sym.upper().endswith("-EQ"):
+                _TOKEN_SYMBOL_MAP[tok] = sym  # equity entry overwrites collision symbol
+            elif not cur.upper().endswith("-EQ"):
+                _TOKEN_SYMBOL_MAP[tok] = sym  # last non-EQ wins among non-EQ entries
         logger.info(f"🗺️ Token→symbol map built: {len(_TOKEN_SYMBOL_MAP)} entries")
     except Exception as e:
         logger.warning(f"⚠️ Could not build token map: {e}")
