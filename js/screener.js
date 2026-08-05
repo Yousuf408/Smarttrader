@@ -429,22 +429,6 @@ function renderStrategyData(result) {
     document.getElementById('screenerCount').textContent = `Showing ${data.length} stocks`;
     updatePlaceOrderButtons();
 
-    // ── Candle-pending banner ──────────────────────────────────────
-    // Show a warm amber notice when the backend hasn't yet completed
-    // its first 5-min slot (before 9:20 IST). The banner hides itself
-    // once candle_data_available flips to true (auto-refresh below
-    // triggers a full re-fetch when that happens).
-    if (strategyId === 'advanceorb') {
-        const banner = document.getElementById('candlePendingBanner');
-        if (banner) {
-            const available = result.candle_data_available;
-            if (available === false) {
-                banner.style.display = 'flex';
-            } else {
-                banner.style.display = 'none';
-            }
-        }
-    }
 }
 
 // ================================================================
@@ -572,7 +556,7 @@ async function onStrategyChange() {
 
                 let value = '';
                 if (col === 'Symbol') value = displayRow.symbol || '';
-                else if (col === 'Max Qty') value = displayRow.maxQty || '';
+                else if (col === 'Max Qty') value = displayRow.maxQty || displayRow.MaxQty || '';
                 else if (col === 'Price / Chg%') value = displayRow.priceChange || '';
                 else if (col === 'Volume / Rel Vol') value = displayRow.volumeRelvol || '';
                 else if (col === 'Signal Time') value = displayRow.signalTime || '';
@@ -590,7 +574,7 @@ async function onStrategyChange() {
                 else if (col === '200 EMA') value = displayRow.ema || '';
                 else if (col === '9:15 HIGH') value = displayRow.high915 || '';
                 else if (col === 'PREV HIGH') value = displayRow.prevHigh || '';
-                else if (col === 'MaxQty') value = displayRow.maxQty || '';
+                else if (col === 'MaxQty') value = displayRow.maxQty || displayRow.MaxQty || '';
                 else if (col === 'Sector') value = displayRow.sector || '';
                 else if (col === 'Support Price') value = displayRow.supportPrice || '';
                 else value = displayRow[col.toLowerCase()] || '';
