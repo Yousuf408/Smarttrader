@@ -423,8 +423,10 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False,
             candidate_symbols = df["name"].dropna().astype(str).tolist()
 
         # "Above 200 EMA" toggle: today's 5-min CLOSE must be ABOVE the 200 EMA
-        # and at most ABOVE_EMA_MAX_GAP% above it (Yahoo Finance 5-min closes).
-        # Close = the 9:20 candle close when available, else the 9:15 close.
+        # (Yahoo Finance 5-min closes). No gap cap — just close > EMA, so any
+        # stock that has closed above its 200 EMA qualifies regardless of how
+        # far above it is. Close = the 9:20 candle close when available, else
+        # the 9:15 close.
         if above_ema:
             above_ema_symbols = set()
             for _s, _yd in (yahoo_open_high or {}).items():
@@ -436,8 +438,7 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False,
                 _ema = _yd.get("ema200")
                 if _close is None or _ema is None or float(_ema) <= 0:
                     continue
-                _gap_pct = (float(_close) - float(_ema)) / float(_ema) * 100
-                if float(_close) > float(_ema) and _gap_pct <= ABOVE_EMA_MAX_GAP:
+                if float(_close) > float(_ema):
                     above_ema_symbols.add(_s)
             df = df[df["name"].isin(above_ema_symbols)].copy()
             candidate_symbols = df["name"].dropna().astype(str).tolist()
@@ -722,7 +723,7 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False,
                 else "OFF: full TradingView universe (no near-high filter)"
             ),
             "above_ema_200": (
-                f"ON: Yahoo 5-min close above 200 EMA, gap ≤ {ABOVE_EMA_MAX_GAP}%"
+                "ON: Yahoo 5-min close above 200 EMA (no gap cap)"
                 if above_ema
                 else "OFF"
             ),
