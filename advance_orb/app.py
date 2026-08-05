@@ -279,7 +279,7 @@ def root():
 
 @app.get("/api/strategies/advanceorb")
 def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False,
-                    yf_filter: bool = False):
+                    yf_filter: bool = False, near_high: bool = True):
     """
     Fetch the NSE universe straight from TradingView:
     1. Price: 200 to 4000 INR
@@ -397,23 +397,25 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False,
 
         candidate_symbols = df['name'].dropna().astype(str).tolist()
 
-        # Fast universe filter: today's Yahoo open must be within ±2% of the
-        # previous trading day's high. This is deliberately separate from
+        # "Filter Near High" toggle: today's Yahoo open must be within ±2% of
+        # the previous trading day's high. This is deliberately separate from
         # the 9:15 candle columns below, which remain TradingView-only and
-        # pending until that separate requirement is enabled.
-        yahoo_open_high = batch_yahoo_orb_data(candidate_symbols)
-        yahoo_near_high_symbols = set()
-        for _s, _yd in yahoo_open_high.items():
-            if not _yd:
-                continue
-            _open = _yd.get("open915")
-            _prev_high = _yd.get("yesterday_high")
-            if _open is None or _prev_high is None or float(_prev_high) <= 0:
-                continue
-            if 0.98 * float(_prev_high) <= float(_open) <= 1.02 * float(_prev_high):
-                yahoo_near_high_symbols.add(_s)
-        df = df[df["name"].isin(yahoo_near_high_symbols)].copy()
-        candidate_symbols = df["name"].dropna().astype(str).tolist()
+        # pending until that separate requirement is enabled. When the toggle
+        # is OFF, the full TradingView universe (~600) is shown instead.
+        if near_high:
+            yahoo_open_high = batch_yahoo_orb_data(candidate_symbols)
+            yahoo_near_high_symbols = set()
+            for _s, _yd in yahoo_open_high.items():
+                if not _yd:
+                    continue
+                _open = _yd.get("open915")
+                _prev_high = _yd.get("yesterday_high")
+                if _open is None or _prev_high is None or float(_prev_high) <= 0:
+                    continue
+                if 0.98 * float(_prev_high) <= float(_open) <= 1.02 * float(_prev_high):
+                    yahoo_near_high_symbols.add(_s)
+            df = df[df["name"].isin(yahoo_near_high_symbols)].copy()
+            candidate_symbols = df["name"].dropna().astype(str).tolist()
 
         # Open-candle batch: pull each symbol's 9:15 IST 5-min candle in
         # parallel. Returns (is_small, high915, open915, low915,
@@ -631,7 +633,9 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False,
             "exchange": "NSE",
             "gap": f"TradingView absolute gap < {GAP_THRESHOLD}%",
             "open_near_prev_high": (
-                "Yahoo Finance: today's open within ±2% of previous day's high"
+                "ON: Yahoo today's open within ±2% of previous day's high"
+                if near_high
+                else "OFF: full TradingView universe (no near-high filter)"
             ),
         }
         if yf_filter:
@@ -1090,6 +1094,12 @@ def refresh_advance_orb(tickers: str = "", gap_up: bool = False):
                     if not (lo_b <= float(opn_v) <= hi_b):
                         continue
                 valid_symbols.add(symbol)
+            # If the chart-feed candle is not available at all (deferred /
+            # TradingView unreachable), don't drop rows based on it.
+            if not valid_symbols and not any(
+                tv_candles.get(s) is not None for s in symbols
+            ):
+                valid_symbols = set(symbols)
 
         # TV SCAN COMMENTED OUT for WS-only testing (Jul 31).
         # tv_query = (Query().select(...)...)

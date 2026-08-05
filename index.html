@@ -169,14 +169,14 @@
                                 <span class="toggle-item-status" id="toggleStatus">OFF</span>
                             </div>
 
-                            <!-- GAP UP MODE (Advance ORB) -->
-                            <div class="toggle-item" id="gapUpWrap">
-                                <span class="toggle-item-label">Gap-Up</span>
+                            <!-- FILTER NEAR HIGH (Advance ORB) -->
+                            <div class="toggle-item" id="nearHighWrap">
+                                <span class="toggle-item-label">Filter Near High</span>
                                 <label class="toggle-switch toggle-xs">
-                                    <input type="checkbox" id="gapUpToggle" onchange="toggleGapUpMode()" />
+                                    <input type="checkbox" id="nearHighToggle" onchange="toggleNearHigh()" checked />
                                     <span class="toggle-slider"></span>
                                 </label>
-                                <span class="toggle-item-status" id="gapUpStatus">OFF</span>
+                                <span class="toggle-item-status active" id="nearHighStatus">ON</span>
                             </div>
 
                             <!-- INSIDE 9:15 FILTER (Advance ORB) -->
@@ -187,16 +187,6 @@
                                     <span class="toggle-slider"></span>
                                 </label>
                                 <span class="toggle-item-status" id="inside915Status">OFF</span>
-                            </div>
-
-                            <!-- YAHOO FINANCE FILTER (Advance ORB) -->
-                            <div class="toggle-item" id="yahooFilterWrap">
-                                <span class="toggle-item-label">Yahoo Filter</span>
-                                <label class="toggle-switch toggle-xs">
-                                    <input type="checkbox" id="yahooFilterToggle" onchange="toggleYahooFilter()" />
-                                    <span class="toggle-slider"></span>
-                                </label>
-                                <span class="toggle-item-status" id="yahooFilterStatus">OFF</span>
                             </div>
 
                             <!-- NEW LOW ONLY (Big Players) -->
@@ -239,6 +229,10 @@
                     <span>⏳</span>
                     <span id="candlePendingText">Candle data pending — table will auto-refresh at 9:20 IST once the first 5-min candle closes.</span>
                 </div>
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 2px 4px;">
+                    <span id="screenerCount" style="font-size:13px;font-weight:600;color:var(--text-muted);">Showing 0 stocks</span>
+                    <span id="nearHighHint" style="font-size:12px;color:var(--text-muted);">open within ±2% of prev high</span>
+                </div>
                 <div class="table-wrap">
                     <table class="table-modern">
                         <thead id="screenerHead">
@@ -263,7 +257,6 @@
                     </table>
                 </div>
                 <div class="panel-footer">
-                    <span id="screenerCount">Showing 0 stocks</span>
                     <div style="display:flex;gap:8px;">
                         <button class="btn btn-outline btn-sm">📥 Export</button>
                     </div>

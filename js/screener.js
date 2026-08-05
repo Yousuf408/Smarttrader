@@ -240,20 +240,23 @@ document.addEventListener("DOMContentLoaded", () => {
 // ================================================================
 // FETCH ADVANCE ORB FROM BACKEND API
 // ================================================================
-let gapUpEnabled = false;
+let nearHighEnabled = true;
 let _inside915Only = false;
-let yahooFilterEnabled = false;
 
-function toggleYahooFilter() {
-    const toggle = document.getElementById('yahooFilterToggle');
-    const status = document.getElementById('yahooFilterStatus');
-    yahooFilterEnabled = toggle.checked;
-    status.textContent = yahooFilterEnabled ? 'ON' : 'OFF';
-    status.classList.toggle('active', yahooFilterEnabled);
-    showToast(yahooFilterEnabled ? '📈 Yahoo Filter ON' : '📈 Yahoo Filter OFF',
-        yahooFilterEnabled
-            ? 'Checking 1st & 2nd close inside 9:15 range + within 0.5% of yesterday high (Yahoo Finance)'
-            : 'Normal ORB mode (WebSocket candle data)');
+function toggleNearHigh() {
+    const toggle = document.getElementById('nearHighToggle');
+    const status = document.getElementById('nearHighStatus');
+    nearHighEnabled = toggle.checked;
+    status.textContent = nearHighEnabled ? 'ON' : 'OFF';
+    status.classList.toggle('active', nearHighEnabled);
+    const hint = document.getElementById('nearHighHint');
+    if (hint) hint.textContent = nearHighEnabled
+        ? 'open within ±2% of prev high'
+        : 'full TradingView universe';
+    showToast(nearHighEnabled ? '🎯 Filter Near High ON' : '🎯 Filter Near High OFF',
+        nearHighEnabled
+            ? 'Keeping only stocks whose open is within ±2% of yesterday\'s high'
+            : 'Showing full TradingView universe');
     // Re-fetch with the new mode
     onStrategyChange();
 }
@@ -273,27 +276,13 @@ function toggleInside915() {
     }
 }
 
-function toggleGapUpMode() {
-    const toggle = document.getElementById('gapUpToggle');
-    const status = document.getElementById('gapUpStatus');
-    gapUpEnabled = toggle.checked;
-    status.textContent = gapUpEnabled ? 'ON' : 'OFF';
-    status.classList.toggle('active', gapUpEnabled);
-    showToast(gapUpEnabled ? '📊 Gap-Up Mode ON' : '📊 Gap-Up Mode OFF',
-        gapUpEnabled ? 'Filtering by 200 EMA + Prev High (no 1.5% candle check)'
-                     : 'Normal ORB mode with 1.5% candle range filter');
-    // Re-fetch with the new mode
-    onStrategyChange();
-}
-
 async function fetchAdvanceORB() {
     const budget = _readBudget();
     const parts  = _readParts();
-    const gapUp = gapUpEnabled ? '&gap_up=true' : '';
-    const yf = yahooFilterEnabled ? '&yf_filter=true' : '';
+    const nh = nearHighEnabled ? '&near_high=true' : '&near_high=false';
     try {
         const response = await fetch(
-            `/api/strategies/advanceorb?budget=${budget}&parts=${parts}${gapUp}${yf}`
+            `/api/strategies/advanceorb?budget=${budget}&parts=${parts}${nh}`
         );
         if (!response.ok) {
             throw new Error(`API returned ${response.status}`);
@@ -466,10 +455,10 @@ async function onStrategyChange() {
 
         // Show Advance ORB toggles, hide Big Players-specific toggles
         const autoBuyEl = document.getElementById('autoBuyWrap');
-        const gapUpEl = document.getElementById('gapUpWrap');
+        const nearHighEl = document.getElementById('nearHighWrap');
         const inside915El = document.getElementById('inside915Wrap');
-        if (autoBuyEl) autoBuyEl.style.display = gapUpEnabled ? 'none' : '';
-        if (gapUpEl) gapUpEl.style.display = '';
+        if (autoBuyEl) autoBuyEl.style.display = '';
+        if (nearHighEl) nearHighEl.style.display = '';
         if (inside915El) inside915El.style.display = '';
         const nw = document.getElementById('newLowFilterWrap');
         if (nw) nw.style.display = 'none';
@@ -505,8 +494,8 @@ async function onStrategyChange() {
         // Hide Advance ORB toggles, show Big Players-specific toggles
         const orbab = document.getElementById('autoBuyWrap');
         if (orbab) orbab.style.display = 'none';
-        const gapUpEl = document.getElementById('gapUpWrap');
-        if (gapUpEl) gapUpEl.style.display = 'none';
+        const nearHighEl = document.getElementById('nearHighWrap');
+        if (nearHighEl) nearHighEl.style.display = 'none';
         const inside915El = document.getElementById('inside915Wrap');
         if (inside915El) inside915El.style.display = 'none';
         const nw = document.getElementById('newLowFilterWrap');
@@ -995,9 +984,8 @@ async function fetchAdvanceORBRefresh(silent = true) {
     const symbols = lastAdvanceOrbData.data.map(r => r.Symbol).filter(Boolean);
     if (symbols.length === 0) return;
     try {
-        const gapUp = gapUpEnabled ? '&gap_up=true' : '';
         const response = await fetch(
-            `/api/strategies/advanceorb/refresh?tickers=${encodeURIComponent(symbols.join(','))}${gapUp}`,
+            `/api/strategies/advanceorb/refresh?tickers=${encodeURIComponent(symbols.join(','))}`,
             { cache: 'no-store' }
         );
         if (!response.ok) return;
@@ -1006,15 +994,13 @@ async function fetchAdvanceORBRefresh(silent = true) {
         for (const r of (result.refreshed || [])) {
             bySymbol[r.Symbol] = r;
         }
-        // In normal mode, the refresh endpoint re-checks the 9:15 candle
-        // and omits symbols that no longer qualify (≤1.5% range). Remove
-        // those from the local dataset. In gap-up mode all symbols stay.
-        if (!gapUpEnabled) {
-            const validSymbols = new Set(Object.keys(bySymbol));
-            lastAdvanceOrbData.data = lastAdvanceOrbData.data.filter(
-                row => validSymbols.has(row.Symbol)
-            );
-        }
+        // The refresh endpoint re-checks the 9:15 candle eligibility and
+        // omits symbols that no longer qualify. Remove those from the
+        // local dataset so the table stays in sync with the new list.
+        const validSymbols = new Set(Object.keys(bySymbol));
+        lastAdvanceOrbData.data = lastAdvanceOrbData.data.filter(
+            row => validSymbols.has(row.Symbol)
+        );
         let touched = 0;
         for (const row of lastAdvanceOrbData.data) {
             const updated = bySymbol[row.Symbol];
