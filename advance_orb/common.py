@@ -34,7 +34,7 @@ SMALL_CANDLE_THRESHOLD = 1.5
 # ── 200-period EMA (5-min closes, Yahoo Finance) ──
 EMA_SPAN = 200
 EMA_LOOKBACK_DAYS = 4
-ABOVE_EMA_MAX_GAP = 2.0   # "Above 200 EMA" toggle: open at most 2% above EMA
+ABOVE_EMA_MAX_GAP = 3.0   # "Above 200 EMA" toggle: open at most 3% above EMA
 
 IST = ZoneInfo("Asia/Kolkata")
 MAX_TV_STOCKS = 100
