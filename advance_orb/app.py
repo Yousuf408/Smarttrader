@@ -218,7 +218,7 @@ async def _no_cache_all(request, call_next):
 
 from advance_orb.common import (
     PRICE_MIN, PRICE_MAX, GAP_THRESHOLD, MARKET_CAP_MIN,
-    SMALL_CANDLE_THRESHOLD, EMA_SPAN, EMA_LOOKBACK_DAYS,
+    SMALL_CANDLE_THRESHOLD, EMA_SPAN, EMA_LOOKBACK_DAYS, ABOVE_EMA_MAX_GAP,
     IST, MAX_TV_STOCKS, YFINANCE_WORKERS,
     has_small_opening_candle, compute_200_ema, compute_200_ema_batch,
     filter_small_opening_candles,
@@ -279,7 +279,8 @@ def root():
 
 @app.get("/api/strategies/advanceorb")
 def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False,
-                    yf_filter: bool = False, near_high: bool = True):
+                    yf_filter: bool = False, near_high: bool = True,
+                    above_ema: bool = False):
     """
     Fetch the NSE universe straight from TradingView:
     1. Price: 200 to 4000 INR
@@ -402,10 +403,14 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False,
         # the 9:15 candle columns below, which remain TradingView-only and
         # pending until that separate requirement is enabled. When the toggle
         # is OFF, the full TradingView universe (~600) is shown instead.
-        if near_high:
+        if near_high or above_ema:
             yahoo_open_high = batch_yahoo_orb_data(candidate_symbols)
+        else:
+            yahoo_open_high = None
+
+        if near_high:
             yahoo_near_high_symbols = set()
-            for _s, _yd in yahoo_open_high.items():
+            for _s, _yd in (yahoo_open_high or {}).items():
                 if not _yd:
                     continue
                 _open = _yd.get("open915")
@@ -415,6 +420,23 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False,
                 if 0.98 * float(_prev_high) <= float(_open) <= 1.02 * float(_prev_high):
                     yahoo_near_high_symbols.add(_s)
             df = df[df["name"].isin(yahoo_near_high_symbols)].copy()
+            candidate_symbols = df["name"].dropna().astype(str).tolist()
+
+        # "Above 200 EMA" toggle: today's 5-min open must be ABOVE the 200 EMA
+        # and at most ABOVE_EMA_MAX_GAP% above it (Yahoo Finance 5-min closes).
+        if above_ema:
+            above_ema_symbols = set()
+            for _s, _yd in (yahoo_open_high or {}).items():
+                if not _yd:
+                    continue
+                _open = _yd.get("open915")
+                _ema = _yd.get("ema200")
+                if _open is None or _ema is None or float(_ema) <= 0:
+                    continue
+                _gap_pct = (float(_open) - float(_ema)) / float(_ema) * 100
+                if float(_open) > float(_ema) and _gap_pct <= ABOVE_EMA_MAX_GAP:
+                    above_ema_symbols.add(_s)
+            df = df[df["name"].isin(above_ema_symbols)].copy()
             candidate_symbols = df["name"].dropna().astype(str).tolist()
 
         # Open-candle batch: pull each symbol's 9:15 IST 5-min candle in
@@ -496,12 +518,22 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False,
         # range shown as its "9:15 range").  The TV day bar is NEVER used
         # for the 9:15 values; they come only from the authenticated
         # TradingView 5-min chart feed above.
-        # Compute 200-period EMA per candidate in parallel; surface
-        # in df['ema']. NOT a screener filter — the auto-buy frontend
-        # has the additional `price > ema` gate. Missing EMA simply
-        # yields None in the row; auto-buy treats None as 'skip the
-        # candidate' (never commit on unvalidated data).
-        ema_map = compute_200_ema_batch(candidate_symbols)
+        # 200 EMA column: prefer the Yahoo Finance 5-min EMA (ema200 from
+        # the batch above) so the "200 EMA" column always shows the Yahoo
+        # 5-min value the filter is built on; fall back to CandleTracker
+        # for symbols the batch missed. Missing EMA yields None in the row;
+        # auto-buy treats None as 'skip the candidate' (never commit on
+        # unvalidated data).
+        ema_map: dict = {}
+        if yahoo_open_high:
+            for _s in candidate_symbols:
+                _yd = yahoo_open_high.get(_s)
+                if _yd and _yd.get("ema200") is not None:
+                    ema_map[_s] = float(_yd["ema200"])
+        _missing_ema = [s for s in candidate_symbols if s not in ema_map]
+        if _missing_ema:
+            _fb = compute_200_ema_batch(_missing_ema)
+            ema_map.update({s: v for s, v in _fb.items() if v is not None})
         df['ema'] = df['name'].map(ema_map)
 
         # Calculate Max Quantities via Dhan (see broker/quantity_calculator.py).
@@ -636,6 +668,11 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False,
                 "ON: Yahoo today's open within ±2% of previous day's high"
                 if near_high
                 else "OFF: full TradingView universe (no near-high filter)"
+            ),
+            "above_ema_200": (
+                f"ON: Yahoo 5-min open above 200 EMA, gap ≤ {ABOVE_EMA_MAX_GAP}%"
+                if above_ema
+                else "OFF"
             ),
         }
         if yf_filter:

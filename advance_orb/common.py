@@ -31,9 +31,10 @@ GAP_THRESHOLD = 2.0
 MARKET_CAP_MIN = 41_000_000_000  # 41 Billion INR
 SMALL_CANDLE_THRESHOLD = 1.5
 
-# ── 200-period EMA (auto-buy gate) ──
+# ── 200-period EMA (5-min closes, Yahoo Finance) ──
 EMA_SPAN = 200
 EMA_LOOKBACK_DAYS = 4
+ABOVE_EMA_MAX_GAP = 2.0   # "Above 200 EMA" toggle: open at most 2% above EMA
 
 IST = ZoneInfo("Asia/Kolkata")
 MAX_TV_STOCKS = 100
@@ -345,7 +346,7 @@ def fetch_yahoo_orb_data(symbol: str) -> dict | None:
     try:
         candles = yf.download(
             tickers=ticker,
-            period="4d",
+            period="12d",
             interval="5m",
             progress=False,
             auto_adjust=False,
@@ -415,6 +416,17 @@ def fetch_yahoo_orb_data(symbol: str) -> dict | None:
         if yesterday_high and yesterday_high > 0
         else None
     )
+
+    # 200-period EMA on 5-min closes (Yahoo Finance). Computed over closed
+    # bars only (before today) so the value is the actual EMA level at
+    # today's open — no lookahead from live bars. Used for the "200 EMA"
+    # column and the "Above 200 EMA" toggle filter.
+    hist = candles[candles.index.date < today]
+    closes = pd.to_numeric(hist["Close"], errors="coerce").dropna()
+    ema200 = None
+    if len(closes) >= EMA_SPAN:
+        ema200 = float(closes.ewm(span=EMA_SPAN, adjust=False).mean().iloc[-1])
+
     result = {
         "open915": open_,
         "high915": high,
@@ -424,6 +436,7 @@ def fetch_yahoo_orb_data(symbol: str) -> dict | None:
         "yesterday_high": yesterday_high,
         "day_low": float(today_rows["Low"].min()),
         "near_high_pct": near_high_pct,
+        "ema200": ema200,
     }
     with _YF_ORB_LOCK:
         _YF_ORB_CACHE[sym] = (time.time(), result)

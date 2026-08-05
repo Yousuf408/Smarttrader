@@ -241,6 +241,7 @@ document.addEventListener("DOMContentLoaded", () => {
 // FETCH ADVANCE ORB FROM BACKEND API
 // ================================================================
 let nearHighEnabled = true;
+let aboveEmaEnabled = false;
 let _inside915Only = false;
 
 function toggleNearHigh() {
@@ -257,6 +258,24 @@ function toggleNearHigh() {
         nearHighEnabled
             ? 'Keeping only stocks whose open is within ±2% of yesterday\'s high'
             : 'Showing full TradingView universe');
+    // Re-fetch with the new mode
+    onStrategyChange();
+}
+
+function toggleAboveEma() {
+    const toggle = document.getElementById('aboveEmaToggle');
+    const status = document.getElementById('aboveEmaStatus');
+    aboveEmaEnabled = toggle.checked;
+    status.textContent = aboveEmaEnabled ? 'ON' : 'OFF';
+    status.classList.toggle('active', aboveEmaEnabled);
+    const hint = document.getElementById('nearHighHint');
+    if (hint) hint.textContent = aboveEmaEnabled
+        ? 'open above 200 EMA (≤2% gap)'
+        : 'open within ±2% of prev high';
+    showToast(aboveEmaEnabled ? '📈 Above 200 EMA ON' : '📈 Above 200 EMA OFF',
+        aboveEmaEnabled
+            ? 'Keeping only stocks whose 5-min open is above the 200 EMA (max 2% above)'
+            : 'No 200 EMA filter');
     // Re-fetch with the new mode
     onStrategyChange();
 }
@@ -280,9 +299,10 @@ async function fetchAdvanceORB() {
     const budget = _readBudget();
     const parts  = _readParts();
     const nh = nearHighEnabled ? '&near_high=true' : '&near_high=false';
+    const ae = aboveEmaEnabled ? '&above_ema=true' : '&above_ema=false';
     try {
         const response = await fetch(
-            `/api/strategies/advanceorb?budget=${budget}&parts=${parts}${nh}`
+            `/api/strategies/advanceorb?budget=${budget}&parts=${parts}${nh}${ae}`
         );
         if (!response.ok) {
             throw new Error(`API returned ${response.status}`);
@@ -456,9 +476,11 @@ async function onStrategyChange() {
         // Show Advance ORB toggles, hide Big Players-specific toggles
         const autoBuyEl = document.getElementById('autoBuyWrap');
         const nearHighEl = document.getElementById('nearHighWrap');
+        const aboveEmaEl = document.getElementById('aboveEmaWrap');
         const inside915El = document.getElementById('inside915Wrap');
         if (autoBuyEl) autoBuyEl.style.display = '';
         if (nearHighEl) nearHighEl.style.display = '';
+        if (aboveEmaEl) aboveEmaEl.style.display = '';
         if (inside915El) inside915El.style.display = '';
         const nw = document.getElementById('newLowFilterWrap');
         if (nw) nw.style.display = 'none';
@@ -496,6 +518,8 @@ async function onStrategyChange() {
         if (orbab) orbab.style.display = 'none';
         const nearHighEl = document.getElementById('nearHighWrap');
         if (nearHighEl) nearHighEl.style.display = 'none';
+        const aboveEmaEl = document.getElementById('aboveEmaWrap');
+        if (aboveEmaEl) aboveEmaEl.style.display = 'none';
         const inside915El = document.getElementById('inside915Wrap');
         if (inside915El) inside915El.style.display = 'none';
         const nw = document.getElementById('newLowFilterWrap');
