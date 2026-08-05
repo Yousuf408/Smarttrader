@@ -396,9 +396,20 @@ def fetch_yahoo_orb_data(symbol: str) -> dict | None:
     open_ = float(c1["Open"])
     close = float(c1["Close"])
 
-    # 2nd candle = the 09:20 IST bar (first row at minute >= 20)
+    # 2nd+ candles = the 09:20 IST bar onward (rows at minute >= 20).
+    # c2 (9:20), c3 (9:25), c4 (9:30) high/low drive the "3 Candles Inside
+    # 9:15" toggle.  close920 stays the 9:20 candle close for Inside-9:15.
     c2_rows = today_rows[(today_rows.index.hour == 9) & (today_rows.index.minute >= 20)]
     close920 = float(c2_rows.iloc[0]["Close"]) if not c2_rows.empty else None
+    _next = {}
+    for _i, _tag in enumerate(("c2", "c3", "c4"), start=0):
+        if len(c2_rows) > _i:
+            _r = c2_rows.iloc[_i]
+            _next[f"{_tag}_hi"] = float(_r["High"])
+            _next[f"{_tag}_lo"] = float(_r["Low"])
+        else:
+            _next[f"{_tag}_hi"] = None
+            _next[f"{_tag}_lo"] = None
 
     # Yesterday's high = max High of the most recent prior trading day's bars
     past = candles[candles.index.date < today]
@@ -435,6 +446,9 @@ def fetch_yahoo_orb_data(symbol: str) -> dict | None:
         "day_low": float(today_rows["Low"].min()),
         "near_high_pct": near_high_pct,
         "ema200": ema200,
+        "c2_hi": _next.get("c2_hi"), "c2_lo": _next.get("c2_lo"),
+        "c3_hi": _next.get("c3_hi"), "c3_lo": _next.get("c3_lo"),
+        "c4_hi": _next.get("c4_hi"), "c4_lo": _next.get("c4_lo"),
     }
     with _YF_ORB_LOCK:
         _YF_ORB_CACHE[sym] = (time.time(), result)

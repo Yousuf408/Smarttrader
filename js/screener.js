@@ -243,6 +243,7 @@ document.addEventListener("DOMContentLoaded", () => {
 let nearHighEnabled = true;
 let aboveEmaEnabled = false;
 let _inside915Only = false;
+let _inside3Only = false;
 
 function toggleNearHigh() {
     const toggle = document.getElementById('nearHighToggle');
@@ -270,11 +271,11 @@ function toggleAboveEma() {
     status.classList.toggle('active', aboveEmaEnabled);
     const hint = document.getElementById('nearHighHint');
     if (hint) hint.textContent = aboveEmaEnabled
-        ? 'open above 200 EMA (≤2% gap)'
+        ? 'close above 200 EMA (≤3% gap)'
         : 'open within ±2% of prev high';
     showToast(aboveEmaEnabled ? '📈 Above 200 EMA ON' : '📈 Above 200 EMA OFF',
         aboveEmaEnabled
-            ? 'Keeping only stocks whose 5-min open is above the 200 EMA (max 2% above)'
+            ? 'Keeping only stocks whose 9:15 close is above the 200 EMA (max 3% above)'
             : 'No 200 EMA filter');
     // Re-fetch with the new mode
     onStrategyChange();
@@ -293,15 +294,28 @@ function toggleInside915() {
     onStrategyChange();
 }
 
+function toggleInside3() {
+    const toggle = document.getElementById('inside3Toggle');
+    const status = document.getElementById('inside3Status');
+    _inside3Only = toggle.checked;
+    status.textContent = _inside3Only ? 'ON' : 'OFF';
+    status.classList.toggle('active', _inside3Only);
+    showToast(_inside3Only ? '📐 3 Candles Inside 9:15 ON' : '📐 3 Candles Inside 9:15 OFF',
+        _inside3Only ? 'Showing only stocks where 9:20/9:25/9:30 candles sit inside the 9:15 range (Yahoo 5-min)'
+                      : 'Showing all stocks');
+    onStrategyChange();
+}
+
 async function fetchAdvanceORB() {
     const budget = _readBudget();
     const parts  = _readParts();
     const nh = nearHighEnabled ? '&near_high=true' : '&near_high=false';
     const ae = aboveEmaEnabled ? '&above_ema=true' : '&above_ema=false';
     const i9 = _inside915Only ? '&inside915=true' : '&inside915=false';
+    const i3 = _inside3Only ? '&inside3=true' : '&inside3=false';
     try {
         const response = await fetch(
-            `/api/strategies/advanceorb?budget=${budget}&parts=${parts}${nh}${ae}${i9}`
+            `/api/strategies/advanceorb?budget=${budget}&parts=${parts}${nh}${ae}${i9}${i3}`
         );
         if (!response.ok) {
             throw new Error(`API returned ${response.status}`);

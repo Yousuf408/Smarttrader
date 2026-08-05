@@ -280,7 +280,8 @@ def root():
 @app.get("/api/strategies/advanceorb")
 def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False,
                     yf_filter: bool = False, near_high: bool = True,
-                    above_ema: bool = False, inside915: bool = False):
+                    above_ema: bool = False, inside915: bool = False,
+                    inside3: bool = False):
     """
     Fetch the NSE universe straight from TradingView:
     1. Price: 200 to 4000 INR
@@ -403,7 +404,7 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False,
         # the 9:15 candle columns below, which remain TradingView-only and
         # pending until that separate requirement is enabled. When the toggle
         # is OFF, the full TradingView universe (~600) is shown instead.
-        if near_high or above_ema or inside915:
+        if near_high or above_ema or inside915 or inside3:
             yahoo_open_high = batch_yahoo_orb_data(candidate_symbols)
         else:
             yahoo_open_high = None
@@ -438,6 +439,33 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False,
                 if float(_close) > float(_ema) and _gap_pct <= ABOVE_EMA_MAX_GAP:
                     above_ema_symbols.add(_s)
             df = df[df["name"].isin(above_ema_symbols)].copy()
+            candidate_symbols = df["name"].dropna().astype(str).tolist()
+
+        # "3 Candles Inside 9:15" toggle: the 9:20, 9:25 and 9:30 candles
+        # must ALL sit inside the 9:15 candle's high–low range (Yahoo 5-min).
+        if inside3:
+            inside3_symbols = set()
+            for _s, _yd in (yahoo_open_high or {}).items():
+                if not _yd:
+                    continue
+                _hi = _yd.get("high915")
+                _lo = _yd.get("low915")
+                if _hi is None or _lo is None or float(_hi) <= 0:
+                    continue
+                _hi, _lo = float(_hi), float(_lo)
+                _ok = True
+                for _k in ("c2", "c3", "c4"):
+                    _khi = _yd.get(f"{_k}_hi")
+                    _klo = _yd.get(f"{_k}_lo")
+                    if _khi is None or _klo is None:
+                        _ok = False
+                        break
+                    if not (_lo <= float(_klo) and float(_khi) <= _hi):
+                        _ok = False
+                        break
+                if _ok:
+                    inside3_symbols.add(_s)
+            df = df[df["name"].isin(inside3_symbols)].copy()
             candidate_symbols = df["name"].dropna().astype(str).tolist()
 
         # Open-candle batch: pull each symbol's 9:15 IST 5-min candle in
@@ -727,6 +755,11 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False,
             "inside_915": (
                 "ON: 9:20 close inside 9:15 range (Yahoo 5-min)"
                 if inside915
+                else "OFF"
+            ),
+            "inside_3_candles": (
+                "ON: 9:20/9:25/9:30 candles inside 9:15 range (Yahoo 5-min)"
+                if inside3
                 else "OFF"
             ),
         }
