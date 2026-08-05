@@ -347,6 +347,16 @@ function renderStrategyData(result) {
     let data = result.data || [];
     const columns = result.columns || strategy.columns || [];
 
+    // Market-closed banner: when the backend anchored to the last trading
+    // day (weekend / holiday / after-hours), tell the user the data is stale.
+    const _banner = document.getElementById('marketClosedBanner');
+    if (_banner) {
+        const _closed = result.market_closed === true;
+        _banner.style.display = _closed ? '' : 'none';
+        const _d = document.getElementById('marketClosedDate');
+        if (_d) _d.textContent = result.reference_date || '';
+    }
+
     // Apply Inside 9:15 filter for Advance ORB
     if (strategyId === 'advanceorb' && _inside915Only) {
         data = data.filter(r => r.inside_915 === true);

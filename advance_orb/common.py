@@ -234,7 +234,7 @@ def _detect_trading_date() -> datetime.date | None:
     try:
         probe = yf.download(
             tickers="^NSEI",
-            period="4d",
+            period="10d",
             interval="5m",
             progress=False,
             auto_adjust=False,
@@ -264,6 +264,39 @@ def _detect_trading_date() -> datetime.date | None:
         return all_dates[0] if all_dates else None
     except Exception:
         return None
+
+
+# ── Market-closed anchor-date resolution ─────────────────────────
+# On weekends / holidays / after-hours there are no bars "today", so the
+# screener used to return 0 stocks and hammer yfinance.  Instead we anchor
+# every Yahoo fact to the most recent trading day and show that data with a
+# "market closed" banner.  The probe result is cached so we don't re-probe
+# ^NSEI on every request.
+_REF_DATE_LOCK = threading.Lock()
+_REF_DATE_CACHE: dict = {"at": 0.0, "anchor": None, "is_live": False}
+_REF_DATE_TTL = 120.0
+
+
+def _resolve_reference_date() -> tuple[datetime.date, bool]:
+    """Return (anchor_date, is_live_trading_day).
+
+    Live day = today has a 9:15 IST bar (probe).  Otherwise the anchor is
+    the most recent date in the probe's history that had a 9:15 bar — i.e.
+    the last working day — so weekend/holiday/after-hours runs still show
+    real (yesterday's) data instead of an empty table.
+    """
+    today = datetime.datetime.now(IST).date()
+    with _REF_DATE_LOCK:
+        if time.time() - _REF_DATE_CACHE["at"] < _REF_DATE_TTL:
+            return _REF_DATE_CACHE["anchor"], _REF_DATE_CACHE["is_live"]
+        detected = _detect_trading_date()
+        if detected is None:
+            # Probe failed; fall back to today (existing behavior).
+            anchor, is_live = today, False
+        else:
+            anchor, is_live = detected, (detected == today)
+        _REF_DATE_CACHE.update({"at": time.time(), "anchor": anchor, "is_live": is_live})
+        return anchor, is_live
 
 
 def batch_opening_candle(symbols: list[str]) -> dict:
@@ -378,11 +411,25 @@ def fetch_yahoo_orb_data(symbol: str) -> dict | None:
         idx = idx.tz_convert(IST)
     candles = candles.copy()
     candles.index = idx
-    today = pd.Timestamp.now(tz=IST).date()
-
-    today_rows = candles[candles.index.date == today]
+    # Anchor date: today when it's a live trading day, otherwise the most
+    # recent trading day (weekend / holiday / after-hours → show last
+    # working day's data instead of an empty screener).
+    anchor_date, _anchor_live = _resolve_reference_date()
+    today_rows = candles[candles.index.date == anchor_date]
     if today_rows.empty:
-        return None  # no Yahoo bars for today yet (pre-market / holiday)
+        # Fallback: newest date with a 9:15 bar inside this symbol's history.
+        cand_dates = sorted({
+            d for d in set(candles.index.date)
+            if len(candles[(candles.index.date == d) & (candles.index.hour == 9)
+                           & (candles.index.minute >= 15)]) > 0
+        }, reverse=True)
+        if not cand_dates:
+            return None  # no usable bars at all (delisted / junk data)
+        anchor_date = cand_dates[0]
+        today_rows = candles[candles.index.date == anchor_date]
+        if today_rows.empty:
+            return None
+    today = anchor_date
 
     # 1st candle = the 09:15 IST 5-min bar (first row at minute >= 15)
     opening = today_rows[(today_rows.index.hour == 9) & (today_rows.index.minute >= 15)]
@@ -446,6 +493,7 @@ def fetch_yahoo_orb_data(symbol: str) -> dict | None:
         "day_low": float(today_rows["Low"].min()),
         "near_high_pct": near_high_pct,
         "ema200": ema200,
+        "data_date": str(today),
         "c2_hi": _next.get("c2_hi"), "c2_lo": _next.get("c2_lo"),
         "c3_hi": _next.get("c3_hi"), "c3_lo": _next.get("c3_lo"),
         "c4_hi": _next.get("c4_hi"), "c4_lo": _next.get("c4_lo"),
@@ -484,7 +532,11 @@ def batch_yahoo_orb_data(symbols: list[str]) -> dict:
     unique = [str(s).strip().upper() for s in symbols if s]
     if not unique:
         return {}
-    today = datetime.datetime.now(IST).strftime("%Y-%m-%d")
+    # Key the day cache by the *anchor* date (today if live, else the last
+    # trading day) so weekend/holiday rows seal under one key and don't
+    # re-download the universe on every calendar day / auto-refresh.
+    _anchor, _ = _resolve_reference_date()
+    today = _anchor.strftime("%Y-%m-%d")
 
     with _ORB_YAHOO_FETCH_LOCK:
         # Re-check under the single-flight lock so waiters benefit from the

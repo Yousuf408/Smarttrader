@@ -223,7 +223,7 @@ from advance_orb.common import (
     has_small_opening_candle, compute_200_ema, compute_200_ema_batch,
     filter_small_opening_candles,
     fetch_tradingview_stocks,
-    _detect_trading_date, _calc_qty_for_broker,
+    _detect_trading_date, _resolve_reference_date, _calc_qty_for_broker,
     _build_ticks_by_symbol, ws_auto_subscribe,
 )
 from bigplayers.routes import router as bigplayers_router
@@ -781,6 +781,7 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False,
         except Exception:
             pass  # never break the screener over a DB hiccup
 
+        _ref_date, _is_live = _resolve_reference_date()
         return {
             "strategy": "advanceorb",
             "name": "Advance ORB",
@@ -789,6 +790,8 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False,
             "columns": out_columns,
             "conditions": conditions,
             "candle_data_available": has_candle_data,
+            "market_closed": not _is_live,
+            "reference_date": str(_ref_date),
         }
 
     except Exception as e:
