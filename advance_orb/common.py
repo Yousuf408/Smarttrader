@@ -43,13 +43,12 @@ YFINANCE_WORKERS = 8
 # ── TradingView scanner (Advance ORB universe) ─────────────────────
 TV_SCAN_URL = "https://scanner.tradingview.com/india/scan"
 TV_SCAN_TTL = 600          # 10 minutes — don't hammer the free endpoint
-TV_SCAN_MAX_RESULTS = 300  # top-300 by market cap (scan sorts market_cap_basic desc)
 _tv_scan_lock = threading.Lock()
 _tv_scan_cache: list[dict] = []
 _tv_scan_cached_at = 0.0
 
 
-def fetch_tradingview_stocks(max_results: int = TV_SCAN_MAX_RESULTS) -> list[dict]:
+def fetch_tradingview_stocks() -> list[dict]:
     """NSE universe straight from TradingView (not the local watchlist).
 
     Screen: type=stock AND exchange=NSE AND
@@ -88,7 +87,6 @@ def fetch_tradingview_stocks(max_results: int = TV_SCAN_MAX_RESULTS) -> list[dic
             {"left": "market_cap_basic", "operation": "greater", "right": MARKET_CAP_MIN},
         ],
         "sort": {"sortBy": "market_cap_basic", "sortOrder": "desc"},
-        "range": [0, max_results],
     }
     headers = {
         "Content-Type": "application/json",
