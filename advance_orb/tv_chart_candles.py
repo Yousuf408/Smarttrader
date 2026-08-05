@@ -26,6 +26,41 @@ _TV_TOKEN_CACHE: tuple[float, str] | None = None
 _TV_CANDLE_CACHE: dict[tuple[str, str], tuple[float, tuple[float, float, float, float, float | None]] | None] = {}
 _TV_CACHE_LOCK = threading.Lock()
 _TV_TOKEN_TTL = 10 * 60
+# TradingView throttles rapid logins (captcha / "having a little trouble").
+# After a failed login, do NOT retry for a cooldown window so the 30-second
+# auto-refresh loop doesn't hammer the sign-in endpoint and worsen the block.
+_TV_LOGIN_COOLDOWN_S = 5 * 60
+_TV_LOGIN_FAIL_AT: float | None = None
+# Persist the failure timestamp across process restarts: a server restart
+# would otherwise immediately fire another login attempt and extend the block.
+_TV_FAIL_MARKER = os.path.join(
+    __import__("tempfile").gettempdir(), "advance_orb_tv_login_fail.ts"
+)
+
+
+def _read_fail_marker() -> float | None:
+    try:
+        with open(_TV_FAIL_MARKER, "r") as fh:
+            return float(fh.read().strip())
+    except (OSError, ValueError):
+        return None
+
+
+def _write_fail_marker(ts: float) -> None:
+    try:
+        tmp = _TV_FAIL_MARKER + ".tmp"
+        with open(tmp, "w") as fh:
+            fh.write(str(ts))
+        os.replace(tmp, _TV_FAIL_MARKER)
+    except OSError:
+        pass
+
+
+def _mark_login_fail(now_ts: float) -> None:
+    global _TV_LOGIN_FAIL_AT
+    with _TV_CACHE_LOCK:
+        _TV_LOGIN_FAIL_AT = now_ts
+    _write_fail_marker(now_ts)
 # These values are immutable for the trading session: yesterday's high and
 # the completed 09:15-09:20 candle do not change after they are published.
 # Keep them in process memory for the rest of the session so 30-second UI
@@ -151,15 +186,27 @@ def batch_tv_opening_candles(
     if not missing:
         return result
 
-    global _TV_TOKEN_CACHE
+    global _TV_TOKEN_CACHE, _TV_LOGIN_FAIL_AT
     with _TV_CACHE_LOCK:
         token = (
             _TV_TOKEN_CACHE[1]
             if _TV_TOKEN_CACHE and now_ts - _TV_TOKEN_CACHE[0] < _TV_TOKEN_TTL
             else ""
         )
+        fail_at = _TV_LOGIN_FAIL_AT if _TV_LOGIN_FAIL_AT is not None else _read_fail_marker()
+        login_blocked = fail_at is not None and now_ts - fail_at < _TV_LOGIN_COOLDOWN_S
+    if not token and login_blocked:
+        logger.warning(
+            "TradingView login skipped: throttled %.0fs ago — cooling down",
+            now_ts - (fail_at or 0),
+        )
+        return result
+
     try:
+        login_attempted = False
+        token_ok = bool(token)
         if not token:
+            login_attempted = True
             login = requests.post(
                 "https://www.tradingview.com/accounts/signin/",
                 data={"username": username, "password": password, "remember": "on"},
@@ -167,8 +214,10 @@ def batch_tv_opening_candles(
                 timeout=20,
             ).json()
             token = (login.get("user") or {}).get("auth_token", "")
+            token_ok = bool(token)
             if not token:
                 logger.warning("TradingView login did not return auth_token: %s", login.get("error", "unknown error"))
+                _mark_login_fail(now_ts)
                 return result
             with _TV_CACHE_LOCK:
                 _TV_TOKEN_CACHE = (now_ts, token)
@@ -181,4 +230,8 @@ def batch_tv_opening_candles(
                     result[symbol] = value
     except Exception as exc:
         logger.warning("TradingView 5-minute candle fetch failed: %s", exc)
+        if login_attempted and not token_ok:
+            # Login itself failed (e.g. anti-bot HTML/non-JSON response) —
+            # treat it as throttling so we cool down instead of re-hammering.
+            _mark_login_fail(now_ts)
     return result
