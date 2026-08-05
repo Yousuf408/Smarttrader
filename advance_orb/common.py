@@ -43,7 +43,7 @@ YFINANCE_WORKERS = 8
 # ── TradingView scanner (Advance ORB universe) ─────────────────────
 TV_SCAN_URL = "https://scanner.tradingview.com/india/scan"
 TV_SCAN_TTL = 600          # 10 minutes — don't hammer the free endpoint
-TV_SCAN_MAX_RESULTS = 200  # top-200 by market cap (scan sorts market_cap_basic desc)
+TV_SCAN_MAX_RESULTS = 300  # top-300 by market cap (scan sorts market_cap_basic desc)
 _tv_scan_lock = threading.Lock()
 _tv_scan_cache: list[dict] = []
 _tv_scan_cached_at = 0.0
@@ -640,76 +640,3 @@ def ws_auto_subscribe(symbols: list[str]):
             pass
 
 
-# ────────────────────────────────────────────────────────────────
-# CHART HISTORY (UDF format for the GoChart / TradingView-style panel)
-# ────────────────────────────────────────────────────────────────
-_CHART_CACHE: dict[tuple, tuple[float, dict]] = {}
-_CHART_CACHE_LOCK = threading.Lock()
-_CHART_TTL = 60  # seconds; enough for pan/zoom without hammering Yahoo
-
-# GoChart resolution label → (yfinance interval, period).  The SDK passes
-# both short labels ("5","60","1D") and suffixed forms ("5m","1h"); map both.
-_CHART_RES_MAP = {
-    "1": ("1m", "5d"), "1m": ("1m", "5d"),
-    "5": ("5m", "12d"), "5m": ("5m", "12d"),
-    "15": ("15m", "1mo"), "15m": ("15m", "1mo"),
-    "30": ("15m", "1mo"),
-    "60": ("60m", "1mo"), "1h": ("60m", "1mo"), "60m": ("60m", "1mo"),
-    "240": ("60m", "1mo"),
-    "1D": ("1d", "6mo"), "1d": ("1d", "6mo"), "D": ("1d", "6mo"),
-}
-
-
-def fetch_chart_history(symbol: str, resolution: str = "5") -> dict:
-    """Return OHLCV bars for a symbol in UDF format for the GoChart SDK.
-
-    ``{"s":"ok", t:[unix_sec], o:[], h:[], l:[], c:[], v:[]}`` or
-    ``{"s":"no_data"}`` / ``{"s":"error", errmsg:...}``.
-
-    Uses Yahoo Finance 5-min intraday data (same source/orbs as the ORB
-    path) with a 60 s per (symbol, resolution) cache.
-    """
-    sym = str(symbol or "").strip().upper().replace(".NS", "").split(":")[-1]
-    key = (sym, str(resolution).lower())
-    with _CHART_CACHE_LOCK:
-        hit = _CHART_CACHE.get(key)
-        if hit and time.time() - hit[0] < _CHART_TTL:
-            return hit[1]
-    if not sym:
-        return {"s": "error", "errmsg": "Symbol required"}
-
-    yf_interval, period = _CHART_RES_MAP.get(resolution.lower(), ("5m", "12d"))
-    try:
-        df = yf.download(
-            tickers=f"{sym}.NS", period=period, interval=yf_interval,
-            progress=False, auto_adjust=False, threads=False,
-        )
-        if df is None or df.empty:
-            out = {"s": "no_data"}
-            with _CHART_CACHE_LOCK:
-                _CHART_CACHE[key] = (time.time(), out)
-            return out
-        if isinstance(df.columns, pd.MultiIndex):
-            try:
-                df = df.xs(f"{sym}.NS", axis=1, level=-1)
-            except (KeyError, IndexError):
-                df = df.copy()
-                df.columns = df.columns.get_level_values(0)
-        idx = pd.DatetimeIndex(df.index)
-        if idx.tz is not None:
-            idx = idx.tz_convert(IST)
-        out = {
-            "s": "ok",
-            "t": [int(x.timestamp()) for x in idx],
-            "o": [float(x) for x in df["Open"].tolist()],
-            "h": [float(x) for x in df["High"].tolist()],
-            "l": [float(x) for x in df["Low"].tolist()],
-            "c": [float(x) for x in df["Close"].tolist()],
-            "v": [float(x) for x in df["Volume"].tolist()],
-        }
-        with _CHART_CACHE_LOCK:
-            _CHART_CACHE[key] = (time.time(), out)
-        return out
-    except Exception as e:  # noqa: BLE001 — never break the chart panel
-        logger.warning("fetch_chart_history %s %s failed: %s", sym, resolution, e)
-        return {"s": "error", "errmsg": str(e)[:180]}

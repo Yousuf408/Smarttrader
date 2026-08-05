@@ -1094,13 +1094,6 @@ def get_live_ticks():
     return {"connected": is_conn, "ticks": _build_ticks_by_symbol()}
 
 
-@app.get("/api/chart/history")
-def chart_history(symbol: str = "", resolution: str = "5"):
-    """OHLCV bars in UDF format for the GoChart TradingView-style panel."""
-    from advance_orb.common import fetch_chart_history
-    return fetch_chart_history(symbol, resolution)
-
-
 @app.get("/api/market/live-ticks/stream")
 async def stream_live_ticks(request: Request):
     """Server-Sent Events endpoint — pushes tick data every ~250 ms.

@@ -413,7 +413,7 @@ function renderStrategyData(result) {
                 ${values.map((val, vi) => {
                     const colName = headerColumns[vi];
                     if (colName === 'Symbol') {
-                        return `<td class="symbol-cell" onclick="openGoChart('${symbol}')" title="Click to view chart">${val} <span class="sym-copy" onclick="event.stopPropagation();copySymbol('${symbol}', this)" title="Copy symbol">⧉</span></td>`;
+                        return `<td class="symbol-cell" onclick="copySymbol('${symbol}', this)" title="Click to copy">${val}</td>`;
                     }
                     return `<td>${val}</td>`;
                 }).join('')}

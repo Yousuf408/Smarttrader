@@ -131,23 +131,6 @@
         <!-- SCREENER – with Strategy Dropdown -->
         <!-- ============================================================= -->
         <div id="page-screener" class="page">
-            <div id="gochartPanel" class="gochart-panel hidden">
-                <div class="gochart-head">
-                    <div class="gochart-title">
-                        <span id="gochartSymbol">—</span>
-                        <span class="gochart-badge">GoChart</span>
-                    </div>
-                    <div class="gochart-intervals" id="gochartIntervals">
-                        <button class="gc-int active" data-int="5m">5m</button>
-                        <button class="gc-int" data-int="15m">15m</button>
-                        <button class="gc-int" data-int="1h">1h</button>
-                        <button class="gc-int" data-int="1D">1D</button>
-                    </div>
-                    <button class="gochart-close" onclick="closeGoChart()" title="Close chart">✕</button>
-                </div>
-                <div id="chart-container" class="gochart-body"></div>
-            </div>
-            <div id="screenerMain" class="screener-main">
             <div class="panel-glass">
                 <div class="panel-head">
                     <div class="screener-controls">
@@ -296,7 +279,6 @@
                     <div><div class="info-label">Entry Rule</div><div class="info-value" id="infoRule">Opening Range Breakout</div></div>
                     <div><div class="info-label">Risk Per Trade</div><div class="info-value" style="color:var(--color-success);" id="infoRisk">2%</div></div>
                 </div>
-            </div>
             </div>
         </div>
 
@@ -622,8 +604,6 @@
     <script src="js/backtest.js"></script>
     <script src="js/testing.js"></script>
     <script src="js/settings.js"></script>
-    <script src="https://gocharting.com/sdk/library/demo-550e8400-e29b-41d4-a716-446655440000/index.umd.js"></script>
-    <script src="js/gochart.js"></script>
     <script>
         // Initialize app
         loadHome();
