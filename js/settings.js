@@ -134,11 +134,16 @@ async function submitBrokerCreds() {
         btn.textContent = '⏳ Connecting…'; 
     }
 
+    // Broker auth goes through a WAF proxy and can take ~90s; never let the
+    // button hang forever on a stalled request.
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const abortTimer = controller ? setTimeout(() => controller.abort(), 180000) : null;
     try {
         const res = await fetch('/api/broker/connect', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
+            signal: controller ? controller.signal : undefined,
         });
         const data = await res.json().catch(() => ({}));
 
@@ -159,13 +164,18 @@ async function submitBrokerCreds() {
             }
         }
     } catch (e) {
+        const timedOut = controller && e && e.name === 'AbortError';
         if (typeof showToast === 'function') {
-            showToast('❌ Network error', String(e && e.message || e));
+            showToast(
+                timedOut ? '⏱️ Connect timed out' : '❌ Network error',
+                timedOut ? 'Broker auth took too long — check server logs and retry.' : String(e && e.message || e)
+            );
         }
     } finally {
-        if (btn) { 
-            btn.disabled = false; 
-            btn.textContent = '🔑 Connect'; 
+        if (abortTimer) clearTimeout(abortTimer);
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = '🔑 Connect';
         }
     }
 }

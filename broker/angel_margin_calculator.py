@@ -334,10 +334,22 @@ def resolve_symbol_token(symbol, exchange="NSE"):
             found_sym = str(row[symbol_col])
             found_token = str(row[token_col])
             SECURITY_CACHE[cache_key] = (found_sym, found_token)
-            print(f"✅ Resolved {symbol} ({exchange}) -> symbol={found_sym}, token={found_token}")
+            # Log each resolution once per process — with ~700 symbols the
+            # per-resolve prints flood stdout on every connect/reconnect.
+            if not hasattr(resolve_symbol_token, "_logged"):
+                resolve_symbol_token._logged = set()
+            log_key = (exchange.upper(), symbol.upper())
+            if log_key not in resolve_symbol_token._logged:
+                resolve_symbol_token._logged.add(log_key)
+                print(f"✅ Resolved {symbol} ({exchange}) -> symbol={found_sym}, token={found_token}")
             return found_sym, found_token
 
-    print(f"⚠️ Symbol {symbol} not found in master")
+    if not hasattr(resolve_symbol_token, "_logged"):
+        resolve_symbol_token._logged = set()
+    log_key = (exchange.upper(), symbol.upper())
+    if log_key not in resolve_symbol_token._logged:
+        resolve_symbol_token._logged.add(log_key)
+        print(f"⚠️ Symbol {symbol} not found in master")
     return None, None
 
 

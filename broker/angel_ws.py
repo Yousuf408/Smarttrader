@@ -512,42 +512,50 @@ def start_websocket(feed_token=None, watchlist=None):
     _load_saved_ticks()
     latest_ticks = {}
 
-    # Immediately seed from REST API so the table has baseline prices
-    # for all watchlist stocks (WS may take time to deliver, or market
-    # may be closed). WS ticks will overlay with real-time data as they
-    # arrive.
-    _seed_ticks_from_rest()
+    # Seed baseline prices from REST in the BACKGROUND. The REST seed
+    # batches every watchlist token (50 per call); running it synchronously
+    # here made /api/broker/connect block for minutes (observed 240s+
+    # timeouts when the watchlist had ~700 symbols). WS ticks overlay as
+    # they arrive, so connect just needs the WS thread to start fast.
+    def _seed_background():
+        try:
+            _seed_ticks_from_rest()
+        except Exception:
+            logger.exception("REST tick seed failed in background")
+        # Fill in missing tokens (collision tokens where REST returned CDS
+        # data instead of stock data) with yesterday_close from the cache.
+        # This way every watchlist stock has at least a stale baseline price.
+        try:
+            missing_filled = 0
+            now_ts = datetime.now(IST).strftime("%H:%M:%S")
+            for name, token, kind in WATCHLIST:
+                tok = str(token)
+                if tok in latest_ticks:
+                    continue
+                cache_entry = candle_tracker._cache.get(name, {})
+                yc = cache_entry.get("yesterday_close")
+                if yc and float(yc) > 0:
+                    latest_ticks[tok] = {
+                        "ltp": float(yc),
+                        "open": float(yc),
+                        "high": float(yc),
+                        "low": float(yc),
+                        "close": float(yc),
+                        "volume": 0,
+                        "change": 0,
+                        "change_pct": 0,
+                        "symbol": f"{name}-EQ",
+                        "token": tok,
+                        "timestamp": now_ts,
+                    }
+                    missing_filled += 1
+            if missing_filled:
+                logger.info(f"📂 Filled {missing_filled} missing tokens with yesterday_close")
+                _save_ticks()
+        except Exception:
+            logger.exception("Missing-token fill failed in background")
 
-    # Fill in missing tokens (collision tokens where REST returned CDS
-    # data instead of stock data) with yesterday_close from the cache.
-    # This way every watchlist stock has at least a stale baseline price.
-    missing_filled = 0
-    now_ts = datetime.now(IST).strftime("%H:%M:%S")
-    for name, token, kind in WATCHLIST:
-        tok = str(token)
-        if tok in latest_ticks:
-            continue
-        cache_entry = candle_tracker._cache.get(name, {})
-        yc = cache_entry.get("yesterday_close")
-        if yc and float(yc) > 0:
-            latest_ticks[tok] = {
-                "ltp": float(yc),
-                "open": float(yc),
-                "high": float(yc),
-                "low": float(yc),
-                "close": float(yc),
-                "volume": 0,
-                "change": 0,
-                "change_pct": 0,
-                "symbol": f"{name}-EQ",
-                "token": tok,
-                "timestamp": now_ts,
-            }
-            missing_filled += 1
-
-    if missing_filled:
-        logger.info(f"📂 Filled {missing_filled} missing tokens with yesterday_close")
-        _save_ticks()
+    threading.Thread(target=_seed_background, daemon=True).start()
 
     _connected = True
 
@@ -738,9 +746,16 @@ def add_to_watchlist(name, token, kind="stock"):
     """Add a single symbol to watchlist and subscribe if WS is connected."""
     global WATCHLIST
     # Check if already exists
+    if not hasattr(add_to_watchlist, "_dup_logged"):
+        add_to_watchlist._dup_logged = set()
     for existing_name, existing_token, _ in WATCHLIST:
         if existing_token == token:
-            logger.info(f"ℹ️ {name} already in watchlist")
+            # Log duplicates once per process — with ~700 symbols in the
+            # watchlist, logging every duplicate check floods stdout and
+            # slows the connect path to a crawl (observed 240s+).
+            if token not in add_to_watchlist._dup_logged:
+                add_to_watchlist._dup_logged.add(token)
+                logger.info(f"ℹ️ {name} already in watchlist")
             return {"success": True, "message": "Already exists", "count": len(WATCHLIST)}
 
     WATCHLIST.append((name, token, kind))
