@@ -698,6 +698,15 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False,
         # Sort by CHG% descending (highest gainers first)
         result.sort(key=lambda x: x['CHG%'], reverse=True)
 
+        # Live tick overlay: subscribe exactly the stocks shown in this ORB
+        # table to the broker WebSocket (Angel One) so the frontend's SSE
+        # stream patches tick-by-tick live prices for them.  Subscribed from
+        # the table itself, never from the watchlist.
+        try:
+            ws_auto_subscribe([str(e["Symbol"]) for e in result])
+        except Exception:
+            pass  # never break the screener over a subscription hiccup
+
         out_columns = GAP_UP_COLUMNS if gap_up else ADVANCE_ORB_COLUMNS
         conditions = {
             "price": f"{PRICE_MIN} to {PRICE_MAX} INR",
