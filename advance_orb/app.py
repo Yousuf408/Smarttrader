@@ -62,6 +62,7 @@ from advance_orb.supabase_db import save_top5_strategy, ensure_table
 from advance_orb.auth_routes import router as auth_router
 from server.candle_tracker import candle_tracker
 from advance_orb.tv_chart_candles import batch_tv_opening_candles
+from advance_orb.common import batch_yahoo_orb_data
 
 # Ensure the strategy_trades table exists (run once at startup)
 ensure_table()
@@ -396,6 +397,24 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False,
 
         candidate_symbols = df['name'].dropna().astype(str).tolist()
 
+        # Fast universe filter: today's Yahoo open must be within ±2% of the
+        # previous trading day's high. This is deliberately separate from
+        # the 9:15 candle columns below, which remain TradingView-only and
+        # pending until that separate requirement is enabled.
+        yahoo_open_high = batch_yahoo_orb_data(candidate_symbols)
+        yahoo_near_high_symbols = set()
+        for _s, _yd in yahoo_open_high.items():
+            if not _yd:
+                continue
+            _open = _yd.get("open915")
+            _prev_high = _yd.get("yesterday_high")
+            if _open is None or _prev_high is None or float(_prev_high) <= 0:
+                continue
+            if 0.98 * float(_prev_high) <= float(_open) <= 1.02 * float(_prev_high):
+                yahoo_near_high_symbols.add(_s)
+        df = df[df["name"].isin(yahoo_near_high_symbols)].copy()
+        candidate_symbols = df["name"].dropna().astype(str).tolist()
+
         # Open-candle batch: pull each symbol's 9:15 IST 5-min candle in
         # parallel. Returns (is_small, high915, open915, low915,
         # close915, range_pct) per symbol.
@@ -405,21 +424,13 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False,
         # TradingView authenticated chart feed is the sole source for the
         # Advance ORB opening candle. Angel/CandleTracker and Yahoo are not
         # used for high915, low915, open915, or close915.
-        opening_candle_map = {}
-        _tv_fill = batch_tv_opening_candles(candidate_symbols)
-        for _s in candidate_symbols:
-            _tv = _tv_fill.get(_s)
-            if _tv:
-                _opn, _hi, _lo, _close, _yh = _tv
-                _rng = ((_hi - _lo) / _lo) * 100
-                opening_candle_map[_s] = (
-                    _rng <= SMALL_CANDLE_THRESHOLD, _hi, _opn, _lo,
-                    _close, _rng, None, _yh, None, None,
-                )
-            else:
-                opening_candle_map[_s] = (
-                    False, None, None, None, None, None, None, None, None, None
-                )
+        # 9:15 candle values are intentionally deferred for now. The current
+        # screener only applies the Yahoo open-vs-previous-high universe
+        # filter above; chart-feed candle backfill will be enabled separately.
+        opening_candle_map = {
+            _s: (False, None, None, None, None, None, None, None, None, None)
+            for _s in candidate_symbols
+        }
         small_candle_symbols = {
             s for s, t in opening_candle_map.items()
             if isinstance(t, tuple) and t and t[0]
@@ -620,8 +631,7 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False,
             "exchange": "NSE",
             "gap": f"TradingView absolute gap < {GAP_THRESHOLD}%",
             "open_near_prev_high": (
-                "TradingView: open within ±2% of yesterday's high (daily"
-                " high from TV 5-min bars)"
+                "Yahoo Finance: today's open within ±2% of previous day's high"
             ),
         }
         if yf_filter:
