@@ -521,12 +521,16 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False,
         if yahoo_open_high:
             _y_close920: dict = {}
             _y_inside: dict = {}
+            _y_hi: dict = {}
+            _y_lo: dict = {}
             for _s, _yd in yahoo_open_high.items():
                 if not _yd:
                     continue
                 _lo = _yd.get("low915")
                 _hi = _yd.get("high915")
                 _c2 = _yd.get("close920")
+                _y_hi[_s] = _hi
+                _y_lo[_s] = _lo
                 if _lo is None or _hi is None or _c2 is None or float(_hi) <= 0:
                     _y_inside[_s] = None
                 else:
@@ -534,6 +538,20 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False,
                 _y_close920[_s] = _c2
             df['close920'] = df['name'].map(lambda s: _y_close920.get(s))
             df['inside_915'] = df['name'].map(lambda s: _y_inside.get(s))
+            # 1st High / 1st Low columns: the TradingView chart-feed candle
+            # is still the future source, but until it's available fill these
+            # from the Yahoo 5-min 9:15 candle we already fetch. (User asked
+            # to display the values we already have instead of empty cells.)
+            df['high915'] = df['name'].map(
+                lambda s: _y_hi.get(s)
+                if _y_hi.get(s) is not None
+                else opening_candle_map.get(s, (False, None, None))[1]
+            )
+            df['low915'] = df['name'].map(
+                lambda s: _y_lo.get(s)
+                if _y_lo.get(s) is not None
+                else opening_candle_map.get(s, (False, None, None, None))[3]
+            )
         # NOTE: the TradingView scan's open/high/low are the FULL-DAY bar,
         # not the 9:15 candle — they were once used to override high915/
         # low915 and produced nonsense ranges (e.g. a stock's whole-day
