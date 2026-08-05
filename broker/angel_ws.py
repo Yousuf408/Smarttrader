@@ -293,7 +293,10 @@ def on_data(wsapp, message):
     global latest_ticks, _raw_messages
 
     try:
-        logger.debug(f"📩 on_data received: type={type(message).__name__}")
+        # NOTE: no per-tick logger lines here — with ~700 subscribed stocks
+        # streaming several times/sec, logging every message floods stdout
+        # and starves the app (measured: app hangs, health checks time out).
+        # Keep only the raw-message ring buffer for debugging.
 
         # Store raw message for debugging (last 5 only)
         _raw_messages.append(message)

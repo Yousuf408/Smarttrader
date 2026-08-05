@@ -443,20 +443,65 @@ def fetch_yahoo_orb_data(symbol: str) -> dict | None:
     return result
 
 
+# ── Per-trading-day RAM cache for Yahoo ORB facts ──────────────────
+# open915/high915/low915/close920/EMA/yesterday_high are FROZEN once the
+# 9:20 IST candle closes and never change for the rest of the day.  Without
+# this, every filter toggle (and the 30s auto-refresh) re-downloads the
+# ~600-symbol 5-min batch — a 240s+ block per request.  A row is sealed
+# into the day cache only when it has a real close920 (i.e. the 9:20 candle
+# is complete), so pre-9:20 runs keep re-fetching and upgrade naturally.
+_ORB_YAHOO_DAY: dict[str, dict[str, dict | None]] = {}  # date -> {sym: row}
+_ORB_YAHOO_DAY_LOCK = threading.Lock()
+# Single-flight: the browser fires a full refetch on every toggle AND every
+# 30s auto-refresh while candle data is still forming. Without this, N
+# concurrent requests each launch their own ~600-symbol batch (240s+ each)
+# and the server collapses. Only one fetch round runs at a time; the rest
+# block on this lock and then serve from the day cache.
+_ORB_YAHOO_FETCH_LOCK = threading.Lock()
+
+
 def batch_yahoo_orb_data(symbols: list[str]) -> dict:
-    """Fetch Yahoo candle data for many symbols in parallel."""
+    """Fetch Yahoo candle data for many symbols in parallel.
+
+    Single-flight + per-IST-day RAM cache: the 9:15/9:20 candle facts
+    (open915/high915/low915/close920/EMA/yesterday_high) are frozen once the
+    9:20 IST candle closes. Completed rows are sealed into the day cache so
+    every later toggle/auto-refresh re-filters cached rows instead of
+    re-downloading the universe.
+    """
     unique = [str(s).strip().upper() for s in symbols if s]
-    results: dict[str, dict | None] = {}
     if not unique:
-        return results
-    with ThreadPoolExecutor(max_workers=YFINANCE_WORKERS) as pool:
-        futures = {pool.submit(fetch_yahoo_orb_data, sym): sym for sym in unique}
-        for future in as_completed(futures):
-            sym = futures[future]
-            try:
-                results[sym] = future.result()
-            except Exception:
-                results[sym] = None
+        return {}
+    today = datetime.datetime.now(IST).strftime("%Y-%m-%d")
+
+    with _ORB_YAHOO_FETCH_LOCK:
+        # Re-check under the single-flight lock so waiters benefit from the
+        # round that just finished instead of launching their own.
+        with _ORB_YAHOO_DAY_LOCK:
+            day_cache = _ORB_YAHOO_DAY.setdefault(today, {})
+            results = {s: day_cache[s] for s in unique if s in day_cache}
+            missing = [s for s in unique if s not in day_cache]
+        if not missing:
+            return results
+
+        fresh: dict[str, dict | None] = {}
+        with ThreadPoolExecutor(max_workers=YFINANCE_WORKERS) as pool:
+            futures = {pool.submit(fetch_yahoo_orb_data, sym): sym for sym in missing}
+            for future in as_completed(futures):
+                sym = futures[future]
+                try:
+                    fresh[sym] = future.result()
+                except Exception:
+                    fresh[sym] = None
+        results.update(fresh)
+        # Seal only complete rows into the day cache.  None / pre-9:20 rows
+        # (close920 missing) are left unsealed so a later round upgrades them
+        # the moment the 9:20 candle closes — then they stay frozen all day.
+        with _ORB_YAHOO_DAY_LOCK:
+            day_cache = _ORB_YAHOO_DAY.setdefault(today, {})
+            for s, row in fresh.items():
+                if row and row.get("close920") is not None:
+                    day_cache[s] = row
     return results
 
 
@@ -563,16 +608,30 @@ def _build_ticks_by_symbol():
     return by_symbol
 
 
+_SUBSCRIBE_ATTEMPTED: set = set()   # symbols already resolved+added this process
+
+
 def ws_auto_subscribe(symbols: list[str]):
-    """Add symbols to the Angel One WebSocket watchlist."""
+    """Add table symbols to the Angel One WebSocket watchlist.
+
+    Idempotent per process: symbols already attempted are skipped instantly,
+    so calling this on every screener fetch (30s auto-refresh + manual runs)
+    stays cheap instead of re-resolving + re-logging the whole table each time.
+    """
     from broker.angel_margin_calculator import (
         is_connected as angel_is_connected,
         resolve_symbol_token as _resolve,
     )
     from broker.angel_ws import add_to_watchlist as angel_ws_add
+    global _SUBSCRIBE_ATTEMPTED
     if not angel_is_connected():
         return
-    for sym in set(s for s in symbols if s):
+    todo = [s for s in set(s for s in symbols if s)
+            if s not in _SUBSCRIBE_ATTEMPTED]
+    if not todo:
+        return
+    for sym in todo:
+        _SUBSCRIBE_ATTEMPTED.add(sym)
         try:
             name, token_str = _resolve(sym.upper(), "NSE")
             if token_str:
