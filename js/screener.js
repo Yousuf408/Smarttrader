@@ -287,12 +287,10 @@ function toggleInside915() {
     status.textContent = _inside915Only ? 'ON' : 'OFF';
     status.classList.toggle('active', _inside915Only);
     showToast(_inside915Only ? '📐 Inside 9:15 ON' : '📐 Inside 9:15 OFF',
-        _inside915Only ? 'Showing only stocks where 9:20 candle closed inside 9:15 range'
+        _inside915Only ? 'Showing only stocks where the 9:20 candle closed inside the 9:15 range (Yahoo 5-min)'
                       : 'Showing all stocks');
-    // Re-render with the current data
-    if (lastAdvanceOrbData) {
-        renderStrategyData(lastAdvanceOrbData);
-    }
+    // Re-fetch so the backend computes inside_915 from the Yahoo 5-min batch
+    onStrategyChange();
 }
 
 async function fetchAdvanceORB() {
@@ -300,9 +298,10 @@ async function fetchAdvanceORB() {
     const parts  = _readParts();
     const nh = nearHighEnabled ? '&near_high=true' : '&near_high=false';
     const ae = aboveEmaEnabled ? '&above_ema=true' : '&above_ema=false';
+    const i9 = _inside915Only ? '&inside915=true' : '&inside915=false';
     try {
         const response = await fetch(
-            `/api/strategies/advanceorb?budget=${budget}&parts=${parts}${nh}${ae}`
+            `/api/strategies/advanceorb?budget=${budget}&parts=${parts}${nh}${ae}${i9}`
         );
         if (!response.ok) {
             throw new Error(`API returned ${response.status}`);

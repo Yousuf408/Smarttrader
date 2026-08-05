@@ -280,7 +280,7 @@ def root():
 @app.get("/api/strategies/advanceorb")
 def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False,
                     yf_filter: bool = False, near_high: bool = True,
-                    above_ema: bool = False):
+                    above_ema: bool = False, inside915: bool = False):
     """
     Fetch the NSE universe straight from TradingView:
     1. Price: 200 to 4000 INR
@@ -403,7 +403,7 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False,
         # the 9:15 candle columns below, which remain TradingView-only and
         # pending until that separate requirement is enabled. When the toggle
         # is OFF, the full TradingView universe (~600) is shown instead.
-        if near_high or above_ema:
+        if near_high or above_ema or inside915:
             yahoo_open_high = batch_yahoo_orb_data(candidate_symbols)
         else:
             yahoo_open_high = None
@@ -512,6 +512,28 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False,
         df['inside_915'] = df['name'].map(
             lambda s: opening_candle_map.get(s, (False, None, None, None, None, None, None, None, None, None))[9]
         )
+        # "Inside 9:15" filter (Yahoo 5-min data): the 2nd candle (9:20)
+        # must close INSIDE the 1st candle's (9:15) high–low range. The
+        # TradingView chart-feed candle is still the future source for the
+        # 9:15/9:20 columns, but until it's available we already fetch the
+        # Yahoo 5-min batch above (open915/high915/low915/close920), so
+        # derive inside_915/close920 from it to keep the toggle working.
+        if yahoo_open_high:
+            _y_close920: dict = {}
+            _y_inside: dict = {}
+            for _s, _yd in yahoo_open_high.items():
+                if not _yd:
+                    continue
+                _lo = _yd.get("low915")
+                _hi = _yd.get("high915")
+                _c2 = _yd.get("close920")
+                if _lo is None or _hi is None or _c2 is None or float(_hi) <= 0:
+                    _y_inside[_s] = None
+                else:
+                    _y_inside[_s] = bool(float(_lo) <= float(_c2) <= float(_hi))
+                _y_close920[_s] = _c2
+            df['close920'] = df['name'].map(lambda s: _y_close920.get(s))
+            df['inside_915'] = df['name'].map(lambda s: _y_inside.get(s))
         # NOTE: the TradingView scan's open/high/low are the FULL-DAY bar,
         # not the 9:15 candle — they were once used to override high915/
         # low915 and produced nonsense ranges (e.g. a stock's whole-day
@@ -672,6 +694,11 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False,
             "above_ema_200": (
                 f"ON: Yahoo 5-min open above 200 EMA, gap ≤ {ABOVE_EMA_MAX_GAP}%"
                 if above_ema
+                else "OFF"
+            ),
+            "inside_915": (
+                "ON: 9:20 close inside 9:15 range (Yahoo 5-min)"
+                if inside915
                 else "OFF"
             ),
         }
