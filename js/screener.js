@@ -300,8 +300,8 @@ function toggleInside3() {
     _inside3Only = toggle.checked;
     status.textContent = _inside3Only ? 'ON' : 'OFF';
     status.classList.toggle('active', _inside3Only);
-    showToast(_inside3Only ? '📐 3 Candles Inside 9:15 ON' : '📐 3 Candles Inside 9:15 OFF',
-        _inside3Only ? 'Showing only stocks where 9:20/9:25/9:30 candles sit inside the 9:15 range (Yahoo 5-min)'
+    showToast(_inside3Only ? '📐 3 Closes Inside 9:15 ON' : '📐 3 Closes Inside 9:15 OFF',
+        _inside3Only ? 'Showing only stocks where 9:20/9:25/9:30 candle closes sit inside the 9:15 range (Yahoo 5-min)'
                       : 'Showing all stocks');
     onStrategyChange();
 }

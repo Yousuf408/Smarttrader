@@ -441,8 +441,9 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False,
             df = df[df["name"].isin(above_ema_symbols)].copy()
             candidate_symbols = df["name"].dropna().astype(str).tolist()
 
-        # "3 Candles Inside 9:15" toggle: the 9:20, 9:25 and 9:30 candles
-        # must ALL sit inside the 9:15 candle's high–low range (Yahoo 5-min).
+        # "3 Candles Inside 9:15" toggle: the CLOSE of the 9:20, 9:25 and
+        # 9:30 candles must ALL sit inside the 9:15 candle's high–low range
+        # (Yahoo 5-min). Full high/low of those candles is NOT required.
         if inside3:
             inside3_symbols = set()
             for _s, _yd in (yahoo_open_high or {}).items():
@@ -455,12 +456,11 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False,
                 _hi, _lo = float(_hi), float(_lo)
                 _ok = True
                 for _k in ("c2", "c3", "c4"):
-                    _khi = _yd.get(f"{_k}_hi")
-                    _klo = _yd.get(f"{_k}_lo")
-                    if _khi is None or _klo is None:
+                    _kc = _yd.get(f"{_k}_close")
+                    if _kc is None:
                         _ok = False
                         break
-                    if not (_lo <= float(_klo) and float(_khi) <= _hi):
+                    if not (_lo <= float(_kc) <= _hi):
                         _ok = False
                         break
                 if _ok:
@@ -758,7 +758,7 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False,
                 else "OFF"
             ),
             "inside_3_candles": (
-                "ON: 9:20/9:25/9:30 candles inside 9:15 range (Yahoo 5-min)"
+                "ON: 9:20/9:25/9:30 candle closes inside 9:15 range (Yahoo 5-min)"
                 if inside3
                 else "OFF"
             ),
