@@ -209,6 +209,16 @@
                                 <span class="toggle-item-status" id="inside3Status">OFF</span>
                             </div>
 
+                            <!-- CALC MAXQTY (Advance ORB) — opt-in margin calc keeps load fast -->
+                            <div class="toggle-item" id="calcQtyWrap" style="display:none;">
+                                <span class="toggle-item-label">Calc MaxQty</span>
+                                <label class="toggle-switch toggle-xs">
+                                    <input type="checkbox" id="calcQtyToggle" onchange="toggleCalcQty()" />
+                                    <span class="toggle-slider"></span>
+                                </label>
+                                <span class="toggle-item-status" id="calcQtyStatus">OFF</span>
+                            </div>
+
                             <!-- NEW LOW ONLY (Big Players) -->
                             <div class="toggle-item" id="newLowFilterWrap" style="display:none;">
                                 <span class="toggle-item-label">New Low</span>

@@ -169,6 +169,11 @@ async function _scheduleScreenerRefresh() {
         const strategyId = document.getElementById("strategySelect")?.value;
         if (strategyId !== "advanceorb") return;
 
+        // MaxQty is opt-in (Calc MaxQty toggle). When OFF, the table shows
+        // 0s — the qty endpoint would compute from the live table anyway,
+        // so skip the broker margin round-trip entirely to keep steppers cheap.
+        if (!calcQtyEnabled) return;
+
         // No snapshot yet — fall back to a heavy full fetch (the
         // Refresh button and Strategy dropdown paths already do
         // this; calling onStrategyChange() covers both cases).
@@ -244,6 +249,7 @@ let nearHighEnabled = true;
 let aboveEmaEnabled = false;
 let _inside915Only = false;
 let _inside3Only = false;
+let calcQtyEnabled = false;
 
 function toggleNearHigh() {
     const toggle = document.getElementById('nearHighToggle');
@@ -306,6 +312,23 @@ function toggleInside3() {
     onStrategyChange();
 }
 
+// Opt-in MaxQty calculation. Off (default) = skip the broker margin
+// round-trip on the screener load, so the table loads fast and the
+// MaxQty column reads 0. On = compute MaxQty for each row via the
+// connected broker (Dhan/Angel).
+function toggleCalcQty() {
+    const toggle = document.getElementById('calcQtyToggle');
+    const status = document.getElementById('calcQtyStatus');
+    calcQtyEnabled = toggle.checked;
+    status.textContent = calcQtyEnabled ? 'ON' : 'OFF';
+    status.classList.toggle('active', calcQtyEnabled);
+    showToast(calcQtyEnabled ? '💸 Calc MaxQty ON' : '💸 Calc MaxQty OFF',
+        calcQtyEnabled
+            ? 'Computing MaxQty from connected broker margin'
+            : 'Skipping MaxQty for faster load — broker margin not fetched');
+    onStrategyChange();
+}
+
 async function fetchAdvanceORB() {
     const budget = _readBudget();
     const parts  = _readParts();
@@ -313,9 +336,10 @@ async function fetchAdvanceORB() {
     const ae = aboveEmaEnabled ? '&above_ema=true' : '&above_ema=false';
     const i9 = _inside915Only ? '&inside915=true' : '&inside915=false';
     const i3 = _inside3Only ? '&inside3=true' : '&inside3=false';
+    const cq = calcQtyEnabled ? '&calc_qty=true' : '&calc_qty=false';
     try {
         const response = await fetch(
-            `/api/strategies/advanceorb?budget=${budget}&parts=${parts}${nh}${ae}${i9}${i3}`
+            `/api/strategies/advanceorb?budget=${budget}&parts=${parts}${nh}${ae}${i9}${i3}${cq}`
         );
         if (!response.ok) {
             throw new Error(`API returned ${response.status}`);
@@ -485,10 +509,12 @@ async function onStrategyChange() {
         const nearHighEl = document.getElementById('nearHighWrap');
         const aboveEmaEl = document.getElementById('aboveEmaWrap');
         const inside915El = document.getElementById('inside915Wrap');
+        const calcQtyEl = document.getElementById('calcQtyWrap');
         if (autoBuyEl) autoBuyEl.style.display = '';
         if (nearHighEl) nearHighEl.style.display = '';
         if (aboveEmaEl) aboveEmaEl.style.display = '';
         if (inside915El) inside915El.style.display = '';
+        if (calcQtyEl) calcQtyEl.style.display = '';
         const nw = document.getElementById('newLowFilterWrap');
         if (nw) nw.style.display = 'none';
         const bpab = document.getElementById('bpAutoBuyWrap');
@@ -529,6 +555,8 @@ async function onStrategyChange() {
         if (aboveEmaEl) aboveEmaEl.style.display = 'none';
         const inside915El = document.getElementById('inside915Wrap');
         if (inside915El) inside915El.style.display = 'none';
+        const calcQtyEl = document.getElementById('calcQtyWrap');
+        if (calcQtyEl) calcQtyEl.style.display = 'none';
         const nw = document.getElementById('newLowFilterWrap');
         if (nw) nw.style.display = '';
         const bpab = document.getElementById('bpAutoBuyWrap');

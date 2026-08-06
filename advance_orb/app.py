@@ -264,7 +264,7 @@ def root():
 @app.get("/api/strategies/advanceorb")
 def get_advance_orb(budget: int = 100000, parts: int = 4, near_high: bool = True,
                     above_ema: bool = False, inside915: bool = False,
-                    inside3: bool = False):
+                    inside3: bool = False, calc_qty: bool = False):
     """
     Fetch the NSE universe straight from TradingView:
     1. Price: 200 to 4000 INR
@@ -585,7 +585,12 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, near_high: bool = True
         # so quantity_calculator.requests call hits the missing-token
         # code path and the screener surfaces a clear "no broker"
         # error to the UI instead of a silent bare 500.
-        _calc_qty_for_broker(df, budget, parts)
+        # MaxQty is opt-in via the Calc MaxQty toggle: off = skip the
+        # broker margin round-trip for a fast load (column reads 0).
+        if calc_qty:
+            _calc_qty_for_broker(df, budget, parts)
+        else:
+            df["MaxQty"] = 0
 
         result = []
         for _, row in df.iterrows():
