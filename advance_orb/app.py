@@ -218,10 +218,9 @@ async def _no_cache_all(request, call_next):
 
 from advance_orb.common import (
     PRICE_MIN, PRICE_MAX, GAP_THRESHOLD, MARKET_CAP_MIN,
-    SMALL_CANDLE_THRESHOLD, EMA_SPAN, EMA_LOOKBACK_DAYS, ABOVE_EMA_MAX_GAP,
+    SMALL_CANDLE_THRESHOLD, ABOVE_EMA_MAX_GAP,
     IST, MAX_TV_STOCKS, YFINANCE_WORKERS,
-    has_small_opening_candle, compute_200_ema, compute_200_ema_batch,
-    filter_small_opening_candles,
+    compute_200_ema, compute_200_ema_batch,
     fetch_tradingview_stocks,
     _detect_trading_date, _resolve_reference_date, _calc_qty_for_broker,
     _build_ticks_by_symbol, ws_auto_subscribe,
@@ -245,21 +244,6 @@ ADVANCE_ORB_COLUMNS = [
     "MaxQty",
 ]
 
-GAP_UP_COLUMNS = [
-    "Symbol",
-    "Price",
-    "CHG%",
-    "GAP%",
-    "Volume",
-    "RELVOL",
-    "Sector",
-    "200 EMA",
-    "Open 9:15",
-    "Prev High",
-    "MaxQty",
-]
-
-
 @app.get("/api")
 def root():
     return {
@@ -278,8 +262,7 @@ def root():
 
 
 @app.get("/api/strategies/advanceorb")
-def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False,
-                    yf_filter: bool = False, near_high: bool = True,
+def get_advance_orb(budget: int = 100000, parts: int = 4, near_high: bool = True,
                     above_ema: bool = False, inside915: bool = False,
                     inside3: bool = False):
     """
@@ -299,16 +282,12 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False,
         raise HTTPException(status_code=400, detail="budget must be > 0")
     if parts < 1 or parts > 20:
         raise HTTPException(status_code=400, detail="parts must be between 1 and 20")
-    # Yahoo Finance is intentionally not a source for ORB candle data.
-    # Keep the legacy query parameter accepted for old clients, but force
-    # the authenticated TradingView/CandleTracker path below.
-    yf_filter = False
     try:
         # ─── Step 1: Universe — TradingView scan (primary) ──────────────
         # Fetch ALL NSE stocks straight from TradingView:
         #   type=stock, exchange=NSE, close 200–4000 INR, mcap > 41B INR.
         # Every returned stock is shown — refinement conditions come in
-        # later steps and via the toggles (Gap-Up / Yahoo filter).
+        # later steps and via the toggles.
         # Falls back to the watchlist + WebSocket path if the scanner
         # is unreachable so the tab never goes empty.
         tv_rows = fetch_tradingview_stocks()
@@ -484,11 +463,6 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False,
             _s: (False, None, None, None, None, None, None, None, None, None)
             for _s in candidate_symbols
         }
-        small_candle_symbols = {
-            s for s, t in opening_candle_map.items()
-            if isinstance(t, tuple) and t and t[0]
-        }
-        inside915_symbols = set()
 
         # Only authenticated TradingView chart candles count as ORB candle
         # data. Angel/CandleTracker and Yahoo are deliberately excluded.
@@ -530,8 +504,7 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False,
         else:
             # No slot-0 candle data yet — read yesterday_high directly from
             # the strategy cache (pre-populated from yfinance at startup,
-            # independent of slot-0 completion). This lets gap-up mode
-            # evaluate open > prev_high even after a fresh server restart.
+            # independent of slot-0 completion).
             df['yesterday_high'] = df['name'].map(
                 lambda s: cache_data.get(s, {}).get("yesterday_high")
             )
@@ -618,36 +591,16 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False,
         for _, row in df.iterrows():
             symbol = row['name']
 
-            if gap_up:
-                # Gap-up mode: skip 1.5% candle filter.
-                # Instead require the 9:15 OPENING price > 200 EMA AND
-                # opening price > yesterday's high (gap-up at the open).
-                open915 = row.get('open915')
-                ema_val = row.get('ema')
-                yh = row.get('yesterday_high')
-                if not pd.notna(open915) or open915 <= 0:
+            # Normal mode: open must be within ±2% of yesterday's high
+            # (TV daily high).  Only evaluated when both values exist —
+            # the TV candle completes ~09:20 — otherwise keep pending.
+            _open = row.get("open915")
+            _yh = row.get("yesterday_high")
+            if pd.notna(_open) and pd.notna(_yh) and float(_yh) > 0:
+                _lo_b = 0.98 * float(_yh)
+                _hi_b = 1.02 * float(_yh)
+                if not (_lo_b <= float(_open) <= _hi_b):
                     continue
-                if not pd.notna(ema_val) or not pd.notna(yh):
-                    continue
-                if float(open915) <= float(ema_val) or float(open915) <= float(yh):
-                    continue
-            elif yf_filter:
-                # Yahoo Finance mode: require both closes inside the 9:15
-                # range AND 9:15 close within 0.5% of yesterday's high
-                # (computed from Yahoo's own candles + yesterday data).
-                if symbol not in yf_pass_symbols:
-                    continue
-            else:
-                # Normal mode: open must be within ±2% of yesterday's high
-                # (TV daily high).  Only evaluated when both values exist —
-                # the TV candle completes ~09:20 — otherwise keep pending.
-                _open = row.get("open915")
-                _yh = row.get("yesterday_high")
-                if pd.notna(_open) and pd.notna(_yh) and float(_yh) > 0:
-                    _lo_b = 0.98 * float(_yh)
-                    _hi_b = 1.02 * float(_yh)
-                    if not (_lo_b <= float(_open) <= _hi_b):
-                        continue
 
             # Format volume
             vol = row.get('volume', 0)
@@ -689,38 +642,37 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False,
                 "MaxQty": int(row.get("MaxQty", 0)),
             }
 
-            if not gap_up:
-                # Normal mode: include candle detail columns
-                entry["high915"] = (
-                    round(float(row["high915"]), 2)
-                    if pd.notna(row.get("high915"))
-                    else None
-                )
-                entry["low915"] = (
-                    round(float(row["low915"]), 2)
-                    if pd.notna(row.get("low915"))
-                    else None
-                )
-                entry["close915"] = (
-                    round(float(row["close915"]), 2)
-                    if pd.notna(row.get("close915"))
-                    else None
-                )
-                entry["candle_range_pct"] = (
-                    round(float(row["candle_range_pct"]), 4)
-                    if pd.notna(row.get("candle_range_pct"))
-                    else None
-                )
-                entry["close920"] = (
-                    round(float(row["close920"]), 2)
-                    if pd.notna(row.get("close920"))
-                    else None
-                )
-                entry["inside_915"] = (
-                    bool(row["inside_915"])
-                    if "inside_915" in row.index and pd.notna(row.get("inside_915"))
-                    else None
-                )
+            # Candle detail columns (always included)
+            entry["high915"] = (
+                round(float(row["high915"]), 2)
+                if pd.notna(row.get("high915"))
+                else None
+            )
+            entry["low915"] = (
+                round(float(row["low915"]), 2)
+                if pd.notna(row.get("low915"))
+                else None
+            )
+            entry["close915"] = (
+                round(float(row["close915"]), 2)
+                if pd.notna(row.get("close915"))
+                else None
+            )
+            entry["candle_range_pct"] = (
+                round(float(row["candle_range_pct"]), 4)
+                if pd.notna(row.get("candle_range_pct"))
+                else None
+            )
+            entry["close920"] = (
+                round(float(row["close920"]), 2)
+                if pd.notna(row.get("close920"))
+                else None
+            )
+            entry["inside_915"] = (
+                bool(row["inside_915"])
+                if "inside_915" in row.index and pd.notna(row.get("inside_915"))
+                else None
+            )
 
             result.append(entry)
 
@@ -736,7 +688,7 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False,
         except Exception:
             pass  # never break the screener over a subscription hiccup
 
-        out_columns = GAP_UP_COLUMNS if gap_up else ADVANCE_ORB_COLUMNS
+        out_columns = ADVANCE_ORB_COLUMNS
         conditions = {
             "price": f"{PRICE_MIN} to {PRICE_MAX} INR",
             "market_cap": f"> {MARKET_CAP_MIN/1e9:.0f}B INR",
@@ -763,17 +715,9 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, gap_up: bool = False,
                 else "OFF"
             ),
         }
-        if yf_filter:
-            conditions["filter"] = (
-                "Yahoo: 9:15 range <= 1.5% AND 1st & 2nd close inside "
-                "9:15 range AND 9:15 close within 0.5% of yesterday high"
-            )
-        elif gap_up:
-            conditions["filter"] = "Price > 200 EMA AND Price > Prev High"
-        else:
-            conditions["universe"] = (
-                "TradingView · all NSE stocks · 200–4000 INR · mcap > 41B"
-            )
+        conditions["universe"] = (
+            "TradingView · all NSE stocks · 200–4000 INR · mcap > 41B"
+        )
 
         # Save top 5 to Supabase for historical tracking
         try:
@@ -1174,14 +1118,14 @@ async def stream_live_ticks(request: Request):
 
 
 @app.get("/api/strategies/advanceorb/refresh")
-def refresh_advance_orb(tickers: str = "", gap_up: bool = False):
+def refresh_advance_orb(tickers: str = ""):
     """Lightweight refresh of price/volume/change for a fixed list of tickers.
 
-    In normal mode, re-checks the 9:15 opening-candle ≤1.5% eligibility.
-    The first 5-minute candle may still be forming when the initial screener
-    request runs, so a row that initially passes can later exceed the 1.5%
-    range. Such rows must be removed before auto-buy evaluates.
-    In gap_up mode, the candle-range check is skipped.
+    Re-checks the 9:15 opening-candle ≤1.5% eligibility and the open-vs-
+    previous-high band.  The first 5-minute candle may still be forming when
+    the initial screener request runs, so a row that initially passes can
+    later exceed the 1.5% range.  Such rows must be removed before auto-buy
+    evaluates.
     """
     try:
         symbols = [s.strip().upper() for s in tickers.split(",") if s.strip()]
@@ -1189,45 +1133,41 @@ def refresh_advance_orb(tickers: str = "", gap_up: bool = False):
             return {"refreshed": []}
 
         opening_candle_map: dict | None = None
-        if gap_up:
-            # Gap-up mode: skip the candle-range check, keep all symbols valid
-            valid_symbols = set(symbols)
-        else:
-            # Normal mode: re-check ≤1.5% opening-candle rule
-            tv_candles = batch_tv_opening_candles(symbols)
-            opening_candle_map = {}
-            for symbol in symbols:
-                candle = tv_candles.get(symbol)
-                if candle:
-                    opn, high, low, close, yh = candle
-                    rng = ((high - low) / low) * 100
-                    opening_candle_map[symbol] = (
-                        rng <= SMALL_CANDLE_THRESHOLD, high, opn, low,
-                        close, rng, None, yh, None, None,
-                    )
-                else:
-                    opening_candle_map[symbol] = (
-                        False, None, None, None, None, None, None, None, None, None
-                    )
-            # Eligibility = small 9:15 candle AND open within ±2% of
-            # yesterday's high (TV daily high).  Same rule as the table.
-            valid_symbols = set()
-            for symbol, candle in opening_candle_map.items():
-                if not (isinstance(candle, tuple) and candle and candle[0]):
+        # Re-check ≤1.5% opening-candle rule
+        tv_candles = batch_tv_opening_candles(symbols)
+        opening_candle_map = {}
+        for symbol in symbols:
+            candle = tv_candles.get(symbol)
+            if candle:
+                opn, high, low, close, yh = candle
+                rng = ((high - low) / low) * 100
+                opening_candle_map[symbol] = (
+                    rng <= SMALL_CANDLE_THRESHOLD, high, opn, low,
+                    close, rng, None, yh, None, None,
+                )
+            else:
+                opening_candle_map[symbol] = (
+                    False, None, None, None, None, None, None, None, None, None
+                )
+        # Eligibility = small 9:15 candle AND open within ±2% of
+        # yesterday's high (TV daily high).  Same rule as the table.
+        valid_symbols = set()
+        for symbol, candle in opening_candle_map.items():
+            if not (isinstance(candle, tuple) and candle and candle[0]):
+                continue
+            opn_v, yh_v = candle[2], candle[7]
+            if pd.notna(opn_v) and pd.notna(yh_v) and yh_v and float(yh_v) > 0:
+                lo_b = 0.98 * float(yh_v)
+                hi_b = 1.02 * float(yh_v)
+                if not (lo_b <= float(opn_v) <= hi_b):
                     continue
-                opn_v, yh_v = candle[2], candle[7]
-                if pd.notna(opn_v) and pd.notna(yh_v) and yh_v and float(yh_v) > 0:
-                    lo_b = 0.98 * float(yh_v)
-                    hi_b = 1.02 * float(yh_v)
-                    if not (lo_b <= float(opn_v) <= hi_b):
-                        continue
-                valid_symbols.add(symbol)
-            # If the chart-feed candle is not available at all (deferred /
-            # TradingView unreachable), don't drop rows based on it.
-            if not valid_symbols and not any(
-                tv_candles.get(s) is not None for s in symbols
-            ):
-                valid_symbols = set(symbols)
+            valid_symbols.add(symbol)
+        # If the chart-feed candle is not available at all (deferred /
+        # TradingView unreachable), don't drop rows based on it.
+        if not valid_symbols and not any(
+            tv_candles.get(s) is not None for s in symbols
+        ):
+            valid_symbols = set(symbols)
 
         # TV SCAN COMMENTED OUT for WS-only testing (Jul 31).
         # tv_query = (Query().select(...)...)

@@ -144,71 +144,6 @@ def fetch_tradingview_stocks() -> list[dict]:
     return rows
 
 
-def has_small_opening_candle(symbol: str) -> bool:
-    """Return whether the latest available 9:15 IST five-minute candle is small."""
-    ticker = f"{str(symbol).strip().upper()}.NS"
-    try:
-        candles = yf.download(
-            tickers=ticker,
-            period="4d",
-            interval="5m",
-            progress=False,
-            auto_adjust=False,
-            prepost=False,
-            threads=False,
-        )
-    except Exception:
-        return False
-
-    if candles.empty:
-        return False
-
-    if isinstance(candles.columns, pd.MultiIndex):
-        try:
-            candles = candles.xs(ticker, axis=1, level=-1)
-        except (KeyError, IndexError):
-            try:
-                candles = candles.xs(ticker, axis=1, level=0)
-            except (KeyError, IndexError):
-                return False
-
-    if "High" not in candles or "Low" not in candles:
-        return False
-
-    local_index = pd.DatetimeIndex(candles.index)
-    if local_index.tz is None:
-        local_index = local_index.tz_localize('UTC').tz_convert(IST)
-    else:
-        local_index = local_index.tz_convert(IST)
-    candles = candles.copy()
-    candles.index = local_index
-    today = pd.Timestamp.now(tz=IST).date()
-
-    opening_today = candles[
-        (candles.index.date == today) &
-        (candles.index.hour == 9) & (candles.index.minute >= 15)
-    ]
-
-    if not opening_today.empty:
-        candle = opening_today.iloc[0]
-    else:
-        opening = candles[
-            (candles.index.hour == 9) & (candles.index.minute >= 15)
-        ]
-        if not opening.empty:
-            candle = opening.iloc[-1]
-        else:
-            return False
-
-    high = pd.to_numeric(candle["High"], errors="coerce")
-    low = pd.to_numeric(candle["Low"], errors="coerce")
-    if pd.isna(high) or pd.isna(low) or low <= 0:
-        return False
-
-    candle_range = (high - low) / low * 100
-    return candle_range <= SMALL_CANDLE_THRESHOLD
-
-
 def compute_200_ema(symbol: str):
     """200-period EMA on 5-min closes.  Tries CandleTracker first."""
     if not symbol or not symbol.strip():
@@ -330,24 +265,7 @@ def batch_opening_candle(symbols: list[str]) -> dict:
     return {s: empty for s in unique}
 
 
-def filter_small_opening_candles(symbols: list[str]) -> set[str]:
-    """Return set of symbols whose 9:15 IST candle range <= SMALL_CANDLE_THRESHOLD."""
-    if not symbols:
-        return set()
-    unique = [str(s).strip().upper() for s in symbols if s]
-    matches: set[str] = set()
-    with ThreadPoolExecutor(max_workers=YFINANCE_WORKERS) as pool:
-        futures = {pool.submit(has_small_opening_candle, sym): sym for sym in unique}
-        for future in as_completed(futures):
-            try:
-                if future.result():
-                    matches.add(futures[future])
-            except Exception:
-                continue
-    return matches
-
-
-# ── Yahoo Finance ORB candle data (independent of the WebSocket) ────
+# ── Yahoo Finance ORB candle data (independent of the WebSocket) ────# ── Yahoo Finance ORB candle data (independent of the WebSocket) ────
 # Used by the "Yahoo Filter" toggle on Advance ORB: today's 9:15 + 9:20
 # candles and yesterday's high are fetched straight from Yahoo Finance.
 # Cached briefly so the frontend's auto-refresh doesn't hammer Yahoo.
