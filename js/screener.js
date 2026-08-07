@@ -394,6 +394,90 @@ function copySymbol(text, el) {
     setTimeout(() => el.classList.remove('symbol-cell-copied'), 1000);
 }
 // ================================================================
+// SHARED ROW/CELL BUILDERS (used by both the main screener table and
+// the "Breakout" table above it)
+// ================================================================
+/** Format one cell value for a column (mirrors the legacy inline logic). */
+function orbCellValue(row, col) {
+    let value;
+    if (col === '200 EMA') {
+        const ema = parseFloat(row.ema);
+        value = Number.isFinite(ema) ? ema : '';
+    } else if (col === '1st High' || col === '9:15 HIGH') {
+        const high = parseFloat(row.high915);
+        value = Number.isFinite(high) ? high.toFixed(2) : '';
+    } else if (col === '1st Low') {
+        const low = parseFloat(row.low915);
+        value = Number.isFinite(low) ? low.toFixed(2) : '';
+    } else if (col === '1st Range%') {
+        const range = parseFloat(row.candle_range_pct);
+        value = Number.isFinite(range) ? `${range.toFixed(2)}%` : '';
+    } else if (col === 'Inside 9:15') {
+        value = row.inside_915 ? '✅' : (row.inside_915 === false ? '❌' : '—');
+    } else if (col === 'Open 9:15') {
+        const op = parseFloat(row.open915);
+        value = Number.isFinite(op) ? `₹${op.toFixed(2)}` : '';
+    } else if (col === 'Prev High') {
+        const ph = parseFloat(row.yesterday_high);
+        value = Number.isFinite(ph) ? `₹${ph.toFixed(2)}` : '';
+    } else {
+        const colKey = col.replace(/ /g, '').replace(/\//g, '');
+        value = row[col] || row[colKey] || row[col.toLowerCase()] || '';
+    }
+    if (col === 'Price' && typeof value === 'number') value = `₹${value.toFixed(2)}`;
+    if (col === 'CHG%' && typeof value === 'number') value = `${value > 0 ? '+' : ''}${value.toFixed(2)}%`;
+    if (col === 'GAP%' && typeof value === 'number') value = `${value > 0 ? '+' : ''}${value.toFixed(2)}%`;
+    return value;
+}
+
+/** Build a full <tr> for one stock given the header columns (Action last). */
+function orbRowHTML(row, headerColumns) {
+    const values = [];
+    headerColumns.forEach(col => { if (col !== 'Action') values.push(orbCellValue(row, col)); });
+    const symbol = row.Symbol || row.symbol || 'Unknown';
+    return `<tr>
+        ${values.map((val, vi) => {
+            const colName = headerColumns[vi];
+            if (colName === 'Symbol') {
+                return `<td class="symbol-cell" onclick="copySymbol('${symbol}', this)" title="Click to copy">${val}</td>`;
+            }
+            return `<td>${val}</td>`;
+        }).join('')}
+        <td>
+            <button class="btn-place-order btn-sm" onclick="placeOrder('${symbol}')" ${autoBuyEnabled ? 'disabled' : ''}>
+                Place Order
+            </button>
+        </td>
+    </tr>`;
+}
+
+let lastOrbColumns = [];
+/** Render the top "Breakout" table = only stocks whose LIVE price has
+ * crossed above the 1st candle high (high915). Simple: price > 1st high. */
+function renderBreakoutTable(data, columns) {
+    const block = document.getElementById('breakoutBlock');
+    if (!block) return;
+    if (columns) lastOrbColumns = [...columns];
+    const headerColumns = [...lastOrbColumns, 'Action'];
+    const list = (data || []).filter(r => {
+        const price = parseFloat(r.Price ?? r.price);
+        const high = parseFloat(r.high915);
+        return Number.isFinite(price) && Number.isFinite(high) && high > 0 && price > high;
+    });
+    const head = document.getElementById('breakoutHead');
+    const body = document.getElementById('breakoutBody');
+    if (head) head.innerHTML = headerColumns.map(col => `<th>${col}</th>`).join('');
+    if (body) {
+        body.innerHTML = list.length
+            ? list.map(r => orbRowHTML(r, headerColumns)).join('')
+            : `<tr><td colspan="${headerColumns.length}" style="text-align:center;padding:24px;color:var(--text-muted);">No breakout yet (price above 1st candle high)</td></tr>`;
+    }
+    const cnt = document.getElementById('breakoutCount');
+    if (cnt) cnt.textContent = `${list.length} stocks`;
+    block.style.display = '';
+}
+
+// ================================================================
 function renderStrategyData(result) {
     const strategyId = document.getElementById('strategySelect').value;
     const strategy = STRATEGIES[strategyId];
@@ -428,85 +512,21 @@ function renderStrategyData(result) {
     if (data.length === 0) {
         tbody.innerHTML = `<tr><td colspan="${headerColumns.length}" style="text-align:center;padding:40px;color:var(--text-muted);">No stocks found for this strategy.</td></tr>`;
     } else {
-        tbody.innerHTML = data.map(row => {
-            // Build values based on column order
-            const values = [];
-            headerColumns.forEach(col => {
-                if (col === 'Action') return;
-
-                // ---- column-name -> row-key fallbacks ----
-                // Server columns ("200 EMA", "9:15 HIGH") use spaces
-                // but row keys are snake-style ("ema", "high915").
-                // Map those by hand before falling back to the generic
-                // row[col] | row[col-no-spaces] | row[col-lower] chain
-                // (which would otherwise yield empty cells because
-                // the row payload uses different keys than the
-                // headers).
-                let value;
-                if (col === '200 EMA') {
-                    const ema = parseFloat(row.ema);
-                    value = Number.isFinite(ema) ? ema : '';
-                } else if (col === '1st High') {
-                    const high = parseFloat(row.high915);
-                    value = Number.isFinite(high) ? high.toFixed(2) : '';
-                } else if (col === '1st Low') {
-                    const low = parseFloat(row.low915);
-                    value = Number.isFinite(low) ? low.toFixed(2) : '';
-                } else if (col === '1st Range%') {
-                    const range = parseFloat(row.candle_range_pct);
-                    value = Number.isFinite(range) ? `${range.toFixed(2)}%` : '';
-                } else if (col === 'Inside 9:15') {
-                    value = row.inside_915 ? '✅' : (row.inside_915 === false ? '❌' : '—');
-                } else if (col === 'Open 9:15') {
-                    const op = parseFloat(row.open915);
-                    value = Number.isFinite(op) ? `₹${op.toFixed(2)}` : '';
-                } else if (col === 'Prev High') {
-                    const ph = parseFloat(row.yesterday_high);
-                    value = Number.isFinite(ph) ? `₹${ph.toFixed(2)}` : '';
-                } else if (col === '9:15 HIGH') {
-                    const h = parseFloat(row.high915);
-                    value = Number.isFinite(h) ? h : '';
-                } else {
-                    const colKey = col.replace(/ /g, '').replace(/\//g, '');
-                    value = row[col] || row[colKey] || row[col.toLowerCase()] || '';
-                }
-                
-                // Special formatting for price
-                if (col === 'Price' && typeof value === 'number') {
-                    value = `₹${value.toFixed(2)}`;
-                }
-                // Special formatting for CHG%
-                if (col === 'CHG%' && typeof value === 'number') {
-                    value = `${value > 0 ? '+' : ''}${value.toFixed(2)}%`;
-                }
-                // Special formatting for GAP%
-                if (col === 'GAP%' && typeof value === 'number') {
-                    value = `${value > 0 ? '+' : ''}${value.toFixed(2)}%`;
-                }
-                
-                values.push(value);
-            });
-
-            const symbol = row.Symbol || row.symbol || 'Unknown';
-            return `<tr>
-                ${values.map((val, vi) => {
-                    const colName = headerColumns[vi];
-                    if (colName === 'Symbol') {
-                        return `<td class="symbol-cell" onclick="copySymbol('${symbol}', this)" title="Click to copy">${val}</td>`;
-                    }
-                    return `<td>${val}</td>`;
-                }).join('')}
-                <td>
-                    <button class="btn-place-order btn-sm" onclick="placeOrder('${symbol}')" ${autoBuyEnabled ? 'disabled' : ''}>
-                        Place Order
-                    </button>
-                </td>
-            </tr>`;
-        }).join('');
+        tbody.innerHTML = data.map(row => orbRowHTML(row, headerColumns)).join('');
     }
 
     document.getElementById('screenerCount').textContent = `Showing ${data.length} stocks`;
     updatePlaceOrderButtons();
+
+    // Top "Breakout" table (Advance ORB only): live price above 1st candle high.
+    const breakoutBlock = document.getElementById('breakoutBlock');
+    if (breakoutBlock) {
+        if (strategyId === 'advanceorb') {
+            renderBreakoutTable(data, columns);
+        } else {
+            breakoutBlock.style.display = 'none';
+        }
+    }
 
 }
 
@@ -1234,6 +1254,39 @@ function _applyTicks(ticks) {
                 if (tick.change_pct != null) row['CHG%'] = Number(tick.change_pct);
             }
         }
+
+        // Patch the matching row in the top "Breakout" table's Price cell too.
+        const bRows = document.querySelectorAll('#breakoutBody tr');
+        for (const btr of bRows) {
+            const bCells = btr.querySelectorAll('td');
+            const bSym = bCells[0] ? bCells[0].textContent.trim() : '';
+            if (bSym !== sym) continue;
+            if (tick.ltp != null && priceIdx < bCells.length) {
+                bCells[priceIdx].textContent = `₹${Number(tick.ltp).toFixed(2)}`;
+            }
+            if (tick.change_pct != null && chgIdx >= 0 && chgIdx < bCells.length) {
+                const v = Number(tick.change_pct);
+                const sign = v > 0 ? '+' : '';
+                bCells[chgIdx].textContent = `${sign}${v.toFixed(2)}%`;
+                bCells[chgIdx].style.color = v >= 0 ? 'var(--color-green, #22c55e)' : 'var(--color-red, #ef4444)';
+            }
+        }
+    }
+}
+
+// Throttled re-render of the breakout table so a stock that *just* crossed
+// above its 1st candle high gets added (or falls back out) without re-drawing
+// the whole table every tick (~250 ms). At most once per SECOND.
+let _breakoutRerenderAt = 0;
+function maybeRerenderBreakout() {
+    const now = Date.now();
+    if (now < _breakoutRerenderAt) return;
+    _breakoutRerenderAt = now + 1000;
+    const strategyId = document.getElementById('strategySelect')?.value;
+    const activePage = document.querySelector('.page.active');
+    const onScreener = activePage && activePage.id === 'page-screener';
+    if (strategyId === 'advanceorb' && onScreener && lastAdvanceOrbData) {
+        renderBreakoutTable(lastAdvanceOrbData.data, lastAdvanceOrbData.columns || lastOrbColumns);
     }
 }
 
@@ -1255,6 +1308,7 @@ function startLiveTickPoll() {
                 const strategyId = document.getElementById('strategySelect')?.value;
                 if (onScreener && strategyId === 'advanceorb') {
                     _applyTicks(data.ticks);
+                    maybeRerenderBreakout();
                 }
             }
         } catch (_) {}

@@ -269,6 +269,18 @@
                     <span id="screenerCount" style="font-size:13px;font-weight:600;color:var(--text-muted);">Showing 0 stocks</span>
                     <span id="nearHighHint" style="font-size:12px;color:var(--text-muted);">open within ±2% of prev high</span>
                 </div>
+                <div id="breakoutBlock" style="display:none;">
+                    <div style="display:flex;align-items:center;gap:8px;padding:6px 2px 4px;">
+                        <span style="font-size:13px;font-weight:700;color:var(--color-green,#22c55e);">🚀 Breakout</span>
+                        <span id="breakoutCount" style="font-size:12px;color:var(--text-muted);">0 stocks</span>
+                    </div>
+                    <div class="table-wrap">
+                        <table class="table-modern">
+                            <thead id="breakoutHead"></thead>
+                            <tbody id="breakoutBody"></tbody>
+                        </table>
+                    </div>
+                </div>
                 <div class="table-wrap">
                     <table class="table-modern">
                         <thead id="screenerHead">
