@@ -410,17 +410,36 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, near_high: bool = True
             df = df[df["name"].isin(yahoo_near_high_symbols)].copy()
             candidate_symbols = df["name"].dropna().astype(str).tolist()
 
-        # "Above 200 EMA" toggle: the 9:15 candle's CLOSE must be ABOVE the
-        # 200 EMA and at most ABOVE_EMA_MAX_GAP% above it. Close of the 9:15
-        # candle (not open, not the 9:20 candle) — confirmed with user.
+        # "Above 200 EMA" toggle: the opening candle's CLOSE must be ABOVE the
+        # 200 EMA and at most ABOVE_EMA_MAX_GAP% above it (opening-candle
+        # close, not open, not the 2nd candle) — confirmed with user.
+        #
+        # IMPORTANT (regression): the filter must NOT silently drop a stock
+        # just because Yahoo didn't return candle data for it. Yahoo yfinance
+        # frequently rate-limits ("Invalid Crumb" / 401), so a symbol can be
+        # absent from `yahoo_open_high` while it is clearly above EMA. The old
+        # code iterated only over `yahoo_open_high` keys, so a Yahoo-side miss
+        # removed a healthy above-EMA row — exactly the "stock above 200 EMA
+        # gets removed" bug. Fix: evaluate every row; if the EMA is missing,
+        # fall back to compute_200_ema_batch (CandleTracker, same value shown
+        # in the 200 EMA column); if we still can't determine it, KEEP the row
+        # (fail-open) rather than wrongly dropping it.
         if above_ema:
             above_ema_symbols = set()
-            for _s, _yd in (yahoo_open_high or {}).items():
-                if not _yd:
+            _yd_all = yahoo_open_high or {}
+            _missing = [s for s in df["name"].tolist() if s not in _yd_all]
+            _fb_ema = compute_200_ema_batch(_missing) if _missing else {}
+            for _s in df["name"].tolist():
+                _yd = _yd_all.get(_s)
+                _close = _yd.get("close915") if _yd else None
+                _ema = _yd.get("ema200") if _yd else None
+                if _ema is None or float(_ema) <= 0:
+                    _ema = _fb_ema.get(_s)  # yahoo missed → CandleTracker EMA
+                if _ema is None or float(_ema) <= 0:
+                    above_ema_symbols.add(_s)  # can't validate → keep (fail-open)
                     continue
-                _close = _yd.get("close915")
-                _ema = _yd.get("ema200")
-                if _close is None or _ema is None or float(_ema) <= 0:
+                if _close is None:
+                    above_ema_symbols.add(_s)  # no opening-close → can't prove below → keep
                     continue
                 _gap_pct = (float(_close) - float(_ema)) / float(_ema) * 100
                 if float(_close) > float(_ema) and _gap_pct <= ABOVE_EMA_MAX_GAP:
