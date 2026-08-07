@@ -264,7 +264,8 @@ def root():
 @app.get("/api/strategies/advanceorb")
 def get_advance_orb(budget: int = 100000, parts: int = 4, near_high: bool = True,
                     above_ema: bool = False, inside915: bool = False,
-                    inside3: bool = False, calc_qty: bool = False):
+                    inside3: bool = False, calc_qty: bool = False,
+                    timeframe: int = 5):
     """
     Fetch the NSE universe straight from TradingView:
     1. Price: 200 to 4000 INR
@@ -275,13 +276,20 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, near_high: bool = True
     re-applied in later design steps).
 
     Query params:
-      budget: total capital in INR (default 100000)
-      parts:  number of equal parts to split budget into (default 4)
+      budget:    total capital in INR (default 100000)
+      parts:     number of equal parts to split budget into (default 4)
+      timeframe: candle timeframe in minutes — 5 (default) or 15.  ALL candle
+                 logic follows the selected timeframe: the opening candle, the
+                 inside-/3-candle checks, and the 200 EMA are computed from
+                 bars of this size.
     """
     if budget <= 0:
         raise HTTPException(status_code=400, detail="budget must be > 0")
     if parts < 1 or parts > 20:
         raise HTTPException(status_code=400, detail="parts must be between 1 and 20")
+    if int(timeframe) not in (5, 15):
+        raise HTTPException(status_code=400, detail="timeframe must be 5 or 15")
+    timeframe = int(timeframe)
     try:
         # ─── Step 1: Universe — TradingView scan (primary) ──────────────
         # Fetch ALL NSE stocks straight from TradingView:
@@ -384,7 +392,7 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, near_high: bool = True
         # pending until that separate requirement is enabled. When the toggle
         # is OFF, the full TradingView universe (~600) is shown instead.
         if near_high or above_ema or inside915 or inside3:
-            yahoo_open_high = batch_yahoo_orb_data(candidate_symbols)
+            yahoo_open_high = batch_yahoo_orb_data(candidate_symbols, timeframe=timeframe)
         else:
             yahoo_open_high = None
 
@@ -1123,7 +1131,7 @@ async def stream_live_ticks(request: Request):
 
 
 @app.get("/api/strategies/advanceorb/refresh")
-def refresh_advance_orb(tickers: str = ""):
+def refresh_advance_orb(tickers: str = "", timeframe: int = 5):
     """Lightweight refresh of price/volume/change for a fixed list of tickers.
 
     Re-checks the 9:15 opening-candle ≤1.5% eligibility and the open-vs-
@@ -1139,7 +1147,7 @@ def refresh_advance_orb(tickers: str = ""):
 
         opening_candle_map: dict | None = None
         # Re-check ≤1.5% opening-candle rule
-        tv_candles = batch_tv_opening_candles(symbols)
+        tv_candles = batch_tv_opening_candles(symbols, timeframe=int(timeframe))
         opening_candle_map = {}
         for symbol in symbols:
             candle = tv_candles.get(symbol)

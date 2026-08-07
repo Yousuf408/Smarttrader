@@ -122,6 +122,7 @@ def _yesterday_high(rows: list[list[float]]) -> float | None:
 async def _batch_tv_opening_candles_async(
     result: dict[str, tuple[float, float, float, float] | None],
     token: str,
+    timeframe: int = 5,
 ) -> None:
     chart = _id("cs_")
     quote = _id("qs_")
@@ -142,7 +143,7 @@ async def _batch_tv_opening_candles_async(
                 chart, alias,
                 f'={{"symbol":"{tv_symbol}","adjustment":"splits","session":"regular"}}',
             ]))
-            await ws.send(_frame("create_series", [chart, series, series, alias, "5", 500]))
+            await ws.send(_frame("create_series", [chart, series, series, alias, f"{timeframe}", 500]))
             raw = ""
             while True:
                 message = await ws.recv()
@@ -157,18 +158,23 @@ async def _batch_tv_opening_candles_async(
 
 def batch_tv_opening_candles(
     symbols: list[str],
+    timeframe: int = 5,
 ) -> dict[str, tuple[float, float, float, float, float | None] | None]:
-    """Fetch today's exact 09:15–09:20 bar + yesterday's daily high (TV only).
+    """Fetch today's exact opening bar + yesterday's daily high (TV only).
 
-    Returns a 5-tuple per symbol: (open, high, low, close, yesterday_high).
-    The last element is the previous trading day's high (max of that day's
-    5-min bar highs = daily-timeframe high).  All values come straight from
-    the authenticated TradingView chart feed — never Yahoo or Angel One.
+    `timeframe` is minutes (5 or 15).  On 5-min this is the 09:15–09:20 bar;
+    on 15-min it is the 09:15–09:30 bar.  Returns a 5-tuple per symbol:
+    (open, high, low, close, yesterday_high).  The last element is the
+    previous trading day's high (max of that day's bar highs = daily-timeframe
+    high).  All values come straight from the authenticated TradingView chart
+    feed — never Yahoo or Angel One.
     """
     result = {str(s).strip().upper(): None for s in symbols if s}
-    # Before the first candle closes there is nothing valid to fetch.
+    timeframe = int(timeframe)
+    # Before the opening candle closes there is nothing valid to fetch.
     now = dt.datetime.now(IST)
-    if (now.hour, now.minute) < (9, 20):
+    first_close_min = 9 * 60 + 15 + timeframe  # 9:20 for 5m, 9:30 for 15m
+    if now.hour * 60 + now.minute < first_close_min:
         return result
     username = os.getenv("TRADINGVIEW_USERNAME", "").strip()
     password = os.getenv("TRADINGVIEW_PASSWORD", "")
@@ -179,7 +185,7 @@ def batch_tv_opening_candles(
     now_ts = time.time()
     with _TV_CACHE_LOCK:
         for symbol in list(result):
-            cached = _TV_CANDLE_CACHE.get((today, symbol))
+            cached = _TV_CANDLE_CACHE.get((today, timeframe, symbol))
             if cached and now_ts - cached[0] < _TV_CANDLE_TTL:
                 result[symbol] = cached[1]
         missing = {symbol: None for symbol, value in result.items() if value is None}
@@ -222,11 +228,11 @@ def batch_tv_opening_candles(
             with _TV_CACHE_LOCK:
                 _TV_TOKEN_CACHE = (now_ts, token)
 
-        asyncio.run(_batch_tv_opening_candles_async(missing, token))
+        asyncio.run(_batch_tv_opening_candles_async(missing, token, timeframe))
         with _TV_CACHE_LOCK:
             for symbol, value in missing.items():
                 if value is not None:
-                    _TV_CANDLE_CACHE[(today, symbol)] = (now_ts, value)
+                    _TV_CANDLE_CACHE[(today, timeframe, symbol)] = (now_ts, value)
                     result[symbol] = value
     except Exception as exc:
         logger.warning("TradingView 5-minute candle fetch failed: %s", exc)

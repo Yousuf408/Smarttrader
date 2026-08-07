@@ -275,8 +275,14 @@ _YF_ORB_FAIL_TTL = 60.0     # failed fetches retried after 1 min
 _YF_ORB_LOCK = threading.Lock()
 
 
-def fetch_yahoo_orb_data(symbol: str) -> dict | None:
-    """Fetch today's 9:15/9:20 5-min candles + yesterday's high from Yahoo.
+def fetch_yahoo_orb_data(symbol: str, timeframe: int = 5) -> dict | None:
+    """Fetch today's opening candle + following candles + yesterday's high.
+
+    `timeframe` is minutes (5 or 15).  On 5-min, the opening candle is the
+    09:15–09:20 bar and the confirmation candle (close920) is 09:20.  On
+    15-min, the opening candle is the 09:15–09:30 bar and the confirmation
+    candle is 09:30.  The EMA (ema200) is computed on closes of the same
+    interval so "everything" follows the selected timeframe.
 
     Returns dict with keys:
       open915, high915, low915, close915, close920 (| None),
@@ -287,7 +293,7 @@ def fetch_yahoo_orb_data(symbol: str) -> dict | None:
     ticker = f"{sym}.NS"
     now = time.time()
     with _YF_ORB_LOCK:
-        hit = _YF_ORB_CACHE.get(sym)
+        hit = _YF_ORB_CACHE.get((sym, timeframe))
         if hit:
             ttl = _YF_ORB_CACHE_TTL if hit[1] is not None else _YF_ORB_FAIL_TTL
             if now - hit[0] < ttl:
@@ -296,7 +302,7 @@ def fetch_yahoo_orb_data(symbol: str) -> dict | None:
         candles = yf.download(
             tickers=ticker,
             period="12d",
-            interval="5m",
+            interval=f"{timeframe}m",
             progress=False,
             auto_adjust=False,
             prepost=False,
@@ -304,11 +310,11 @@ def fetch_yahoo_orb_data(symbol: str) -> dict | None:
         )
     except Exception:
         with _YF_ORB_LOCK:
-            _YF_ORB_CACHE[sym] = (time.time(), None)
+            _YF_ORB_CACHE[(sym, timeframe)] = (time.time(), None)
         return None
     if candles is None or candles.empty:
         with _YF_ORB_LOCK:
-            _YF_ORB_CACHE[sym] = (time.time(), None)
+            _YF_ORB_CACHE[(sym, timeframe)] = (time.time(), None)
         return None
     if isinstance(candles.columns, pd.MultiIndex):
         try:
@@ -361,19 +367,24 @@ def fetch_yahoo_orb_data(symbol: str) -> dict | None:
     open_ = float(c1["Open"])
     close = float(c1["Close"])
 
-    # 2nd+ candles = the 09:20 IST bar onward (rows at minute >= 20).
-    # c2 (9:20), c3 (9:25), c4 (9:30) close drive the "3 Candles Inside
-    # 9:15" toggle (close must sit inside the 9:15 high–low range).
-    # close920 stays the 9:20 candle close for Inside-9:15.
-    c2_rows = today_rows[(today_rows.index.hour == 9) & (today_rows.index.minute >= 20)]
-    close920 = float(c2_rows.iloc[0]["Close"]) if not c2_rows.empty else None
+    # 2nd+ candles = the next bars after the opening candle.  c2 = the 2nd
+    # bar (9:20 for 5-min, 9:30 for 15-min), c3 = 3rd (9:25 / 9:45), c4 = 4th
+    # (9:30 / 10:00).  Their closes drive the "3 Candles Inside" toggle (close
+    # must sit inside the opening candle's high–low range).  close920 always
+    # means "the 2nd candle's close" regardless of timeframe (9:20 on 5-min,
+    # 9:30 on 15-min).
+    sorted_today = today_rows.sort_index()
+    c1_ts = opening.index[0]
+    following = sorted_today[sorted_today.index > c1_ts]
+    _rows = list(following[["High", "Low", "Close"]].itertuples())
+    close920 = float(_rows[0].Close) if _rows else None
     _next = {}
     for _i, _tag in enumerate(("c2", "c3", "c4"), start=0):
-        if len(c2_rows) > _i:
-            _r = c2_rows.iloc[_i]
-            _next[f"{_tag}_hi"] = float(_r["High"])
-            _next[f"{_tag}_lo"] = float(_r["Low"])
-            _next[f"{_tag}_close"] = float(_r["Close"])
+        if len(_rows) > _i:
+            _r = _rows[_i]
+            _next[f"{_tag}_hi"] = float(_r.High)
+            _next[f"{_tag}_lo"] = float(_r.Low)
+            _next[f"{_tag}_close"] = float(_r.Close)
         else:
             _next[f"{_tag}_hi"] = None
             _next[f"{_tag}_lo"] = None
@@ -405,6 +416,7 @@ def fetch_yahoo_orb_data(symbol: str) -> dict | None:
         ema200 = float(closes.ewm(span=EMA_SPAN, adjust=False).mean().iloc[-1])
 
     result = {
+        "timeframe": timeframe,
         "open915": open_,
         "high915": high,
         "low915": low,
@@ -420,7 +432,7 @@ def fetch_yahoo_orb_data(symbol: str) -> dict | None:
         "c4_hi": _next.get("c4_hi"), "c4_lo": _next.get("c4_lo"), "c4_close": _next.get("c4_close"),
     }
     with _YF_ORB_LOCK:
-        _YF_ORB_CACHE[sym] = (time.time(), result)
+        _YF_ORB_CACHE[(sym, timeframe)] = (time.time(), result)
     return result
 
 
@@ -441,29 +453,29 @@ _ORB_YAHOO_DAY_LOCK = threading.Lock()
 _ORB_YAHOO_FETCH_LOCK = threading.Lock()
 
 
-def batch_yahoo_orb_data(symbols: list[str]) -> dict:
+def batch_yahoo_orb_data(symbols: list[str], timeframe: int = 5) -> dict:
     """Fetch Yahoo candle data for many symbols in parallel.
 
-    Single-flight + per-IST-day RAM cache: the 9:15/9:20 candle facts
-    (open915/high915/low915/close920/EMA/yesterday_high) are frozen once the
-    9:20 IST candle closes. Completed rows are sealed into the day cache so
-    every later toggle/auto-refresh re-filters cached rows instead of
-    re-downloading the universe.
+    Single-flight + per-IST-day/per-timeframe RAM cache: the opening-candle
+    facts (open915/high915/low915/close920/EMA/yesterday_high) are frozen
+    once the second candle (9:20 on 5-min, 9:30 on 15-min) closes. Completed
+    rows are sealed into the day cache so every later toggle / auto-refresh
+    re-filters cached rows instead of re-downloading the universe.
     """
     unique = [str(s).strip().upper() for s in symbols if s]
     if not unique:
         return {}
     # Key the day cache by the *anchor* date (today if live, else the last
-    # trading day) so weekend/holiday rows seal under one key and don't
-    # re-download the universe on every calendar day / auto-refresh.
+    # trading day) AND the timeframe, so 5-min and 15-min rows never collide.
     _anchor, _ = _resolve_reference_date()
     today = _anchor.strftime("%Y-%m-%d")
+    cache_key = (today, int(timeframe))
 
     with _ORB_YAHOO_FETCH_LOCK:
         # Re-check under the single-flight lock so waiters benefit from the
         # round that just finished instead of launching their own.
         with _ORB_YAHOO_DAY_LOCK:
-            day_cache = _ORB_YAHOO_DAY.setdefault(today, {})
+            day_cache = _ORB_YAHOO_DAY.setdefault(cache_key, {})
             results = {s: day_cache[s] for s in unique if s in day_cache}
             missing = [s for s in unique if s not in day_cache]
         if not missing:
@@ -471,7 +483,7 @@ def batch_yahoo_orb_data(symbols: list[str]) -> dict:
 
         fresh: dict[str, dict | None] = {}
         with ThreadPoolExecutor(max_workers=YFINANCE_WORKERS) as pool:
-            futures = {pool.submit(fetch_yahoo_orb_data, sym): sym for sym in missing}
+            futures = {pool.submit(fetch_yahoo_orb_data, sym, int(timeframe)): sym for sym in missing}
             for future in as_completed(futures):
                 sym = futures[future]
                 try:
@@ -479,11 +491,11 @@ def batch_yahoo_orb_data(symbols: list[str]) -> dict:
                 except Exception:
                     fresh[sym] = None
         results.update(fresh)
-        # Seal only complete rows into the day cache.  None / pre-9:20 rows
-        # (close920 missing) are left unsealed so a later round upgrades them
-        # the moment the 9:20 candle closes — then they stay frozen all day.
+        # Seal only complete rows into the day cache.  None / pre-second-candle
+        # rows (close920 missing) are left unsealed so a later round upgrades
+        # them the moment the second candle closes — then frozen all day.
         with _ORB_YAHOO_DAY_LOCK:
-            day_cache = _ORB_YAHOO_DAY.setdefault(today, {})
+            day_cache = _ORB_YAHOO_DAY.setdefault(cache_key, {})
             for s, row in fresh.items():
                 if row and row.get("close920") is not None:
                     day_cache[s] = row

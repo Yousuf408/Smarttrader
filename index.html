@@ -154,6 +154,14 @@
                             <input type="number" id="partsInput" value="4" min="1" max="20" step="1" />
                             <button type="button" onclick="stepParts(1)" aria-label="Increase parts">+</button>
                         </div>
+                        <!-- ===== TIMEFRAME (Advance ORB) ===== -->
+                        <div class="stepper stepper-narrow" id="tfWrap">
+                            <label for="tfSelect" class="field-label">TF:</label>
+                            <select id="tfSelect" class="strategy-select" onchange="onTimeframeChange()" title="Candle timeframe — all ORB candle logic (opening range, inside checks, 200 EMA) uses this bar size">
+                                <option value="5">5 min</option>
+                                <option value="15">15 min</option>
+                            </select>
+                        </div>
                         <button class="btn btn-primary btn-refresh" onclick="refreshScreener()">🔄</button>
 
                         <!-- ===== TOGGLES GROUP (compact, flex row) ===== -->

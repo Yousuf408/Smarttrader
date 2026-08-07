@@ -240,6 +240,13 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     _attachBudgetFormatter();
     _restoreSteppers();
+    // Restore persisted candle timeframe into the TF select.
+    try {
+        const savedTf = parseInt(localStorage.getItem(TF_KEY), 10);
+        if (savedTf === 15) orbTimeframe = 15;
+    } catch (e) {}
+    const tfSel = document.getElementById('tfSelect');
+    if (tfSel) tfSel.value = String(orbTimeframe);
 });
 
 // ================================================================
@@ -250,6 +257,27 @@ let aboveEmaEnabled = false;
 let _inside915Only = false;
 let _inside3Only = false;
 let calcQtyEnabled = false;
+// Candle timeframe (5 or 15 min) for Advance ORB. All ORB candle logic —
+// opening range, inside/3-candle checks, and the 200 EMA — is computed
+// backend-side from bars of this size.
+const TF_KEY = "tradeAlgo.timeframe";
+let orbTimeframe = 5;
+
+function orbTimeframeLabel() {
+    return orbTimeframe === 15 ? '15-min' : '5-min';
+}
+
+function onTimeframeChange() {
+    const sel = document.getElementById('tfSelect');
+    const tf = sel ? parseInt(sel.value, 10) : 5;
+    orbTimeframe = (tf === 15) ? 15 : 5;
+    try { localStorage.setItem(TF_KEY, String(orbTimeframe)); } catch (e) {}
+    showToast(`⏱️ ${orbTimeframeLabel()} timeframe`,
+        orbTimeframe === 15
+            ? 'Opening range, inside/3-candle checks & 200 EMA now use 15-min bars (opening candle closes ~9:30)'
+            : 'Using 5-min opening-range candles (closes ~9:20)');
+    onStrategyChange();
+}
 
 function toggleNearHigh() {
     const toggle = document.getElementById('nearHighToggle');
@@ -281,7 +309,7 @@ function toggleAboveEma() {
         : 'open within ±2% of prev high';
     showToast(aboveEmaEnabled ? '📈 Above 200 EMA ON' : '📈 Above 200 EMA OFF',
         aboveEmaEnabled
-            ? 'Keeping only stocks whose 9:15 close is above the 200 EMA (max 3% above)'
+            ? `Keeping only stocks whose opening-candle close is above the 200 ${orbTimeframeLabel()} EMA (max 3% above)`
             : 'No 200 EMA filter');
     // Re-fetch with the new mode
     onStrategyChange();
@@ -294,9 +322,10 @@ function toggleInside915() {
     status.textContent = _inside915Only ? 'ON' : 'OFF';
     status.classList.toggle('active', _inside915Only);
     showToast(_inside915Only ? '📐 Inside 9:15 ON' : '📐 Inside 9:15 OFF',
-        _inside915Only ? 'Showing only stocks where the 9:20 candle closed inside the 9:15 range (Yahoo 5-min)'
-                      : 'Showing all stocks');
-    // Re-fetch so the backend computes inside_915 from the Yahoo 5-min batch
+        _inside915Only
+            ? `Showing only stocks where the 2nd ${orbTimeframeLabel()} candle closed inside the opening range`
+            : 'Showing all stocks');
+    // Re-fetch so the backend computes inside_915 from the Yahoo batch
     onStrategyChange();
 }
 
@@ -307,8 +336,9 @@ function toggleInside3() {
     status.textContent = _inside3Only ? 'ON' : 'OFF';
     status.classList.toggle('active', _inside3Only);
     showToast(_inside3Only ? '📐 3 Closes Inside 9:15 ON' : '📐 3 Closes Inside 9:15 OFF',
-        _inside3Only ? 'Showing only stocks where 9:20/9:25/9:30 candle closes sit inside the 9:15 range (Yahoo 5-min)'
-                      : 'Showing all stocks');
+        _inside3Only
+            ? `Showing only stocks where 3 successive closes sit inside the opening range (${orbTimeframeLabel()})`
+            : 'Showing all stocks');
     onStrategyChange();
 }
 
@@ -337,9 +367,10 @@ async function fetchAdvanceORB() {
     const i9 = _inside915Only ? '&inside915=true' : '&inside915=false';
     const i3 = _inside3Only ? '&inside3=true' : '&inside3=false';
     const cq = calcQtyEnabled ? '&calc_qty=true' : '&calc_qty=false';
+    const tf = `&timeframe=${orbTimeframe}`;
     try {
         const response = await fetch(
-            `/api/strategies/advanceorb?budget=${budget}&parts=${parts}${nh}${ae}${i9}${i3}${cq}`
+            `/api/strategies/advanceorb?budget=${budget}&parts=${parts}${nh}${ae}${i9}${i3}${cq}${tf}`
         );
         if (!response.ok) {
             throw new Error(`API returned ${response.status}`);
@@ -1044,7 +1075,7 @@ async function fetchAdvanceORBRefresh(silent = true) {
     if (symbols.length === 0) return;
     try {
         const response = await fetch(
-            `/api/strategies/advanceorb/refresh?tickers=${encodeURIComponent(symbols.join(','))}`,
+            `/api/strategies/advanceorb/refresh?tickers=${encodeURIComponent(symbols.join(','))}&timeframe=${orbTimeframe}`,
             { cache: 'no-store' }
         );
         if (!response.ok) return;
