@@ -24,3 +24,5 @@ The Advance ORB endpoint queries TradingView through `tradingview-screener`, so 
 - Every modification must update the Replit file tree on disk (no extra cost — happens automatically with each edit). The "Modified files" section at the end of each implementation update is the source of truth.
 - Push to GitHub (`origin` → `Yousuf408/Smarttrader`) only when the user explicitly commands it. Auto-push after every change is opt-in, not on by default.
 - Communication style: keep replies short and point-wise. Use bullets, no fluff, no recap-of-recap.
+- ALWAYS check the prior discussion / project task list / memory before implementing anything. Do not "fix" or remove a behavioral condition that was deliberately added earlier without reading why it exists.
+- Advance ORB "Above 200 EMA" toggle KEEPS the ≤3% above-EMA cap (`ABOVE_EMA_MAX_GAP = 3.0`). A stock more than 3% above its EMA is excluded by design — this was a deliberate prior decision. Never remove this cap.

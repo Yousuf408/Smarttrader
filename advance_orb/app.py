@@ -411,8 +411,13 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, near_high: bool = True
             candidate_symbols = df["name"].dropna().astype(str).tolist()
 
         # "Above 200 EMA" toggle: the opening candle's CLOSE must be ABOVE the
-        # 200 EMA and at most ABOVE_EMA_MAX_GAP% above it (opening-candle
-        # close, not open, not the 2nd candle) — confirmed with user.
+        # 200 EMA AND at most ABOVE_EMA_MAX_GAP% above it (opening-candle
+        # close, not open, not the 2nd candle).
+        # The ABOVE_EMA_MAX_GAP (=3%) cap is INTENTIONAL — added after a prior
+        # discussion with the user, who explicitly asked to keep it. Do NOT
+        # remove it. A stock beyond 3% above its EMA is excluded by design
+        # (e.g. SAPPHIRE 15m: close 198.11 vs EMA 192.30 = 3.02% is correctly
+        # excluded).
         #
         # IMPORTANT (regression): the filter must NOT silently drop a stock
         # just because Yahoo didn't return candle data for it. Yahoo yfinance
