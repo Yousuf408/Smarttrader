@@ -331,6 +331,45 @@ function updateMarketStatus() {
 setInterval(updateMarketStatus, 30000);
 
 // ================================================================
+// LIVE NIFTY / BANK NIFTY (Angel One) — header index chips
+// ================================================================
+function renderIndexChips(indices) {
+    const names = { 'NIFTY': 'IN', 'BANKNIFTY': 'BN' };
+    (indices || []).forEach(ix => {
+        const name = ix.name;
+        if (name !== 'NIFTY' && name !== 'BANKNIFTY') return;
+        const valEl = document.getElementById('idxVal' + name);
+        const chgEl = document.getElementById('idxChg' + name);
+        const chip  = document.getElementById('idxChip' + name);
+        if (!valEl || !chgEl || !chip) return;
+        const ltp = parseFloat(ix.ltp);
+        if (Number.isFinite(ltp)) valEl.textContent = ltp.toLocaleString('en-IN', { maximumFractionDigits: 1 });
+        const pct = parseFloat(ix.change_pct);
+        if (Number.isFinite(pct)) {
+            const sign = pct > 0 ? '+' : '';
+            chgEl.textContent = `${sign}${pct.toFixed(2)}%`;
+            chgEl.classList.toggle('pos', pct >= 0);
+            chgEl.classList.toggle('neg', pct < 0);
+        }
+        chip.style.opacity = 1;
+    });
+}
+
+function updateIndices() {
+    fetch('/api/market/indices')
+        .then(r => r.json())
+        .then(d => renderIndexChips(d.indices))
+        .catch(() => {});
+}
+// Don't hit the broker endpoints before auth — poll once when the dashboard
+// is visible, then refresh on a modest cadence (index tape doesn't need to be
+// sub-second in the header).
+document.addEventListener('DOMContentLoaded', function () {
+    setTimeout(updateIndices, 1500);
+    setInterval(updateIndices, 5000);
+});
+
+// ================================================================
 // NAVIGATION
 // ================================================================
 function navigateTo(pageId) {

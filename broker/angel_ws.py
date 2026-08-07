@@ -305,11 +305,9 @@ def on_data(wsapp, message):
 
         # Only accept NSE Capital Market (equity) data — reject CDS (13),
         # MCX (5), and other segments that share token numbers with equities.
-        exchange_type = message.get('exchange_type')
-        if exchange_type != 1:
-            logger.debug(f"on_data — token {message.get('token')} skipped (exchange_type={exchange_type})")
-            return
-
+        # Exception: known index tokens (NIFTY, BANKNIFTY) arrive with a
+        # different exchange_type — always allow them so the header index
+        # widgets get live Nifty / Bank Nifty.
         token = str(message.get('token', ''))
         if not token and isinstance(message, dict):
             # Try alternate key names
@@ -318,8 +316,22 @@ def on_data(wsapp, message):
             logger.debug("on_data — no token in message, skipping")
             return
 
-        # Look up a human-readable symbol name for this token
+        index_tokens = {str(t) for _, t, kd in WATCHLIST if kd == "index"}
+        exchange_type = message.get('exchange_type')
+        if exchange_type != 1 and token not in index_tokens:
+            logger.debug(f"on_data — token {token} skipped (exchange_type={exchange_type})")
+            return
+
+        # Look up a human-readable symbol name for this token.
+        # Index tokens aren't in the equity scrip master → fall back to the
+        # WATCHLIST display name (NIFTY / BANKNIFTY).
         symbol = _TOKEN_SYMBOL_MAP.get(token, "")
+        if not symbol and token in index_tokens:
+            symbol = next(
+                (nm for nm, t_, kd in WATCHLIST
+                 if kd == "index" and str(t_) == token),
+                symbol,
+            )
         if not token:
             logger.warning(f"🔴 No token in message!")
             return
@@ -401,32 +413,44 @@ def on_open(wsapp):
             "(exchangeType=1)..."
         )
 
-        # Collect ALL tokens as STRINGS — the SDK expects string tokens
+        # Collect tokens as STRINGS — the SDK expects string tokens
         # in the subscription JSON (``"tokens": ["2885"]``, not ``[2885]``).
         # Also, the SDK's ``_on_data`` only processes *binary* frames
         # (data_type == 2). Mode 1 / LTP sends *text* frames that the SDK
         # silently discards, so we must use Mode 2 (Quote) for **all**
         # subscriptions, indices included.
         all_tokens = [str(t) for _, t, _ in WATCHLIST]
+        index_tokens = [str(t) for _, t, k in WATCHLIST if k == "index"]
+        stock_tokens = [str(t) for _, t, k in WATCHLIST if k == "stock"]
         has_index = any(k == "index" for _, _, k in WATCHLIST)
         has_stock = any(k == "stock" for _, _, k in WATCHLIST)
 
         if has_index:
-            logger.info(f"  • Indices: {sum(1 for _, _, k in WATCHLIST if k == 'index')} (Mode 2)")
+            logger.info(f"  • Indices: {len(index_tokens)} (exchangeType 2, Mode 2)")
         if has_stock:
-            logger.info(f"  • Stocks: {sum(1 for _, _, k in WATCHLIST if k == 'stock')} (Mode 2)")
+            logger.info(f"  • Stocks: {len(stock_tokens)} (exchangeType 1, Mode 2)")
 
-        # Batch-subscribe everything in Mode 2 (binary frames → triggers on_data)
+        # Batch-subscribe stocks (exchangeType 1) and indices (exchangeType 2)
+        # separately in Mode 2 (binary frames → triggers on_data).  Indices
+        # (NIFTY/BANKNIFTY) only stream when sent with exchangeType 2.
         BATCH_SIZE = 950
-        for i in range(0, len(all_tokens), BATCH_SIZE):
-            batch = all_tokens[i:i + BATCH_SIZE]
-            _sws.subscribe(_correlation_id, 2, [
-                {"exchangeType": 1, "tokens": batch}
-            ])
-            batch_num = (i // BATCH_SIZE) + 1
-            logger.info(f"✓ Subscribed batch {batch_num}: {len(batch)} tokens in Mode 2")
+        if stock_tokens:
+            for i in range(0, len(stock_tokens), BATCH_SIZE):
+                batch = stock_tokens[i:i + BATCH_SIZE]
+                _sws.subscribe(_correlation_id, 2, [
+                    {"exchangeType": 1, "tokens": batch}
+                ])
+                batch_num = (i // BATCH_SIZE) + 1
+                logger.info(f"✓ Subscribed stock batch {batch_num}: {len(batch)} tokens")
+        if index_tokens:
+            for i in range(0, len(index_tokens), BATCH_SIZE):
+                batch = index_tokens[i:i + BATCH_SIZE]
+                _sws.subscribe(_correlation_id, 2, [
+                    {"exchangeType": 2, "tokens": batch}
+                ])
+                logger.info(f"✓ Subscribed index batch: {len(batch)} tokens (NSE indices)")
 
-        logger.info(f"✅ Total subscribed: {len(all_tokens)} tokens as NSE equity")
+        logger.info(f"✅ Total subscribed: {len(all_tokens)} tokens")
 
     except Exception as e:
         logger.error(f"🔴 Subscribe error: {e}", exc_info=True)

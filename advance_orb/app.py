@@ -1105,6 +1105,42 @@ def health():
 # P3 — LIVE MARKET TICKS (from Angel One WebSocket)
 # ================================================================
 
+@app.get("/api/market/indices")
+def get_market_indices():
+    """Return live NIFTY / BANKNIFTY index values from the Angel One WS.
+
+    Indices stream on exchangeType 2 tokens 26000 (NIFTY) and 26009
+    (BANKNIFTY). Returns their LTP + % change so the header widgets can
+    show a live Nifty / Bank Nifty tape next to the Live badge.
+    """
+    from broker.angel_ws import get_latest_ticks as _angel_ticks
+    from broker.angel_ws import get_feed_token
+    _alias = {26000: "NIFTY", 26009: "BANKNIFTY"}
+    _token_map = {}
+    try:
+        from broker.angel_ws import WATCHLIST as _WL
+        _token_map = {str(t): nm for nm, t, k in _WL if k == "index"}
+    except Exception:
+        pass
+    ticks = _angel_ticks() or {}
+    out = []
+    for tok, name in _alias.items():
+        d = ticks.get(str(tok))
+        if not d:
+            continue
+        out.append({
+            "name": name,
+            "ltp": d.get("ltp"),
+            "change_pct": d.get("change_pct"),
+            "change": d.get("change"),
+            "timestamp": d.get("timestamp"),
+        })
+    return {
+        "indices": out,
+        "connected": angel_ws_connected(),
+    }
+
+
 @app.get("/api/market/live-ticks")
 def get_live_ticks():
     """Return latest tick data for all subscribed symbols."""
@@ -1520,6 +1556,7 @@ def broker_connect(payload: dict):
                 # Build the list from the candle_tracker's token→symbol map.
                 initial_ws = [
                     ("NIFTY", 26000, "index"),
+                    ("BANKNIFTY", 26009, "index"),
                 ]
                 _all_stocks = [
                     (sym, int(tok), "stock")
