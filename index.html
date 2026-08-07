@@ -269,9 +269,9 @@
                     <span id="screenerCount" style="font-size:13px;font-weight:600;color:var(--text-muted);">Showing 0 stocks</span>
                     <span id="nearHighHint" style="font-size:12px;color:var(--text-muted);">open within ±2% of prev high</span>
                 </div>
-                <div id="breakoutBlock" style="display:none;">
+                <div id="breakoutBlock" style="display:none;margin-bottom:24px;">
                     <div style="display:flex;align-items:center;gap:8px;padding:6px 2px 4px;">
-                        <span style="font-size:13px;font-weight:700;color:var(--color-green,#22c55e);">🚀 Breakout</span>
+                        <span style="font-size:15px;font-weight:800;color:var(--color-green,#22c55e);text-transform:uppercase;letter-spacing:.4px;">🚀 Breakout Table</span>
                         <span id="breakoutCount" style="font-size:12px;color:var(--text-muted);">0 stocks</span>
                     </div>
                     <div class="table-wrap">
@@ -281,28 +281,30 @@
                         </table>
                     </div>
                 </div>
-                <div class="table-wrap">
-                    <table class="table-modern">
-                        <thead id="screenerHead">
-                            <tr>
-                                <th>Symbol</th>
-                                <th>Price</th>
-                                <th>CHG%</th>
-                                <th>GAP%</th>
-                                <th>Volume</th>
-                                <th>RELVOL</th>
-                                <th>Inside</th>
-                                <th>Breakout</th>
-                                <th>200 EMA</th>
-                                <th>9:15 HIGH</th>
-                                <th>PREV HIGH</th>
-                                <th>MaxQty</th>
-                                <th>Sector</th>
-                                <th>Action</th>
-                            </tr>
-                        </thead>
-                        <tbody id="screenerBody"></tbody>
-                    </table>
+                <div style="margin-top:8px;border-top:1px solid var(--border-color,rgba(255,255,255,.08));">
+                    <div class="table-wrap">
+                        <table class="table-modern">
+                            <thead id="screenerHead">
+                                <tr>
+                                    <th>Symbol</th>
+                                    <th>Price</th>
+                                    <th>CHG%</th>
+                                    <th>GAP%</th>
+                                    <th>Volume</th>
+                                    <th>RELVOL</th>
+                                    <th>Inside</th>
+                                    <th>Breakout</th>
+                                    <th>200 EMA</th>
+                                    <th>9:15 HIGH</th>
+                                    <th>PREV HIGH</th>
+                                    <th>MaxQty</th>
+                                    <th>Sector</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="screenerBody"></tbody>
+                        </table>
+                    </div>
                 </div>
                 <div class="panel-footer">
                     <div style="display:flex;gap:8px;">
