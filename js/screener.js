@@ -430,8 +430,12 @@ function orbCellValue(row, col) {
     return value;
 }
 
-/** Build a full <tr> for one stock given the header columns (Action last). */
+/** Build a full <tr> for one stock given the header columns.
+ * The Place Order (Action) button is only rendered when 'Action' is present
+ * in headerColumns — so the Signal Scan table can drop its Action column
+ * while the Breakout table keeps one. */
 function orbRowHTML(row, headerColumns) {
+    const hasAction = headerColumns.includes('Action');
     const values = [];
     headerColumns.forEach(col => { if (col !== 'Action') values.push(orbCellValue(row, col)); });
     const symbol = row.Symbol || row.symbol || 'Unknown';
@@ -443,11 +447,11 @@ function orbRowHTML(row, headerColumns) {
             }
             return `<td>${val}</td>`;
         }).join('')}
-        <td>
+        ${hasAction ? `<td>
             <button class="btn-place-order btn-sm" onclick="placeOrder('${symbol}')" ${autoBuyEnabled ? 'disabled' : ''}>
                 Place Order
             </button>
-        </td>
+        </td>` : ''}
     </tr>`;
 }
 
@@ -457,7 +461,9 @@ let lastOrbColumns = [];
 function renderBreakoutTable(data, columns) {
     const block = document.getElementById('breakoutBlock');
     if (!block) return;
-    if (columns) lastOrbColumns = [...columns];
+    // Breakout table drops the GAP% column (keeps everything else + Action).
+    if (columns) lastOrbColumns = [...columns].filter(c => c !== 'GAP%');
+    else lastOrbColumns = lastOrbColumns.filter(c => c !== 'GAP%');
     const headerColumns = [...lastOrbColumns, 'Action'];
     const list = (data || []).filter(r => {
         const price = parseFloat(r.Price ?? r.price);
@@ -486,6 +492,14 @@ function renderStrategyData(result) {
     let data = result.data || [];
     const columns = result.columns || strategy.columns || [];
 
+    // Signal Scan Logs table shows its own reduced column set — Sector,
+    // 1st Range%, Inside 9:15 and MaxQty are dropped (and Action removed) so
+    // each table has distinct columns. The Breakout table keeps GAP% = one
+    // of its core signals; here we only touch the Signal Scan table.
+    // Data rows are untouched — only the rendered columns are filtered.
+    const SIGNAL_SCAN_DROP = ['Sector', '1st Range%', 'Inside 9:15', 'MaxQty'];
+    const signalColumns = columns.filter(c => !SIGNAL_SCAN_DROP.includes(c));
+
     // Market-closed banner: when the backend anchored to the last trading
     // day (weekend / holiday / after-hours), tell the user the data is stale.
     const _banner = document.getElementById('marketClosedBanner');
@@ -501,10 +515,10 @@ function renderStrategyData(result) {
         data = data.filter(r => r.inside_915 === true);
     }
 
-    // Update table headers
+    // Update table headers — Signal Scan Logs (no Action button; each stock
+    // row still lives on so placeOrder / auto-buy work off the data).
     const thead = document.querySelector('#screenerHead tr');
-    const headerColumns = [...columns];
-    headerColumns.push('Action');
+    const headerColumns = [...signalColumns];
     thead.innerHTML = headerColumns.map(col => `<th>${col}</th>`).join('');
 
     // Update table rows
@@ -549,8 +563,8 @@ async function onStrategyChange() {
     if (strategyId === 'advanceorb') {
         const tbody = document.getElementById('screenerBody');
         const thead = document.querySelector('#screenerHead tr');
-        const columns = [...strategy.columns];
-        columns.push('Action');
+        const SIGNAL_SCAN_DROP = ['Sector', '1st Range%', 'Inside 9:15', 'MaxQty'];
+        const columns = [...strategy.columns].filter(c => !SIGNAL_SCAN_DROP.includes(c));
         thead.innerHTML = columns.map(col => `<th>${col}</th>`).join('');
         tbody.innerHTML = `<tr><td colspan="${columns.length}" style="text-align:center;padding:40px;">🔎 Filtering best-performing stocks…</td></tr>`;
         document.getElementById('screenerCount').textContent = 'Loading...';
@@ -1380,21 +1394,39 @@ function refreshScreener() {
 // ================================================================
 function _lookupRowQty(symbol) {
     try {
-        const headers = document.querySelectorAll('#screenerHead th');
-        const tr = Array.from(document.querySelectorAll('#screenerBody tr')).find(r => {
+        // MaxQty column now only exists in the Breakout table (removed from
+        // Signal Scan Logs). Search breakout first, then the main table.
+        const cell = _lookupRowCell(symbol, 'MaxQty', ['#breakoutHead', '#screenerHead'], ['#breakoutBody', '#screenerBody']);
+        return Math.max(0, parseInt((cell || '').replace(/[^0-9-]/g, ''), 10) || 0);
+    } catch (e) { console.warn('qty lookup failed for', symbol, e); }
+    return 0;
+}
+
+/** Find a named column's cell text for a symbol, searching several
+ * head/body table pairs in order. Falls back to row data when the column
+ * isn't rendered in any table (so placeOrder still gets a real value even
+ * though MaxQty/Price aren't shown in Signal Scan Logs). */
+function _lookupRowCell(symbol, colName, headSelectors, bodySelectors) {
+    for (let t = 0; t < headSelectors.length; t++) {
+        const headers = document.querySelectorAll(headSelectors[t] + ' th');
+        const tr = Array.from(document.querySelectorAll(bodySelectors[t] + ' tr')).find(r => {
             const first = r.querySelector('td');
             return first && first.textContent.trim() === symbol;
         });
-        if (!tr) return 0;
+        if (!tr) continue;
         const cells = tr.querySelectorAll('td');
         for (let i = 0; i < headers.length && i < cells.length; i++) {
-            if (headers[i].textContent.trim() === 'MaxQty') {
-                const v = parseInt((cells[i].textContent || '').replace(/[^0-9-]/g, ''), 10);
-                return Number.isFinite(v) ? v : 0;
-            }
+            if (headers[i].textContent.trim() === colName) return cells[i].textContent || '';
         }
-    } catch (e) { console.warn('qty lookup failed for', symbol, e); }
-    return 0;
+    }
+    // Column not rendered in any table → read from the backing data so
+    // order logic keeps working even with reduced columns.
+    const row = _orderRowForSymbol(symbol);
+    if (row) {
+        if (colName === 'MaxQty') return row.MaxQty != null ? String(row.MaxQty) : '';
+        if (colName === 'Price') return row.Price != null ? String(row.Price) : '';
+    }
+    return '';
 }
 
 function placeOrder(symbol) {
@@ -1432,19 +1464,8 @@ function _parsePctStr(s) {
 // and the SmartMoney / BigPlayers hardcoded stub rows).
 function _lookupRowPrice(symbol) {
     try {
-        const headers = document.querySelectorAll('#screenerHead th');
-        const tr = Array.from(document.querySelectorAll('#screenerBody tr')).find(r => {
-            const first = r.querySelector('td');
-            return first && first.textContent.trim() === symbol;
-        });
-        if (!tr) return 0;
-        const cells = tr.querySelectorAll('td');
-        for (let i = 0; i < headers.length && i < cells.length; i++) {
-            if (headers[i].textContent.trim() === 'Price') {
-                const v = parseFloat((cells[i].textContent || '').replace(/[^0-9.]/g, ''));
-                return Number.isFinite(v) ? v : 0;
-            }
-        }
+        const cell = _lookupRowCell(symbol, 'Price', ['#breakoutHead', '#screenerHead'], ['#breakoutBody', '#screenerBody']);
+        return parseFloat((cell || '').replace(/[^0-9.]/g, '')) || 0;
     } catch (e) { console.warn('price lookup failed for', symbol, e); }
     return 0;
 }
