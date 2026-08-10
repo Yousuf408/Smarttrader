@@ -22,6 +22,7 @@
             <a class="sidebar-link active" data-page="home"><span class="sidebar-icon">🏠</span><span class="sidebar-label">Home</span></a>
             <a class="sidebar-link" data-page="strategies"><span class="sidebar-icon">🎯</span><span class="sidebar-label">Strategies</span></a>
             <a class="sidebar-link" data-page="screener"><span class="sidebar-icon">🔎</span><span class="sidebar-label">Screener</span></a>
+            <a class="sidebar-link" data-page="niftyohlc"><span class="sidebar-icon">📊</span><span class="sidebar-label">Nifty OHLC</span></a>
             <a class="sidebar-link" data-page="portfolio"><span class="sidebar-icon">💼</span><span class="sidebar-label">Portfolio</span></a>
             <a class="sidebar-link" data-page="backtest"><span class="sidebar-icon">📈</span><span class="sidebar-label">Backtest</span></a>
             <a class="sidebar-link" data-page="testing"><span class="sidebar-icon">🧪</span><span class="sidebar-label">Testing</span></a>
@@ -340,6 +341,20 @@
                     <div><div class="info-label">Entry Rule</div><div class="info-value" id="infoRule">Opening Range Breakout</div></div>
                     <div><div class="info-label">Risk Per Trade</div><div class="info-value" style="color:var(--color-success);" id="infoRisk">2%</div></div>
                 </div>
+            </div>
+        </div>
+
+        <!-- ============================================================= -->
+        <!-- NIFTY OHLC (standalone TradingView page embedded) -->
+        <!-- ============================================================= -->
+        <div id="page-niftyohlc" class="page">
+            <div class="page-header">
+                <h2>📊 Nifty 50 Top 10 — 5-Min OHLC</h2>
+            </div>
+            <div style="border:1px solid var(--border-color, #2d333b);border-radius:12px;overflow:hidden;background:var(--bg, #0d1117);">
+                <iframe src="/nifty/ohlc" id="niftyOhlcFrame"
+                        style="width:100%;height:calc(100vh - 170px);min-height:560px;border:0;display:block;"
+                        title="Nifty OHLC"></iframe>
             </div>
         </div>
 
