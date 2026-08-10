@@ -62,7 +62,6 @@ from advance_orb.supabase_db import save_top5_strategy, ensure_table
 from advance_orb.auth_routes import router as auth_router
 from server.candle_tracker import candle_tracker
 from advance_orb.tv_chart_candles import batch_tv_opening_candles
-from advance_orb.common import batch_yahoo_orb_data
 from advance_orb.equal_low_scanner import EqualLowSession, equal_low_inside_915
 
 # Ensure the strategy_trades table exists (run once at startup)
@@ -223,6 +222,7 @@ from advance_orb.common import (
     IST, MAX_TV_STOCKS, YFINANCE_WORKERS,
     compute_200_ema, compute_200_ema_batch,
     fetch_tradingview_stocks,
+    batch_yahoo_orb_data,
     _detect_trading_date, _resolve_reference_date, _calc_qty_for_broker,
     _build_ticks_by_symbol, ws_auto_subscribe,
 )
@@ -493,61 +493,22 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, near_high: bool = True
         # 9:15 candle values are intentionally deferred for now. The current
         # screener only applies the Yahoo open-vs-previous-high universe
         # filter above; chart-feed candle backfill will be enabled separately.
-        opening_candle_map = {
-            _s: (False, None, None, None, None, None, None, None, None, None)
-            for _s in candidate_symbols
-        }
-
-        # Only authenticated TradingView chart candles count as ORB candle
-        # data. Angel/CandleTracker and Yahoo are deliberately excluded.
-        has_candle_data = any(
-            isinstance(t, tuple) and t and t[2] for t in opening_candle_map.values()
+        # 9:15 candle columns are seeded empty and filled below from the
+        # Yahoo batch (high915/low915/close920/inside_915) and the strategy
+        # cache (yesterday_high). The authenticated TradingView chart-feed
+        # candle path is deferred, so has_candle_data stays False and these
+        # fall back to live server data until that feed is enabled.
+        has_candle_data = False
+        df['high915'] = None
+        df['low915'] = None
+        df['close915'] = None
+        df['open915'] = None
+        df['candle_range_pct'] = None
+        df['yesterday_high'] = df['name'].map(
+            lambda s: cache_data.get(s, {}).get("yesterday_high")
         )
-
-        # "open915" = today's OPEN price (= the first 5-min candle's Open).
-        # Used for the 200-EMA distance check instead of the live close,
-        # so a stock that opens within the band keeps its row even when
-        # the live price subsequently moves beyond 3% of EMA.
-        # Mirror: assign df['high915'] = today's 9:15 IST candle HIGH
-        # (= first 5-min candle's High). Read by the JS band-filter
-        # in autoBuyAllStocks — NOT part of any screener-side filter.
-        df['high915'] = df['name'].map(
-            lambda s: opening_candle_map.get(s, (False, None, None))[1]
-        )
-        df['low915'] = df['name'].map(
-            lambda s: opening_candle_map.get(s, (False, None, None, None))[3]
-        )
-        df['close915'] = df['name'].map(
-            lambda s: opening_candle_map.get(s, (False, None, None, None, None))[4]
-        )
-        if has_candle_data:
-            df['open915'] = df['name'].map(
-                lambda s: opening_candle_map.get(s, (False, None, None, None, None, None, None, None))[2]
-            )
-        else:
-            # No authenticated TradingView candle yet: remain explicitly
-            # empty rather than substituting a broker tick/day-open value.
-            df['open915'] = None
-        df['candle_range_pct'] = df['name'].map(
-            lambda s: opening_candle_map.get(s, (False, None, None, None, None, None, None, None))[5]
-        )
-        if has_candle_data:
-            df['yesterday_high'] = df['name'].map(
-                lambda s: opening_candle_map.get(s, (False, None, None, None, None, None, None, None, None, None))[7]
-            )
-        else:
-            # No slot-0 candle data yet — read yesterday_high directly from
-            # the strategy cache (pre-populated from yfinance at startup,
-            # independent of slot-0 completion).
-            df['yesterday_high'] = df['name'].map(
-                lambda s: cache_data.get(s, {}).get("yesterday_high")
-            )
-        df['close920'] = df['name'].map(
-            lambda s: opening_candle_map.get(s, (False, None, None, None, None, None, None, None, None, None))[8]
-        )
-        df['inside_915'] = df['name'].map(
-            lambda s: opening_candle_map.get(s, (False, None, None, None, None, None, None, None, None, None))[9]
-        )
+        df['close920'] = None
+        df['inside_915'] = None
         # "Inside 9:15" filter (Yahoo 5-min data): the 2nd candle (9:20)
         # must close INSIDE the 1st candle's (9:15) high–low range. The
         # TradingView chart-feed candle is still the future source for the
@@ -574,20 +535,10 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, near_high: bool = True
                 _y_close920[_s] = _c2
             df['close920'] = df['name'].map(lambda s: _y_close920.get(s))
             df['inside_915'] = df['name'].map(lambda s: _y_inside.get(s))
-            # 1st High / 1st Low columns: the TradingView chart-feed candle
-            # is still the future source, but until it's available fill these
-            # from the Yahoo 5-min 9:15 candle we already fetch. (User asked
-            # to display the values we already have instead of empty cells.)
-            df['high915'] = df['name'].map(
-                lambda s: _y_hi.get(s)
-                if _y_hi.get(s) is not None
-                else opening_candle_map.get(s, (False, None, None))[1]
-            )
-            df['low915'] = df['name'].map(
-                lambda s: _y_lo.get(s)
-                if _y_lo.get(s) is not None
-                else opening_candle_map.get(s, (False, None, None, None))[3]
-            )
+            # 1st High / 1st Low columns: fill from the Yahoo 5-min 9:15
+            # candle we already fetch instead of showing empty cells.
+            df['high915'] = df['name'].map(lambda s: _y_hi.get(s))
+            df['low915'] = df['name'].map(lambda s: _y_lo.get(s))
         # "Share Low" column: detect whether the opening candles share the same
         # low.  Using just the lows the screener already fetched (low915 +
         # c2_lo/c3_lo/c4_lo) — never an additional Yahoo call per symbol.
@@ -1297,9 +1248,6 @@ def refresh_advance_orb(tickers: str = "", timeframe: int = 5):
                 continue
 
             if pd.notna(vol_raw) and vol_raw >= 1_000_000:
-                    vol_raw = int(ws_vol)
-
-            if pd.notna(vol_raw) and vol_raw >= 1_000_000:
                 volume_str = f"{vol_raw/1_000_000:.1f}M"
             elif pd.notna(vol_raw) and vol_raw >= 1_000:
                 volume_str = f"{vol_raw/1_000:.1f}K"
@@ -1307,7 +1255,7 @@ def refresh_advance_orb(tickers: str = "", timeframe: int = 5):
                 volume_str = str(int(vol_raw))
             else:
                 volume_str = "0"
-            relvol_str = f"{values[4]:.2f}x" if len(values) > 4 and pd.notna(values[4]) else "0x"
+            relvol_str = "0x"
 
             # Pull live 9:20 candle data from the TradingView 5-min map
             candle = (opening_candle_map or {}).get(name)
