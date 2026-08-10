@@ -199,6 +199,8 @@ def detect_equal_low(
     if current_low <= 0:
         return None
 
+    _ts = lambda pos: df.index[pos].strftime("%H:%M")  # noqa: E731
+
     limit = min(len(df), max(2, int(lookback) + 2))  # +1 for current, +1 extra
     for i in range(2, limit):  # 2 .. lookback+1 -> skips the current row
         prev_low = float(df["low"].iloc[-i] or 0.0)
@@ -207,7 +209,9 @@ def detect_equal_low(
         diff_pct = abs(current_low - prev_low) / prev_low * 100.0
         if diff_pct <= tolerance_pct:
             return {
+                "current_time": _ts(-1),
                 "low": round(current_low, 2),
+                "matched_time": _ts(-i),
                 "matched_low": round(prev_low, 2),
                 "diff_pct": round(diff_pct, 4),
                 "sample_count": i,
@@ -377,6 +381,7 @@ def scan_batch(
 # ────────────────────────────────────────────────────────────────────
 def equal_low_from_lows(
     lows: list[float | None],
+    labels: list[str] | None = None,
     tolerance_pct: float = DEFAULT_TOLERANCE_PCT,
 ) -> dict[str, Any] | None:
     """Derive an Equal-Low match from bare candle Lows (oldest→newest).
@@ -384,19 +389,45 @@ def equal_low_from_lows(
     Used by the Advance ORB backend to render the "Share Low" column from
     the lows the screener already fetched (low915 + successive candle lows)
     without issuing any additional Yahoo calls per symbol.
+
+    ``labels`` (optional) are the per-candle time labels in the same order
+    as ``lows``; when provided the returned match includes ``current_time``
+    and ``matched_time`` so the UI can say *"9:40 candle sharing low with
+    9:25"* instead of showing only the price level.
     """
     valid = [float(l) for l in lows if l is not None and float(l) > 0]
     if len(valid) < 2:
         return None
+    # Positions (in the ORIGINAL list) of the valid lows, oldest→newest.
+    pos = [i for i, l in enumerate(lows) if l is not None and float(l) > 0]
+    cur_label = None
+    if labels:
+        try:
+            cur_label = labels[pos[-1]]
+        except IndexError:
+            cur_label = None
+
     current_low = valid[-1]
+    # The prev candle we hit FIRST is valid[-2] = pos[-2] in the original list.
+    matched_label = None
+    if labels and len(pos) >= 2:
+        try:
+            matched_label = labels[pos[-2]]
+        except IndexError:
+            matched_label = None
+
     for prev in valid[-2::-1]:  # most recent first, skipping the current low
         diff_pct = abs(current_low - prev) / prev * 100.0
         if diff_pct <= tolerance_pct:
-            return {
+            result: dict[str, Any] = {
                 "low": round(current_low, 2),
                 "matched_low": round(prev, 2),
                 "diff_pct": round(diff_pct, 4),
             }
+            if labels and cur_label is not None:
+                result["current_time"] = cur_label
+                result["matched_time"] = matched_label
+            return result
     return None
 
 

@@ -417,7 +417,9 @@ function orbCellValue(row, col) {
     } else if (col === 'Share Low') {
         if (row.share_low && typeof row.share_low === 'object') {
             const m = row.share_low;
-            value = `🎯 ${m.low} (≈${m.matched_low} · ${m.diff_pct}%)`;
+            value = m.current_time && m.matched_time
+                ? `🎯 ${m.current_time} sharing low with ${m.matched_time} (${m.low} ≈ ${m.matched_low} · ${m.diff_pct}%)`
+                : `🎯 ${m.low} (≈${m.matched_low} · ${m.diff_pct}%)`;
         } else {
             value = row.share_low ? '🎯' : '—';
         }
