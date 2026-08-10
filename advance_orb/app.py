@@ -1652,6 +1652,26 @@ def purge_old_day():
 
 
 # =================================================================
+# STANDALONE NIFTY OHLC PAGE (top 10 Nifty 50, 5-min TradingView data)
+# Registered before the SPA fallback so both the page and its API
+# resolve correctly.
+# =================================================================
+from advance_orb.nifty_ohlc import build_payload as _nifty_ohlc_payload
+
+_NIFTY_PAGE = PROJECT_ROOT / "nifty_ohlc.html"
+
+
+@app.get("/nifty/ohlc", include_in_schema=False)
+def nifty_ohlc_page():
+    return FileResponse(_NIFTY_PAGE, media_type="text/html")
+
+
+@app.get("/api/nifty/ohlc")
+def nifty_ohlc_data():
+    return _nifty_ohlc_payload()
+
+
+# =================================================================
 # SPA FALLBACK — any GET that doesn't match an explicit route or
 # a static-asset mount, and isn't under /api/ /js/ /style.css,
 # returns index.html. Lets the user paste a deep link like

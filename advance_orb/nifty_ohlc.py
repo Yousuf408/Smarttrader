@@ -1,0 +1,178 @@
+"""Standalone TradingView OHLC page (top 10 Nifty 50).
+
+Fetches 5-minute OHLC + VWAP + 200 EMA + volume + daily change for a fixed
+set of NSE symbols using the third-party ``tvscreener`` library (v0.4.0 API),
+then exposes a compact JSON endpoint for the frontend.
+
+Notes on the tvscreener 0.4.0 API (they differ from older tutorials / the
+original ``tvscreener`` blog post):
+  * There is no ``StockField.SYMBOL``; use ``StockField.NAME``/``StockField.PRICE``
+    and read the ``Symbol`` column from the result dataframe.
+  * 5-minute fields are suffixed: ``OPEN_5``, ``HIGH_5``, ``LOW_5``, ``CLOSE_5``,
+    ``VOLUME_5``, ``VWAP_5``, ``EMA200_5`` (there is no ``with_interval("5")``).
+  * There is no symbol-list ``isin`` filter (it maps to ``in_range`` which
+    TradingView rejects with a list). So we scope to ``Market.INDIA`` sorted by
+    market cap (default) and filter the resulting rows to our symbol set in
+    pandas. The top 10 Nifty names all fall within the first 100 rows.
+"""
+
+from __future__ import annotations
+
+import threading
+import time
+from datetime import datetime
+
+import tvscreener as tvs
+from tvscreener import StockField, Market
+
+IST_ZONE_TZINFO = None  # set below without importing zoneinfo eagerly
+
+TOP_NIFTY = [
+    "NSE:RELIANCE",
+    "NSE:TCS",
+    "NSE:HDFCBANK",
+    "NSE:INFY",
+    "NSE:ICICIBANK",
+    "NSE:HINDUNILVR",
+    "NSE:ITC",
+    "NSE:SBIN",
+    "NSE:BAJFINANCE",
+    "NSE:BHARTIARTL",
+]
+
+# TradingView field set for the 5-minute interval.
+_FIELDS = [
+    StockField.NAME,
+    StockField.PRICE,
+    StockField.OPEN_5,
+    StockField.HIGH_5,
+    StockField.LOW_5,
+    StockField.CLOSE_5,
+    StockField.VOLUME_5,
+    StockField.VWAP_5,
+    StockField.EMA200_5,
+    StockField.CHANGE_PERCENT,
+]
+
+_COLUMNS = [
+    "Symbol", "Name", "Price", "Open|5", "High|5", "Low|5",
+    "Close|5", "Volume|5", "Vwap|5", "Ema200|5", "Change %",
+]
+
+# NSE equity cash session (IST): 09:15 -> 15:30, Mon-Fri.
+_OPEN_MIN = 9 * 60 + 15
+_CLOSE_MIN = 15 * 60 + 30
+
+
+def _ist_now():
+    from zoneinfo import ZoneInfo
+    return datetime.now(ZoneInfo("Asia/Kolkata"))
+
+
+def _market_status(now):
+    """Return (open: bool, label: str, next_label: str) for the running view."""
+    minutes = now.hour * 60 + now.minute
+    is_weekday = now.weekday() < 5
+    is_open = is_weekday and _OPEN_MIN <= minutes <= _CLOSE_MIN
+    if is_open:
+        return True, "Open", "Market is open"
+    if not is_weekday:
+        return False, "Closed", "Market is closed (weekend)"
+    if minutes < _OPEN_MIN:
+        return False, "Pre-market", f"Opens at 09:15 IST"
+    return False, "Closed", "Market closed for the day"
+
+
+class NiftyOHLCService:
+    """Cached fetch of the top-10 Nifty 5-min OHLC snapshot."""
+
+    def __init__(self, ttl_seconds: float = 20.0):
+        self.ttl = ttl_seconds
+        self._lock = threading.Lock()
+        self._cache = None      # list[dict]
+        self._cached_at = 0.0
+        self._last_error = None
+
+    def _fetch(self):
+        ss = tvs.StockScreener()
+        ss.set_markets(Market.INDIA)
+        ss.specific_fields = _FIELDS
+        ss.set_range(0, 100)
+        df = ss.get()
+        df = df[_COLUMNS]
+        want = set(TOP_NIFTY)
+        df = df[df["Symbol"].isin(want)]
+
+        rows = []
+        for _, r in df.iterrows():
+            price = r["Price"] or 0.0
+            vwap = r["Vwap|5"] or 0.0
+            ema = r["Ema200|5"] or 0.0
+            change = r["Change %"]
+            rows.append({
+                "symbol": str(r["Symbol"]).split(":")[-1],
+                "name": str(r["Name"]),
+                "price": round(price, 2),
+                "open": round(r["Open|5"], 2) if r["Open|5"] is not None else None,
+                "high": round(r["High|5"], 2) if r["High|5"] is not None else None,
+                "low": round(r["Low|5"], 2) if r["Low|5"] is not None else None,
+                "close": round(r["Close|5"], 2) if r["Close|5"] is not None else None,
+                "vwap": round(vwap, 2),
+                "ema200": round(ema, 2),
+                "volume": int(r["Volume|5"]) if r["Volume|5"] is not None else 0,
+                "change_pct": round(change, 2) if change is not None else 0.0,
+            })
+
+        rows.sort(key=lambda x: TOP_NIFTY.index(f"NSE:{x['symbol']}") if f"NSE:{x['symbol']}" in TOP_NIFTY else 999)
+        self._cache = rows
+        self._cached_at = time.time()
+        self._last_error = None
+        return rows
+
+    def snapshot(self):
+        """Return the latest rows (cache-busting no data-freshness staleness)."""
+        with self._lock:
+            if self._cache is not None and (time.time() - self._cached_at) < self.ttl:
+                rows = self._cache
+            else:
+                try:
+                    rows = self._fetch()
+                except Exception as exc:  # noqa: BLE001 - surface via payload
+                    self._last_error = str(exc)
+                    if self._cache is not None:
+                        rows = self._cache
+                    else:
+                        rows = []
+            return rows, self._last_error
+
+
+_SERVICE = NiftyOHLCService(ttl_seconds=20.0)
+
+
+def build_payload():
+    """Build the full response for the frontend."""
+    rows, error = _SERVICE.snapshot()
+    now = _ist_now()
+    open_flag, status_label, status_note = _market_status(now)
+
+    gainer = max(rows, key=lambda r: r["change_pct"]) if rows else None
+    loser = min(rows, key=lambda r: r["change_pct"]) if rows else None
+    above_ema = [r for r in rows if r["ema200"] and r["price"] > r["ema200"]]
+
+    return {
+        "as_of": now.isoformat(timespec="seconds"),
+        "as_of_display": now.strftime("%d %b %Y, %I:%M:%S %p"),
+        "market": {"open": open_flag, "label": status_label, "note": status_note},
+        "refresh_seconds": 30,
+        "rows": rows,
+        "stats": {
+            "gainer": gainer,
+            "loser": loser,
+            "above_ema": {
+                "count": len(above_ema),
+                "total": len(rows),
+                "symbols": [r["symbol"] for r in above_ema],
+            },
+        },
+        "error": error,
+    }
