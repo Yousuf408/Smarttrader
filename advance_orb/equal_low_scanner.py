@@ -379,58 +379,83 @@ def scan_batch(
 # ────────────────────────────────────────────────────────────────────
 # Inside-9:15 gated equal-low (used by the Advance ORB "Share Low" column)
 # ────────────────────────────────────────────────────────────────────
+def _time_hm(value: str) -> float:
+    """Parse 'HH:MM' to minutes since midnight (for cutoff comparisons)."""
+    try:
+        hh, mm = value.split(":")
+        return int(hh) * 60 + int(mm)
+    except (ValueError, AttributeError):
+        return 0.0
+
+
 def equal_low_inside_915(
     candles: list[dict[str, Any]],
     high915: float | None,
     low915: float | None,
     tolerance_pct: float = DEFAULT_TOLERANCE_PCT,
     lookback: int = DEFAULT_LOOKBACK,
+    cutoff: str = "11:00",
 ) -> dict[str, Any] | None:
     """Equal-Low using REAL candle timestamps, gated to the 9:15 range.
 
     ``candles`` is oldest→newest, each ``{"t": "HH:MM", "high": float,
-    "low": float}`` (today's bars only).  A match is reported ONLY when
-    BOTH the current (latest) candle AND the matched previous candle are
-    inside the 09:15 opening range — i.e. ``low >= low915 and high <=
-    high915``.  This guarantees the caption is always truthful:
+    "low": float}`` (today's bars only).
 
-        "09:40 sharing low with 09:25 (…%)"
+    Rules enforced here:
+      * Only candles up to ``cutoff`` (default 11:00) are tracked — lows
+        after 11:00 AM are ignored.
+      * A match counts ONLY when BOTH the current candle AND the matched
+        previous candle sit inside the 09:15 opening range — i.e.
+        ``low >= low915 and high <= high915``.
+      * The whole 09:15→cutoff window is scanned (not just the very last
+        candle), so a stock that tagged the same low earlier in the morning
+        is still caught even if it later breaks out of the range.  The most
+        recent valid pair is reported.
 
-    and never a fabricated/guessed time.
+    Returns ``{"current_time", "low", "matched_time", "matched_low",
+    "diff_pct"}`` using real candle timestamps (never fabricated), or None.
     """
     if not candles or len(candles) < 2:
         return None
     if high915 is None or low915 is None or high915 <= 0:
         return None
 
+    limit = _time_hm(cutoff)
+
     def inside(c: dict[str, Any]) -> bool:
         hi = float(c.get("high") or 0.0)
         lo = float(c.get("low") or 0.0)
         return bool(hi > 0 and lo > 0 and lo >= low915 and hi <= high915)
 
-    current = candles[-1]
-    current_low = float(current.get("low") or 0.0)
-    if current_low <= 0 or not inside(current):
-        return None
-
-    # Walk backwards from the second-to-last candle, at most `lookback` bars.
-    start = len(candles) - 2
-    end = max(-1, len(candles) - 1 - lookback)
-    for i in range(start, end, -1):
-        prev = candles[i]
-        prev_low = float(prev.get("low") or 0.0)
-        if prev_low <= 0 or not inside(prev):
+    best: dict[str, Any] | None = None
+    for i in range(1, len(candles)):
+        cur = candles[i]
+        if _time_hm(str(cur.get("t", ""))) > limit:
+            break  # candles are chronological -> stop at the cutoff
+        cur_low = float(cur.get("low") or 0.0)
+        if cur_low <= 0 or not inside(cur):
             continue
-        diff_pct = abs(current_low - prev_low) / prev_low * 100.0
-        if diff_pct <= tolerance_pct:
-            return {
-                "current_time": current["t"],
-                "low": round(current_low, 2),
-                "matched_time": prev["t"],
-                "matched_low": round(prev_low, 2),
-                "diff_pct": round(diff_pct, 4),
-            }
-    return None
+
+        start = i - 1
+        end = max(-1, i - 1 - lookback)
+        for j in range(start, end, -1):
+            prev = candles[j]
+            prev_low = float(prev.get("low") or 0.0)
+            if prev_low <= 0 or not inside(prev):
+                continue
+            diff_pct = abs(cur_low - prev_low) / prev_low * 100.0
+            if diff_pct <= tolerance_pct:
+                # Most recent pair wins; overwrite so best ends the latest match.
+                best = {
+                    "current_time": cur["t"],
+                    "low": round(cur_low, 2),
+                    "matched_time": prev["t"],
+                    "matched_low": round(prev_low, 2),
+                    "diff_pct": round(diff_pct, 4),
+                }
+                break
+
+    return best
 
 
 # ────────────────────────────────────────────────────────────────────
