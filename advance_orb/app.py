@@ -63,6 +63,7 @@ from advance_orb.auth_routes import router as auth_router
 from server.candle_tracker import candle_tracker
 from advance_orb.tv_chart_candles import batch_tv_opening_candles
 from advance_orb.common import batch_yahoo_orb_data
+from advance_orb.equal_low_scanner import EqualLowSession, equal_low_from_lows
 
 # Ensure the strategy_trades table exists (run once at startup)
 ensure_table()
@@ -241,6 +242,7 @@ ADVANCE_ORB_COLUMNS = [
     "1st Low",
     "1st Range%",
     "Inside 9:15",
+    "Share Low",
     "MaxQty",
 ]
 
@@ -586,6 +588,22 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, near_high: bool = True
                 if _y_lo.get(s) is not None
                 else opening_candle_map.get(s, (False, None, None, None))[3]
             )
+        # "Share Low" column: detect whether the opening candles share the same
+        # low.  Using just the lows the screener already fetched (low915 +
+        # c2_lo/c3_lo/c4_lo) — never an additional Yahoo call per symbol.
+        # Stocks that match an Equal Low are "pinned" for the session (kept
+        # fixed even if the 09:15 High is later broken), per the user rule.
+        _equal_low_session = EqualLowSession()
+        _shared_low: dict = {}
+        _y_low_src = yahoo_open_high or {}
+        for _s in candidate_symbols:
+            _yd = _y_low_src.get(_s) or {}
+            _lows = [_yd.get("low915"), _yd.get("c2_lo"),
+                     _yd.get("c3_lo"), _yd.get("c4_lo")]
+            _match = equal_low_from_lows(_lows)
+            if _match is not None:
+                _equal_low_session.pin_match(_s, _match)
+            _shared_low[_s] = _match
         # NOTE: the TradingView scan's open/high/low are the FULL-DAY bar,
         # not the 9:15 candle — they were once used to override high915/
         # low915 and produced nonsense ranges (e.g. a stock's whole-day
@@ -710,6 +728,8 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, near_high: bool = True
                 if "inside_915" in row.index and pd.notna(row.get("inside_915"))
                 else None
             )
+            _sl = _shared_low.get(symbol)
+            entry["share_low"] = _sl
 
             result.append(entry)
 

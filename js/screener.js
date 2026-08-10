@@ -414,6 +414,13 @@ function orbCellValue(row, col) {
         value = Number.isFinite(range) ? `${range.toFixed(2)}%` : '';
     } else if (col === 'Inside 9:15') {
         value = row.inside_915 ? '✅' : (row.inside_915 === false ? '❌' : '—');
+    } else if (col === 'Share Low') {
+        if (row.share_low && typeof row.share_low === 'object') {
+            const m = row.share_low;
+            value = `🎯 ${m.low} (≈${m.matched_low} · ${m.diff_pct}%)`;
+        } else {
+            value = row.share_low ? '🎯' : '—';
+        }
     } else if (col === 'Open 9:15') {
         const op = parseFloat(row.open915);
         value = Number.isFinite(op) ? `₹${op.toFixed(2)}` : '';
