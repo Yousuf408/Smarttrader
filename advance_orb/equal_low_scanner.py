@@ -377,6 +377,63 @@ def scan_batch(
 
 
 # ────────────────────────────────────────────────────────────────────
+# Inside-9:15 gated equal-low (used by the Advance ORB "Share Low" column)
+# ────────────────────────────────────────────────────────────────────
+def equal_low_inside_915(
+    candles: list[dict[str, Any]],
+    high915: float | None,
+    low915: float | None,
+    tolerance_pct: float = DEFAULT_TOLERANCE_PCT,
+    lookback: int = DEFAULT_LOOKBACK,
+) -> dict[str, Any] | None:
+    """Equal-Low using REAL candle timestamps, gated to the 9:15 range.
+
+    ``candles`` is oldest→newest, each ``{"t": "HH:MM", "high": float,
+    "low": float}`` (today's bars only).  A match is reported ONLY when
+    BOTH the current (latest) candle AND the matched previous candle are
+    inside the 09:15 opening range — i.e. ``low >= low915 and high <=
+    high915``.  This guarantees the caption is always truthful:
+
+        "09:40 sharing low with 09:25 (…%)"
+
+    and never a fabricated/guessed time.
+    """
+    if not candles or len(candles) < 2:
+        return None
+    if high915 is None or low915 is None or high915 <= 0:
+        return None
+
+    def inside(c: dict[str, Any]) -> bool:
+        hi = float(c.get("high") or 0.0)
+        lo = float(c.get("low") or 0.0)
+        return bool(hi > 0 and lo > 0 and lo >= low915 and hi <= high915)
+
+    current = candles[-1]
+    current_low = float(current.get("low") or 0.0)
+    if current_low <= 0 or not inside(current):
+        return None
+
+    # Walk backwards from the second-to-last candle, at most `lookback` bars.
+    start = len(candles) - 2
+    end = max(-1, len(candles) - 1 - lookback)
+    for i in range(start, end, -1):
+        prev = candles[i]
+        prev_low = float(prev.get("low") or 0.0)
+        if prev_low <= 0 or not inside(prev):
+            continue
+        diff_pct = abs(current_low - prev_low) / prev_low * 100.0
+        if diff_pct <= tolerance_pct:
+            return {
+                "current_time": current["t"],
+                "low": round(current_low, 2),
+                "matched_time": prev["t"],
+                "matched_low": round(prev_low, 2),
+                "diff_pct": round(diff_pct, 4),
+            }
+    return None
+
+
+# ────────────────────────────────────────────────────────────────────
 # Forward-looking helper for the screener (cheap, no extra Yahoo calls)
 # ────────────────────────────────────────────────────────────────────
 def equal_low_from_lows(

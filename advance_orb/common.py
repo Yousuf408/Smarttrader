@@ -415,6 +415,22 @@ def fetch_yahoo_orb_data(symbol: str, timeframe: int = 5) -> dict | None:
     if len(closes) >= EMA_SPAN:
         ema200 = float(closes.ewm(span=EMA_SPAN, adjust=False).mean().iloc[-1])
 
+    # Real per-candle timestamps + OHLC for today's bars (oldest→newest),
+    # used by the "Share Low" column so its caption shows the ACTUAL candle
+    # times (e.g. "09:40 sharing low with 09:25") instead of fabricated ones.
+    _today_candles = []
+    for _r in sorted_today.itertuples():
+        _t = _r.Index
+        if getattr(_t, "tzinfo", None) is None:
+            _t = _t.tz_localize("UTC").tz_convert(IST)
+        else:
+            _t = _t.tz_convert(IST)
+        _today_candles.append({
+            "t": _t.strftime("%H:%M"),
+            "high": float(_r.High),
+            "low": float(_r.Low),
+        })
+
     result = {
         "timeframe": timeframe,
         "open915": open_,
@@ -430,6 +446,7 @@ def fetch_yahoo_orb_data(symbol: str, timeframe: int = 5) -> dict | None:
         "c2_hi": _next.get("c2_hi"), "c2_lo": _next.get("c2_lo"), "c2_close": _next.get("c2_close"),
         "c3_hi": _next.get("c3_hi"), "c3_lo": _next.get("c3_lo"), "c3_close": _next.get("c3_close"),
         "c4_hi": _next.get("c4_hi"), "c4_lo": _next.get("c4_lo"), "c4_close": _next.get("c4_close"),
+        "today_candles": _today_candles,
     }
     with _YF_ORB_LOCK:
         _YF_ORB_CACHE[(sym, timeframe)] = (time.time(), result)

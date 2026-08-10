@@ -63,7 +63,7 @@ from advance_orb.auth_routes import router as auth_router
 from server.candle_tracker import candle_tracker
 from advance_orb.tv_chart_candles import batch_tv_opening_candles
 from advance_orb.common import batch_yahoo_orb_data
-from advance_orb.equal_low_scanner import EqualLowSession, equal_low_from_lows
+from advance_orb.equal_low_scanner import EqualLowSession, equal_low_inside_915
 
 # Ensure the strategy_trades table exists (run once at startup)
 ensure_table()
@@ -596,19 +596,16 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, near_high: bool = True
         _equal_low_session = EqualLowSession()
         _shared_low: dict = {}
         _y_low_src = yahoo_open_high or {}
-        # Per-candle time labels matching the order of the lows below, so the
-        # "Share Low" cell can read "9:40 candle sharing low with 9:25".
-        # Timeframe-relative: 5-min -> 09:15, 09:20, 09:25, 09:30 ;
-        # 15-min -> 09:15, 09:30, 09:45, 10:00.
-        if timeframe == 15:
-            _sl_labels = ["09:15", "09:30", "09:45", "10:00"]
-        else:
-            _sl_labels = ["09:15", "09:20", "09:25", "09:30"]
         for _s in candidate_symbols:
             _yd = _y_low_src.get(_s) or {}
-            _lows = [_yd.get("low915"), _yd.get("c2_lo"),
-                     _yd.get("c3_lo"), _yd.get("c4_lo")]
-            _match = equal_low_from_lows(_lows, labels=_sl_labels)
+            # Equal-Low using REAL candle timestamps from today's bars, and
+            # gated so a match is reported ONLY when BOTH the current and the
+            # matched previous candle lie inside the 09:15 high-low range.
+            _match = equal_low_inside_915(
+                (_yd.get("today_candles") or []),
+                _yd.get("high915"),
+                _yd.get("low915"),
+            )
             if _match is not None:
                 _equal_low_session.pin_match(_s, _match)
             _shared_low[_s] = _match
