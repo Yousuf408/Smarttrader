@@ -30,6 +30,9 @@ PRICE_MAX = 4000  # 200 to 4000 INR per user's old-condition spec
 GAP_THRESHOLD = 2.0
 MARKET_CAP_MIN = 41_000_000_000  # 41 Billion INR
 SMALL_CANDLE_THRESHOLD = 1.5
+# "Buy side" default: only stocks trading ABOVE their day's open.
+# Filters out names drifting down so the universe shrinks (670 -> ~310).
+CHANGE_FROM_OPEN_MIN = 0.0
 
 # ── 200-period EMA (5-min closes, Yahoo Finance) ──
 EMA_SPAN = 200
@@ -78,6 +81,7 @@ def fetch_tradingview_stocks() -> list[dict]:
             "volume", "relative_volume_10d_calc", "market_cap_basic",
             "sector",
             "open", "high", "low",
+            "change_from_open",
         ],
         "filter": [
             {"left": "type", "operation": "equal", "right": "stock"},
@@ -85,6 +89,7 @@ def fetch_tradingview_stocks() -> list[dict]:
             {"left": "close", "operation": "greater", "right": PRICE_MIN},
             {"left": "close", "operation": "less", "right": PRICE_MAX},
             {"left": "market_cap_basic", "operation": "greater", "right": MARKET_CAP_MIN},
+            {"left": "change_from_open", "operation": "greater", "right": CHANGE_FROM_OPEN_MIN},
         ],
         "sort": {"sortBy": "market_cap_basic", "sortOrder": "desc"},
     }
@@ -108,7 +113,7 @@ def fetch_tradingview_stocks() -> list[dict]:
     rows: list[dict] = []
     for item in body.get("data", []):
         d = item.get("d") or []
-        if len(d) < 9:
+        if len(d) < 12:
             continue
         name = str(d[0] or "").strip().upper()
         close = d[2]
@@ -121,6 +126,12 @@ def fetch_tradingview_stocks() -> list[dict]:
         # truth. Exclude both gap-ups and gap-downs at or beyond 2%.
         if abs(gap) >= GAP_THRESHOLD:
             continue
+        # "Buy side" default: require the stock to be trading at/above its
+        # day's open. Together with the server-side filter this also guards
+        # against a stale scan returning a drifting stock.
+        change_from_open = float(d[12]) if isinstance(d[12], (int, float)) else CHANGE_FROM_OPEN_MIN
+        if change_from_open < CHANGE_FROM_OPEN_MIN:
+            continue
         rows.append({
             "name": name,
             "close": float(close),
@@ -130,6 +141,7 @@ def fetch_tradingview_stocks() -> list[dict]:
             "relative_volume": float(d[6]) if isinstance(d[6], (int, float)) else 0.0,
             "market_cap_basic": float(d[7]) if isinstance(d[7], (int, float)) else 0,
             "sector": str(d[8]) if d[8] else "N/A",
+            "change_from_open": change_from_open,
             # 9:15 IST opening bar OHLC straight from TradingView.
             "open": float(d[9]) if len(d) > 9 and isinstance(d[9], (int, float)) else None,
             "high": float(d[10]) if len(d) > 10 and isinstance(d[10], (int, float)) else None,
@@ -140,7 +152,7 @@ def fetch_tradingview_stocks() -> list[dict]:
     with _tv_scan_lock:
         _tv_scan_cache = rows
         _tv_scan_cached_at = time.time()
-    logger.info("tv-scan: %d NSE stocks (200–4000 INR, mcap > 41B)", len(rows))
+    logger.info("tv-scan: %d NSE stocks (200–4000 INR, mcap > 41B, chg-from-open > %s)", len(rows), CHANGE_FROM_OPEN_MIN)
     return rows
 
 
