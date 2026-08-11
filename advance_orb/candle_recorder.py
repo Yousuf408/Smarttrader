@@ -190,11 +190,21 @@ def _json_reead() -> dict:
 
 
 def _json_upsert(rows: list[dict]) -> int:
-    """Merge rows into the local JSON file keyed by ``date|symbol``."""
+    """Merge rows into the local JSON file keyed by ``date|symbol``.
+
+    Role: the file holds ONLY the latest trading day's rows.  On the first
+    write of a new day, all rows with a different ``date`` are dropped so the
+    file always reflects the current day's universe — each morning it starts
+    fresh for that day's new stocks.
+    """
     if not rows:
         return 0
+    today = rows[0].get("date")
     with _JSON_LOCK:
         data = _json_reead()
+        if today:
+            # Prune the previous day(s) so only today's candle data survives.
+            data = {k: v for k, v in data.items() if k.split("|")[0] == today}
         for r in rows:
             key = f"{r.get('date')}|{r.get('symbol')}"
             rec = data.get(key) or {}
