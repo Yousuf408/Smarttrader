@@ -163,9 +163,9 @@ class ORBOHLCService:
 _SERVICE = ORBOHLCService(ttl_seconds=20.0)
 
 
-def _store_to_supabase(rows: list[dict]) -> int:
-    """Persist the forming-candle OHLC for these rows into orb_candles_5min."""
-    from advance_orb.candle_recorder import current_candle_label, _supabase_upsert
+def _store_rows(rows: list[dict]) -> int:
+    """Persist the forming-candle OHLC for these rows into the JSON file."""
+    from advance_orb.candle_recorder import current_candle_label, save_rows
     lbl = current_candle_label(_ist_now())
     if not lbl or not rows:
         return 0
@@ -193,17 +193,13 @@ def _store_to_supabase(rows: list[dict]) -> int:
         payloads.append(p)
     if not payloads:
         return 0
-    try:
-        return _supabase_upsert(payloads)
-    except Exception as exc:  # noqa: BLE001 - logged, non-fatal to the page
-        print(f"[nifty_ohlc] store error: {exc}")
-        return 0
+    return save_rows(payloads)
 
 
 def build_payload():
-    """Build the full response for the frontend (+ persist to Supabase)."""
+    """Build the full response for the frontend (+ persist to JSON file)."""
     rows, error = _SERVICE.snapshot()
-    stored = _store_to_supabase(rows)
+    stored = _store_rows(rows)
     now = _ist_now()
     open_flag, status_label, status_note = _market_status(now)
 

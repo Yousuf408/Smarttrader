@@ -218,30 +218,10 @@ def _json_upsert(rows: list[dict]) -> int:
     return len(rows)
 
 
-# ── Supabase upsert ─────────────────────────────────────────────
-def _supabase_upsert(rows: list[dict]) -> int:
-    """Upsert candle rows into ``orb_candles_5min``; returns count inserted.
-
-    Note: also mirrors every row to the local JSON file, so data is never lost
-    even when the Supabase API (PostgREST schema cache) is unavailable.
-    """
-    if not rows:
-        return 0
-    # Always persist locally first — Supabase failure must never lose data.
-    json_count = _json_upsert(rows)
-    try:
-        from advance_orb.supabase_db import _get_client
-        client = _get_client()
-        res = (
-            client.table("orb_candles_5min")
-            .upsert(rows, on_conflict="date,symbol")
-            .execute()
-        )
-        return len(res.data or [])
-    except Exception as exc:  # noqa: BLE001 - Supabase down/cache stale: keep local
-        err = str(exc)[:160]
-        print(f"[candle_recorder] Supabase upsert failed ({err}); kept {json_count} rows in {_CANDLES_JSON.name}")
-        return 0
+# ── Storage ─────────────────────────────────────────────────────
+def save_rows(rows: list[dict]) -> int:
+    """Persist the candle rows to the local JSON file (Supabase disabled)."""
+    return _json_upsert(rows)
 
 
 # ── Single tick ─────────────────────────────────────────────────
@@ -294,15 +274,8 @@ def record_once() -> dict:
             payloads.append(p)
 
         saved = errors = 0
-        try:
-            if payloads:
-                saved = _supabase_upsert(payloads)
-        except Exception as exc:  # noqa: BLE001
-            errors = 1
-            _set_status(running=True, last_tick=today, last_candle=lbl, today=today,
-                        universe=len(universe), matched=matched, saved=saved,
-                        errors=errors, last_message=str(exc)[:200])
-            return {"saved": 0, "candle": lbl, "message": str(exc)[:200]}
+        if payloads:
+            saved = save_rows(payloads)
 
         msg = f"{today} {lbl}: {saved}/{len(payloads)} rows"
         _set_status(running=True, last_tick=f"{now.strftime('%H:%M:%S')} {today}",
