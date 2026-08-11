@@ -104,9 +104,16 @@ class ORBOHLCService:
         df = df[_COLUMNS]
 
         want = _orb_universe()
-        # Filter the market-wide scan down to just our ORB universe symbols.
+        # User rule: keep only stocks whose 9:15 candle CLOSE is above the
+        # 200 EMA (same definition as the Advance ORB toggle — 9:15 close vs
+        # prior-day EMA, ≤3% cap, fail-open on missing data).
+        from advance_orb.common import above_200_ema_symbols
+        keep = above_200_ema_symbols(list(want.keys()))
+
+        # Filter the market-wide scan down to just our ORB-universe symbols
+        # that pass the 9:15-above-200-EMA rule.
         base_col = df["Symbol"].apply(lambda s: str(s).split(":")[-1].strip().upper())
-        mask = base_col.isin(want.keys())
+        mask = base_col.isin(keep)
         df = df[mask].copy()
 
         rows = []
@@ -116,9 +123,6 @@ class ORBOHLCService:
             vwap = r["Vwap|5"] or 0.0
             ema = r["Ema200|5"] or 0.0
             change = r["Change %"]
-            # User rule: keep only stocks trading ABOVE their 200 EMA.
-            if ema is None or price <= ema:
-                continue
             rows.append({
                 "symbol": base,
                 "name": str(r["Name"]) or want.get(base, {}).get("name", base),

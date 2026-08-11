@@ -531,6 +531,44 @@ def batch_yahoo_orb_data(symbols: list[str], timeframe: int = 5) -> dict:
     return results
 
 
+def above_200_ema_symbols(symbols: list[str], timeframe: int = 5) -> set[str]:
+    """Symbols whose 9:15 opening-candle CLOSE sits ABOVE the 200 EMA.
+
+    Mirrors the Advance ORB "Above 200 EMA" toggle exactly:
+      * Compares the 9:15 opening candle's CLOSE (``close915``) against the
+        200 EMA computed on PRIOR days' closes (``ema200``) — no lookahead.
+      * Keeps a symbol only when close > ema AND close is at most
+        ``ABOVE_EMA_MAX_GAP``% above it (3% cap — user rule, never remove).
+      * Fail-open: if Yahoo has no data (delisted / rate-limited) or no EMA /
+        opening-close, the symbol is KEPT rather than wrongly dropped.
+
+    Returns a set of the base symbols (no exchange prefix) that pass.
+    """
+    unique = sorted({str(s).strip().upper().replace(".NS", "") for s in symbols if s})
+    if not unique:
+        return set()
+    yahoo = batch_yahoo_orb_data(unique, timeframe=timeframe)
+    _missing = [s for s in unique if s not in yahoo]
+    fb = compute_200_ema_batch(_missing) if _missing else {}
+    ok: set[str] = set()
+    for s in unique:
+        yd = yahoo.get(s) or {}
+        close = yd.get("close915")
+        ema = yd.get("ema200")
+        if ema is None or float(ema) <= 0:
+            ema = fb.get(s)
+        if ema is None or float(ema) <= 0:
+            ok.add(s)  # can't validate → keep (fail-open)
+            continue
+        if close is None:
+            ok.add(s)  # no opening-close → can't prove below → keep
+            continue
+        gap_pct = (float(close) - float(ema)) / float(ema) * 100
+        if float(close) > float(ema) and gap_pct <= ABOVE_EMA_MAX_GAP:
+            ok.add(s)
+    return ok
+
+
 def _calc_qty_for_broker(df, budget, parts):
     """Add a MaxQty column to *df* using whichever broker is currently connected."""
     use_name_close = 'name' in df.columns and 'close' in df.columns

@@ -166,10 +166,11 @@ def snapshot_rows() -> dict[str, dict]:
         ema = float(r["Ema200|5"]) if r["Ema200|5"] is not None else None
         vwap = float(r["Vwap|5"]) if r["Vwap|5"] is not None else None
         change = float(r["Change %"]) if r["Change %"] is not None else None
-        # User rule: keep only stocks trading ABOVE their 200 EMA, so the
-        # universe reduces by default. Requires a valid EMA; skip if unknown.
-        if ema is None or c <= ema:
-            continue
+        # NOTE: the "above 200 EMA" filter is applied at the payload layer via
+        # common.above_200_ema_symbols() using the 9:15 CANDLE CLOSE vs the
+        # prior-day EMA (same definition as the Advance ORB toggle). The live
+        # Ema200|5 here is only carried for the ema200_915 column, never used
+        # as a filter.
         row = {
             "o": o, "h": h, "l": lo, "c": c,
             "vwap": vwap, "ema": ema, "change": change,
@@ -251,10 +252,18 @@ def record_once() -> dict:
                         errors=0, last_message="no ORB universe from TradingView")
             return {"saved": 0, "candle": lbl, "message": "empty universe"}
 
+        # User rule: keep only stocks whose 9:15 candle CLOSE is above the
+        # 200 EMA (same definition as the Advance ORB toggle — 9:15 close vs
+        # prior-day EMA, ≤3% cap, fail-open on missing data).
+        from advance_orb.common import above_200_ema_symbols
+        keep = above_200_ema_symbols(universe)
+
         snap = snapshot_rows()
         matched = 0
         payloads: list[dict] = []
         for base in universe:
+            if base not in keep:
+                continue
             row = snap.get(base)
             if not row:
                 continue
