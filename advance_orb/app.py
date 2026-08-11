@@ -63,6 +63,10 @@ from advance_orb.auth_routes import router as auth_router
 from server.candle_tracker import candle_tracker
 from advance_orb.tv_chart_candles import batch_tv_opening_candles
 from advance_orb.equal_low_scanner import EqualLowSession, equal_low_inside_915
+from advance_orb.candle_recorder import (
+    candle_recorder_loop as candle_rec_loop,
+    get_status as candle_rec_status,
+)
 
 # Ensure the strategy_trades table exists (run once at startup)
 ensure_table()
@@ -167,18 +171,25 @@ async def _angel_auto_renew_loop():
 async def lifespan(_app):
     task_dhan = asyncio.create_task(_dhan_auto_renew_loop())
     task_angel = asyncio.create_task(_angel_auto_renew_loop())
+    task_candle = asyncio.create_task(candle_rec_loop())
     print("[broker] daily auto-renew loop started (Dhan + Angel)")
+    print("[candles] 5-min ORB candle recorder loop started")
     try:
         yield
     finally:
         task_dhan.cancel()
         task_angel.cancel()
+        task_candle.cancel()
         try:
             await task_dhan
         except (asyncio.CancelledError, Exception):
             pass
         try:
             await task_angel
+        except (asyncio.CancelledError, Exception):
+            pass
+        try:
+            await task_candle
         except (asyncio.CancelledError, Exception):
             pass
 
@@ -1669,6 +1680,14 @@ def nifty_ohlc_page():
 @app.get("/api/nifty/ohlc")
 def nifty_ohlc_data():
     return _nifty_ohlc_payload()
+
+
+# =================================================================
+# ORB 5-min CANDLE RECORDER STATUS
+# =================================================================
+@app.get("/api/candles/status")
+def candles_status():
+    return candle_rec_status()
 
 
 # =================================================================
