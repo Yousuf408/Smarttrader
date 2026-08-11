@@ -23,11 +23,17 @@ volume is intentionally not stored here.
 from __future__ import annotations
 
 import asyncio
+import json
 import threading
 import time
 from datetime import datetime
+from pathlib import Path
 
 from zoneinfo import ZoneInfo
+
+# Local JSON fallback so candles are persisted even if Supabase is unavailable.
+_CANDLES_JSON = Path(__file__).resolve().parent.parent / "stocks" / "orb_candles_5min.json"
+_JSON_LOCK = threading.Lock()
 
 IST = ZoneInfo("Asia/Kolkata")
 
@@ -167,19 +173,59 @@ def snapshot_rows() -> dict[str, dict]:
     return out
 
 
-# ── Supabase upsert ─────────────────────────────────────────────
-def _supabase_upsert(rows: list[dict]) -> int:
-    """Upsert candle rows into ``orb_candles_5min``; returns count inserted."""
+# ── JSON fallback storage (always-on, Supabase-independent) ─────
+def _json_reead() -> dict:
+    if not _CANDLES_JSON.exists():
+        return {}
+    try:
+        return json.loads(_CANDLES_JSON.read_text("utf-8"))
+    except Exception:
+        return {}
+
+
+def _json_upsert(rows: list[dict]) -> int:
+    """Merge rows into the local JSON file keyed by ``date|symbol``."""
     if not rows:
         return 0
-    from advance_orb.supabase_db import _get_client
-    client = _get_client()
-    res = (
-        client.table("orb_candles_5min")
-        .upsert(rows, on_conflict="date,symbol")
-        .execute()
-    )
-    return len(res.data or [])
+    with _JSON_LOCK:
+        data = _json_reead()
+        for r in rows:
+            key = f"{r.get('date')}|{r.get('symbol')}"
+            rec = data.get(key) or {}
+            rec.update(r)          # merge only the fields present this tick
+            rec.setdefault("date", r.get("date"))
+            rec.setdefault("symbol", r.get("symbol"))
+            data[key] = rec
+        tmp = _CANDLES_JSON.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), "utf-8")
+        tmp.replace(_CANDLES_JSON)
+    return len(rows)
+
+
+# ── Supabase upsert ─────────────────────────────────────────────
+def _supabase_upsert(rows: list[dict]) -> int:
+    """Upsert candle rows into ``orb_candles_5min``; returns count inserted.
+
+    Note: also mirrors every row to the local JSON file, so data is never lost
+    even when the Supabase API (PostgREST schema cache) is unavailable.
+    """
+    if not rows:
+        return 0
+    # Always persist locally first — Supabase failure must never lose data.
+    json_count = _json_upsert(rows)
+    try:
+        from advance_orb.supabase_db import _get_client
+        client = _get_client()
+        res = (
+            client.table("orb_candles_5min")
+            .upsert(rows, on_conflict="date,symbol")
+            .execute()
+        )
+        return len(res.data or [])
+    except Exception as exc:  # noqa: BLE001 - Supabase down/cache stale: keep local
+        err = str(exc)[:160]
+        print(f"[candle_recorder] Supabase upsert failed ({err}); kept {json_count} rows in {_CANDLES_JSON.name}")
+        return 0
 
 
 # ── Single tick ─────────────────────────────────────────────────
