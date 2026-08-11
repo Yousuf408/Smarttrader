@@ -163,11 +163,16 @@ def snapshot_rows() -> dict[str, dict]:
             continue
         if None in (o, h, lo, c) or h == 0:
             continue
+        ema = float(r["Ema200|5"]) if r["Ema200|5"] is not None else None
+        vwap = float(r["Vwap|5"]) if r["Vwap|5"] is not None else None
+        change = float(r["Change %"]) if r["Change %"] is not None else None
+        # User rule: keep only stocks trading ABOVE their 200 EMA, so the
+        # universe reduces by default. Requires a valid EMA; skip if unknown.
+        if ema is None or c <= ema:
+            continue
         row = {
             "o": o, "h": h, "l": lo, "c": c,
-            "vwap": float(r["Vwap|5"]) if r["Vwap|5"] is not None else None,
-            "ema": float(r["Ema200|5"]) if r["Ema200|5"] is not None else None,
-            "change": float(r["Change %"]) if r["Change %"] is not None else None,
+            "vwap": vwap, "ema": ema, "change": change,
         }
         out[base] = row
     return out

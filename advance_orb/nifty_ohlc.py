@@ -116,6 +116,9 @@ class ORBOHLCService:
             vwap = r["Vwap|5"] or 0.0
             ema = r["Ema200|5"] or 0.0
             change = r["Change %"]
+            # User rule: keep only stocks trading ABOVE their 200 EMA.
+            if ema is None or price <= ema:
+                continue
             rows.append({
                 "symbol": base,
                 "name": str(r["Name"]) or want.get(base, {}).get("name", base),
