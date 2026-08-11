@@ -82,8 +82,8 @@
 <body>
 <div class="wrap">
   <header>
-    <h1>Nifty 50 — Top 10 Movers
-      <small>Intraday 5-Minute OHLC · TradingView Screener API</small>
+    <h1>ORB Universe — 5-Min OHLC
+      <small>All stocks from Advance ORB (TradingView) · stored to Supabase</small>
     </h1>
     <div class="topbar">
       <span id="marketPill" class="pill"><span class="dot"></span><span id="marketLbl">—</span></span>
@@ -105,13 +105,12 @@
   <div class="foot">
     Data source: <a href="https://github.com/deepentropy/tvscreener" target="_blank" rel="noopener">tvscreener</a> (unofficial TradingView Screener API).
     Auto-refresh every <b>30s</b> · Times in <b>IST</b>.
-    OHLC/VWAP/EMA200 reflect the current 5-minute candle.
+    OHLC/VWAP/EMA200 reflect the current 5-minute candle. Values are <b>stored to Supabase</b> on each refresh.
   </div>
 </div>
 
 <script>
 const API = '/api/nifty/ohlc';
-const want = new Set(['RELIANCE','TCS','HDFCBANK','INFY','ICICIBANK','HINDUNILVR','ITC','SBIN','BAJFINANCE','BHARTIARTL']);
 let lastPayload = null;
 let timer = null;
 
@@ -195,7 +194,7 @@ function exportCSV(){
   const blob = new Blob([lines.join('\n')], {type:'text/csv'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = 'nifty_top10_ohlc_'+d.as_of.replace(/[:T]/g,'-').slice(0,19)+'.csv';
+  a.download = 'orb_universe_5m_ohlc_'+d.as_of.replace(/[:T]/g,'-').slice(0,19)+'.csv';
   document.body.appendChild(a); a.click();
   setTimeout(()=>{URL.revokeObjectURL(a.href); a.remove();},100);
 }

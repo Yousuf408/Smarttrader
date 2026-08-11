@@ -1,8 +1,10 @@
-"""Standalone TradingView OHLC page (top 10 Nifty 50).
+"""TradingView OHLC page — all ORB-universe stocks, stored to Supabase.
 
-Fetches 5-minute OHLC + VWAP + 200 EMA + volume + daily change for a fixed
-set of NSE symbols using the third-party ``tvscreener`` library (v0.4.0 API),
-then exposes a compact JSON endpoint for the frontend.
+Fetches 5-minute OHLC + VWAP + 200 EMA + volume + daily change for the exact
+stocks the Advance ORB scan pulls from TradingView (the ORB universe), using
+the third-party ``tvscreener`` library (v0.4.0 API).  Returns a JSON payload
+for the frontend and stores each stock's forming 5-min candle into the
+existing ``orb_candles_5min`` table (one row per ``(date, symbol)``).
 
 Notes on the tvscreener 0.4.0 API (they differ from older tutorials / the
 original ``tvscreener`` blog post):
@@ -13,7 +15,7 @@ original ``tvscreener`` blog post):
   * There is no symbol-list ``isin`` filter (it maps to ``in_range`` which
     TradingView rejects with a list). So we scope to ``Market.INDIA`` sorted by
     market cap (default) and filter the resulting rows to our symbol set in
-    pandas. The top 10 Nifty names all fall within the first 100 rows.
+    pandas. The ORB universe (mcap-desc screen) falls well within range 0-800.
 """
 
 from __future__ import annotations
@@ -24,21 +26,6 @@ from datetime import datetime
 
 import tvscreener as tvs
 from tvscreener import StockField, Market
-
-IST_ZONE_TZINFO = None  # set below without importing zoneinfo eagerly
-
-TOP_NIFTY = [
-    "NSE:RELIANCE",
-    "NSE:TCS",
-    "NSE:HDFCBANK",
-    "NSE:INFY",
-    "NSE:ICICIBANK",
-    "NSE:HINDUNILVR",
-    "NSE:ITC",
-    "NSE:SBIN",
-    "NSE:BAJFINANCE",
-    "NSE:BHARTIARTL",
-]
 
 # TradingView field set for the 5-minute interval.
 _FIELDS = [
@@ -83,8 +70,23 @@ def _market_status(now):
     return False, "Closed", "Market closed for the day"
 
 
-class NiftyOHLCService:
-    """Cached fetch of the top-10 Nifty 5-min OHLC snapshot."""
+def _orb_universe() -> dict[str, dict]:
+    """Base-symbol -> display data for the ORB universe (TV, not watchlist)."""
+    from advance_orb.common import fetch_tradingview_stocks
+    rows = fetch_tradingview_stocks()
+    out: dict[str, dict] = {}
+    for r in rows:
+        name = str(r.get("name") or "").strip()
+        if not name:
+            continue
+        base = name.split(":")[-1].strip().upper()
+        if base:
+            out[base] = {"name": name}
+    return out
+
+
+class ORBOHLCService:
+    """Cached TradingView snapshot of every ORB-universe stock."""
 
     def __init__(self, ttl_seconds: float = 20.0):
         self.ttl = ttl_seconds
@@ -97,21 +99,26 @@ class NiftyOHLCService:
         ss = tvs.StockScreener()
         ss.set_markets(Market.INDIA)
         ss.specific_fields = _FIELDS
-        ss.set_range(0, 100)
+        ss.set_range(0, 800)             # covers the ORB universe (mcap-desc)
         df = ss.get()
         df = df[_COLUMNS]
-        want = set(TOP_NIFTY)
-        df = df[df["Symbol"].isin(want)]
+
+        want = _orb_universe()
+        # Filter the market-wide scan down to just our ORB universe symbols.
+        base_col = df["Symbol"].apply(lambda s: str(s).split(":")[-1].strip().upper())
+        mask = base_col.isin(want.keys())
+        df = df[mask].copy()
 
         rows = []
         for _, r in df.iterrows():
+            base = str(r["Symbol"]).split(":")[-1].strip().upper()
             price = r["Price"] or 0.0
             vwap = r["Vwap|5"] or 0.0
             ema = r["Ema200|5"] or 0.0
             change = r["Change %"]
             rows.append({
-                "symbol": str(r["Symbol"]).split(":")[-1],
-                "name": str(r["Name"]),
+                "symbol": base,
+                "name": str(r["Name"]) or want.get(base, {}).get("name", base),
                 "price": round(price, 2),
                 "open": round(r["Open|5"], 2) if r["Open|5"] is not None else None,
                 "high": round(r["High|5"], 2) if r["High|5"] is not None else None,
@@ -123,7 +130,7 @@ class NiftyOHLCService:
                 "change_pct": round(change, 2) if change is not None else 0.0,
             })
 
-        rows.sort(key=lambda x: TOP_NIFTY.index(f"NSE:{x['symbol']}") if f"NSE:{x['symbol']}" in TOP_NIFTY else 999)
+        rows.sort(key=lambda x: x["symbol"])
         self._cache = rows
         self._cached_at = time.time()
         self._last_error = None
@@ -146,12 +153,50 @@ class NiftyOHLCService:
             return rows, self._last_error
 
 
-_SERVICE = NiftyOHLCService(ttl_seconds=20.0)
+_SERVICE = ORBOHLCService(ttl_seconds=20.0)
+
+
+def _store_to_supabase(rows: list[dict]) -> int:
+    """Persist the forming-candle OHLC for these rows into orb_candles_5min."""
+    from advance_orb.candle_recorder import current_candle_label, _supabase_upsert
+    lbl = current_candle_label(_ist_now())
+    if not lbl or not rows:
+        return 0
+    now = _ist_now()
+    today = now.strftime("%Y-%m-%d")
+    payloads = []
+    for r in rows:
+        if r["open"] is None or r["high"] is None or r["low"] is None or r["close"] is None:
+            continue
+        p = {
+            "date": today,
+            "symbol": r["symbol"],
+            f"price_{lbl}_O": r["open"],
+            f"price_{lbl}_H": r["high"],
+            f"price_{lbl}_L": r["low"],
+            f"price_{lbl}_C": r["close"],
+        }
+        if r["vwap"]:
+            p[f"vwap_{lbl}"] = r["vwap"]
+        if lbl == "0915":
+            if r["ema200"]:
+                p["ema200_915"] = r["ema200"]
+            if r["change_pct"]:
+                p["change_pct_915"] = r["change_pct"]
+        payloads.append(p)
+    if not payloads:
+        return 0
+    try:
+        return _supabase_upsert(payloads)
+    except Exception as exc:  # noqa: BLE001 - logged, non-fatal to the page
+        print(f"[nifty_ohlc] store error: {exc}")
+        return 0
 
 
 def build_payload():
-    """Build the full response for the frontend."""
+    """Build the full response for the frontend (+ persist to Supabase)."""
     rows, error = _SERVICE.snapshot()
+    stored = _store_to_supabase(rows)
     now = _ist_now()
     open_flag, status_label, status_note = _market_status(now)
 
@@ -165,6 +210,7 @@ def build_payload():
         "market": {"open": open_flag, "label": status_label, "note": status_note},
         "refresh_seconds": 30,
         "rows": rows,
+        "stored": stored,
         "stats": {
             "gainer": gainer,
             "loser": loser,
