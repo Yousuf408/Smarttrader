@@ -61,6 +61,9 @@
         white-space:nowrap;font-variant-numeric:tabular-nums}
   tbody tr:last-child td{border-bottom:none}
   tbody tr:hover{background:rgba(255,255,255,.03)}
+  /* Vertical divider after each candle-timeframe group (on the VWAP column). */
+  th.tfsep{border-right:2px solid var(--accent);border-bottom:2px solid var(--accent)}
+  td.tfsep{border-right:2px solid rgba(47,129,247,.45)}
   .sym .t{font-weight:700}.sym .s{color:var(--muted);font-size:11.5px;display:block;font-weight:500}
   .up{color:var(--up)} .down{color:var(--down)} .flat{color:var(--muted)}
   .chg{font-weight:700}
@@ -174,7 +177,7 @@ function renderTable(d){
   const subHead = [];
   for(const lbl of labels){
     groupHead.push(`<th colspan="5" class="cf">${fmtTime(lbl)}</th>`);
-    subHead.push('<th>Open</th><th>High</th><th>Low</th><th>Close</th><th>VWAP</th>');
+    subHead.push('<th>Open</th><th>High</th><th>Low</th><th>Close</th><th class="tfsep">VWAP</th>');
   }
   let html = `<table><thead><tr>${groupHead.join('')}</tr><tr>${subHead.join('')}</tr></thead><tbody>`;
   for(const r of rows){
@@ -191,7 +194,7 @@ function renderTable(d){
       const vwls = (o!=null && vw!=null) ? (vw>o ? 'up':'down') : '';
       return `<td>${fmt(o)}</td><td class="${cl!=null&&h!=null&&h>=cl?'up':'flat'}">${fmt(h)}</td>
         <td class="${lo!=null&&cl!=null&&lo<=cl?'down':'flat'}">${fmt(lo)}</td>
-        <td class="${ccls}">${fmt(cl)}</td><td class="${vwls||'flat'}">${fmt(vw)}</td>`;
+        <td class="${ccls}">${fmt(cl)}</td><td class="tfsep ${vwls||'flat'}">${fmt(vw)}</td>`;
     }).join('');
     html += `<tr>
       <td class="sym"><span class="t">${r.name}${tags.join('')}</span><span class="s">${r.symbol}</span></td>
