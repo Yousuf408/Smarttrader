@@ -675,15 +675,17 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, near_high: bool = True
             symbol = row['name']
 
             # Normal mode: open must be within ±2% of yesterday's high
-            # (TV daily high).  Only evaluated when both values exist —
-            # the TV candle completes ~09:20 — otherwise keep pending.
-            _open = row.get("open915")
-            _yh = row.get("yesterday_high")
-            if pd.notna(_open) and pd.notna(_yh) and float(_yh) > 0:
-                _lo_b = 0.98 * float(_yh)
-                _hi_b = 1.02 * float(_yh)
-                if not (_lo_b <= float(_open) <= _hi_b):
-                    continue
+            # (TV daily high).  Only applied when the "Near High" toggle is ON —
+            # with no filter selected the full TradingView universe is shown.
+            # Only evaluated when both values exist (~09:20) otherwise keep.
+            if near_high:
+                _open = row.get("open915")
+                _yh = row.get("yesterday_high")
+                if pd.notna(_open) and pd.notna(_yh) and float(_yh) > 0:
+                    _lo_b = 0.98 * float(_yh)
+                    _hi_b = 1.02 * float(_yh)
+                    if not (_lo_b <= float(_open) <= _hi_b):
+                        continue
 
             # Format volume
             vol = row.get('volume', 0)
