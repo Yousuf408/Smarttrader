@@ -409,6 +409,12 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, near_high: bool = True
             yahoo_open_high = batch_yahoo_orb_data(candidate_symbols, timeframe=timeframe)
         else:
             yahoo_open_high = None
+        # Our own TradingView JSON store (5-min or 15-min file, selected by the
+        # timeframe param) is the PRIMARY source for the opening candle + the
+        # inside/3-candles checks, so we read it ONCE here (before the filters
+        # below) and reuse it in both the filter and column-fill paths.  Yahoo
+        # is only a fallback for symbols the store hasn't recorded yet.
+        _store_915 = load_orb_candles_9_15(timeframe=timeframe)
 
         if near_high:
             yahoo_near_high_symbols = set()
@@ -471,17 +477,30 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, near_high: bool = True
         # (Yahoo 5-min). Full high/low of those candles is NOT required.
         if inside3:
             inside3_symbols = set()
-            for _s, _yd in (yahoo_open_high or {}).items():
-                if not _yd:
-                    continue
-                _hi = _yd.get("high915")
-                _lo = _yd.get("low915")
+            for _s in df["name"].tolist():
+                # Check OUR OWN TradingView JSON store first (5-min: 9:15/9:20/
+                # 9:25/9:30; 15-min: 9:15/9:30/9:45/10:00).  Only when the store
+                # lacks this symbol (not yet recorded / below-EMA universe) fall
+                # back to the Yahoo candle closes, so we lean away from Yahoo.
+                _sd = _store_915.get(_s)
+                _hi = _sd.get("high915") if _sd else None
+                _lo = _sd.get("low915") if _sd else None
+                _closes = (
+                    [_sd.get("c2_close"), _sd.get("c3_close"), _sd.get("c4_close")]
+                    if _sd else [None, None, None]
+                )
+                _from_store = _sd is not None and _hi is not None and _lo is not None \
+                    and float(_hi) > 0 and all(c is not None for c in _closes)
+                if not _from_store:
+                    _yd = (yahoo_open_high or {}).get(_s) or {}
+                    _hi = _yd.get("high915")
+                    _lo = _yd.get("low915")
+                    _closes = [_yd.get(f"{_k}_close") for _k in ("c2", "c3", "c4")]
                 if _hi is None or _lo is None or float(_hi) <= 0:
                     continue
                 _hi, _lo = float(_hi), float(_lo)
                 _ok = True
-                for _k in ("c2", "c3", "c4"):
-                    _kc = _yd.get(f"{_k}_close")
+                for _kc in _closes:
                     if _kc is None:
                         _ok = False
                         break
@@ -552,27 +571,26 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, near_high: bool = True
             df['high915'] = df['name'].map(lambda s: _y_hi.get(s))
             df['low915'] = df['name'].map(lambda s: _y_lo.get(s))
 
-        # 15-MIN: source the 9:15 opening candle (high/low/open/close) and the
-        # inside-9:15 check from OUR OWN TradingView JSON store instead of
-        # Yahoo Finance.  TradingView's live 9:15 bar is the exact candle the
-        # Advance ORB scans, and we already record it every ~30s.  We start
-        # with the 15-min timeframe only (per user) — 5-min stays on Yahoo
-        # until 15-min is validated.  When the store lacks a symbol (not yet
-        # recorded / below-EMA universe), we fall back to the Yahoo values
-        # that were filled above so the row is never wrongly dropped.
-        if timeframe == 15:
-            _store_915 = load_orb_candles_9_15(timeframe=15)
-            if _store_915:
-                for _s in df["name"].tolist():
-                    _sd = _store_915.get(_s)
-                    if not _sd:
-                        continue  # store miss → keep the Yahoo values above
-                    df.loc[df["name"] == _s, "high915"] = _sd["high915"]
-                    df.loc[df["name"] == _s, "low915"] = _sd["low915"]
-                    df.loc[df["name"] == _s, "open915"] = _sd["open915"]
-                    df.loc[df["name"] == _s, "close915"] = _sd["close915"]
-                    df.loc[df["name"] == _s, "close920"] = _sd["close920"]
-                    df.loc[df["name"] == _s, "inside_915"] = _sd["inside_915"]
+        # OUR OWN TradingView JSON store is now the PRIMARY source for the 9:15
+        # opening candle (high/low/open/close) and the inside-9:15 check for BOTH
+        # timeframes (5-min and 15-min), so we lean away from Yahoo.  TradingView's
+        # live 9:15 bar is the exact candle the Advance ORB scans, and we already
+        # record it every ~30s into stocks/orb_candles_5min.json (5-min) and
+        # orb_candles_15min.json (15-min).  When the store lacks a symbol (not yet
+        # recorded / below-EMA universe), we fall back to the Yahoo values that
+        # were filled above so the row is never wrongly dropped.  ``_store_915``
+        # was already loaded once above (before the filters) and is reused here.
+        if _store_915:
+            for _s in df["name"].tolist():
+                _sd = _store_915.get(_s)
+                if not _sd:
+                    continue  # store miss → keep the Yahoo values above
+                df.loc[df["name"] == _s, "high915"] = _sd["high915"]
+                df.loc[df["name"] == _s, "low915"] = _sd["low915"]
+                df.loc[df["name"] == _s, "open915"] = _sd["open915"]
+                df.loc[df["name"] == _s, "close915"] = _sd["close915"]
+                df.loc[df["name"] == _s, "close920"] = _sd["close920"]
+                df.loc[df["name"] == _s, "inside_915"] = _sd["inside_915"]
 
         # "1st Range%" = the opening (9:15) candle's % range: (high − low) / low,
         # computed from the high915/low915 that are now filled above (our own TV

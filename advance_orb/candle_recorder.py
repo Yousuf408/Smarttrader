@@ -275,12 +275,17 @@ def load_orb_candles_9_15(timeframe: int = 15) -> dict[str, dict]:
     straight from our own TradingView JSON store.
 
     Returns ``{symbol: {open915, high915, low915, close915, close920,
-    inside_915, ema200}}`` or ``{}`` when the store is missing/empty.  For
-    15-min the opening candle is the 09:15–09:30 bar and the 2nd candle used
-    for ``inside_915`` is 09:30; for 5-min it is 09:20.
+    inside_915, c2_close, c3_close, c4_close, ema200}}`` or ``{}`` when the
+    store is missing/empty.  The follow-up candles (2nd/3rd/4th bars after the
+    09:15 open) are 09:20/09:25/09:30 on 5-min and 09:30/09:45/10:00 on 15-min,
+    so the "3 Candles Inside 9:15" filter can be computed from the store too.
     """
-    path = _CANDLES_15_JSON if int(timeframe) == 15 else _CANDLES_JSON
-    second = "0930" if int(timeframe) == 15 else "0920"
+    tf = int(timeframe)
+    path = _CANDLES_15_JSON if tf == 15 else _CANDLES_JSON
+    if tf == 15:
+        c2l, c3l, c4l = "0930", "0945", "1000"
+    else:
+        c2l, c3l, c4l = "0920", "0925", "0930"
     data = _json_reead(path)
     out: dict[str, dict] = {}
     for key, rec in data.items():
@@ -291,7 +296,9 @@ def load_orb_candles_9_15(timeframe: int = 15) -> dict[str, dict]:
         h = rec.get("price_0915_H")
         l = rec.get("price_0915_L")
         c = rec.get("price_0915_C")
-        c2 = rec.get(f"price_{second}_C")
+        c2 = rec.get(f"price_{c2l}_C")
+        c3 = rec.get(f"price_{c3l}_C")
+        c4 = rec.get(f"price_{c4l}_C")
         if o is None or h is None or l is None or c is None:
             continue  # 9:15 bar not complete yet for this symbol
         inside = None
@@ -300,6 +307,7 @@ def load_orb_candles_9_15(timeframe: int = 15) -> dict[str, dict]:
         out[sym] = {
             "open915": o, "high915": h, "low915": l, "close915": c,
             "close920": c2, "inside_915": inside,
+            "c2_close": c2, "c3_close": c3, "c4_close": c4,
             "ema200": rec.get("ema200_0915"),
         }
     return out
