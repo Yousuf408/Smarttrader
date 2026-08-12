@@ -37,7 +37,7 @@ CHANGE_FROM_OPEN_MIN = 0.0
 # ── 200-period EMA (5-min closes, Yahoo Finance) ──
 EMA_SPAN = 200
 EMA_LOOKBACK_DAYS = 4
-ABOVE_EMA_MAX_GAP = 3.0   # "Above 200 EMA" toggle: open at most 3% above EMA
+ABOVE_EMA_MAX_GAP = 4.0   # "Above 200 EMA" toggle: open at most 4% above EMA
 
 IST = ZoneInfo("Asia/Kolkata")
 MAX_TV_STOCKS = 100
@@ -538,7 +538,7 @@ def above_200_ema_symbols(symbols: list[str], timeframe: int = 5) -> set[str]:
       * Compares the 9:15 opening candle's CLOSE (``close915``) against the
         200 EMA computed on PRIOR days' closes (``ema200``) — no lookahead.
       * Keeps a symbol only when close > ema AND close is at most
-        ``ABOVE_EMA_MAX_GAP``% above it (3% cap — user rule, never remove).
+        ``ABOVE_EMA_MAX_GAP``% above it (4% cap — user rule, never remove).
       * Fail-open: if Yahoo has no data (delisted / rate-limited) or no EMA /
         opening-close, the symbol is KEPT rather than wrongly dropped.
 

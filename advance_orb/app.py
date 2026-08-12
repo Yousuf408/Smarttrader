@@ -433,11 +433,10 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, near_high: bool = True
         # "Above 200 EMA" toggle: the opening candle's CLOSE must be ABOVE the
         # 200 EMA AND at most ABOVE_EMA_MAX_GAP% above it (opening-candle
         # close, not open, not the 2nd candle).
-        # The ABOVE_EMA_MAX_GAP (=3%) cap is INTENTIONAL — added after a prior
-        # discussion with the user, who explicitly asked to keep it. Do NOT
-        # remove it. A stock beyond 3% above its EMA is excluded by design
-        # (e.g. SAPPHIRE 15m: close 198.11 vs EMA 192.30 = 3.02% is correctly
-        # excluded).
+        # The ABOVE_EMA_MAX_GAP (=4%) cap is INTENTIONAL — added after a prior
+        # discussion with the user, who explicitly asked to keep a cap. Do NOT
+        # remove it. A stock beyond 4% above its EMA is excluded by design.
+        # (Originally 3%, widened to 4% by user request on 2026-08.)
         #
         # IMPORTANT (regression): the filter must NOT silently drop a stock
         # just because Yahoo didn't return candle data for it. Yahoo yfinance
