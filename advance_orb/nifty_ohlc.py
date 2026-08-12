@@ -20,12 +20,17 @@ original ``tvscreener`` blog post):
 
 from __future__ import annotations
 
+import json
 import threading
 import time
 from datetime import datetime
+from pathlib import Path
 
 import tvscreener as tvs
 from tvscreener import StockField, Market
+
+# Wide-table store of all 5-min candles for the latest day (1 stock = 1 row).
+_CANDLES_STORE = Path(__file__).resolve().parent.parent / "stocks" / "orb_candles_5min.json"
 
 # TradingView field set for the 5-minute interval.
 _FIELDS = [
@@ -196,11 +201,66 @@ def _store_rows(rows: list[dict]) -> int:
     return save_rows(payloads)
 
 
+def _load_day_candles() -> tuple[dict[str, dict], list[str]]:
+    """Read the wide candle store -> {symbol: {lbl: {o,h,l,c,vwap}}}, labels.
+
+    Falls back to the live-snapshot rows when the store is empty/missing (e.g.
+    a fresh day before market opens) so the page never shows an empty table.
+    """
+    if _CANDLES_STORE.exists():
+        try:
+            data = json.loads(_CANDLES_STORE.read_text("utf-8"))
+        except Exception:
+            data = {}
+    else:
+        data = {}
+
+    by_symbol: dict[str, dict] = {}
+    labels: set[str] = set()
+    for key, rec in data.items():
+        _, sym = (key.split("|", 1) + ["", ""])[:2]
+        if not sym:
+            continue
+        per: dict[str, dict] = {}
+        for col, val in rec.items():
+            # columns look like price_1300_O  /  vwap_1300
+            parts = col.split("_")
+            if parts[0] == "vwap" and len(parts) == 2:
+                per.setdefault(parts[1], {})["vwap"] = val
+            elif (
+                len(parts) == 3
+                and parts[0] == "price"
+                and parts[2] in ("O", "H", "L", "C")
+            ):
+                lbl, ohlc = parts[1], parts[2].lower()
+                per.setdefault(lbl, {})[ohlc] = val
+        # Keep a candle label only when it actually holds an open/close price.
+        for lbl, c in list(per.items()):
+            if not c.get("o") and not c.get("c"):
+                per.pop(lbl, None)
+                continue
+            c.setdefault("h", None)
+            c.setdefault("l", None)
+            c.setdefault("vwap", None)
+        if per:
+            by_symbol[sym] = per
+            labels.update(per.keys())
+
+    ordered = sorted(labels, key=lambda s: int(s)) if labels else []
+    return by_symbol, ordered
+
+
 def build_payload():
     """Build the full response for the frontend (+ persist to JSON file)."""
     rows, error = _SERVICE.snapshot()
     stored = _store_rows(rows)
     now = _ist_now()
+    store_by_symbol, candle_labels = _load_day_candles()
+
+    # Attach all stored day-candles to each row (column-wise wide table).
+    for r in rows:
+        r["candles"] = store_by_symbol.get(r["symbol"], {})
+
     open_flag, status_label, status_note = _market_status(now)
 
     gainer = max(rows, key=lambda r: r["change_pct"]) if rows else None
@@ -214,6 +274,7 @@ def build_payload():
         "refresh_seconds": 30,
         "rows": rows,
         "stored": stored,
+        "candle_labels": candle_labels,
         "stats": {
             "gainer": gainer,
             "loser": loser,
