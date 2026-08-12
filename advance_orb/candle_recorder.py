@@ -31,18 +31,29 @@ from pathlib import Path
 
 from zoneinfo import ZoneInfo
 
-# Local JSON fallback so candles are persisted even if Supabase is unavailable.
+# Local JSON files so candles are persisted without any external DB.
 _CANDLES_JSON = Path(__file__).resolve().parent.parent / "stocks" / "orb_candles_5min.json"
+_CANDLES_15_JSON = Path(__file__).resolve().parent.parent / "stocks" / "orb_candles_15min.json"
 _JSON_LOCK = threading.Lock()
 
 IST = ZoneInfo("Asia/Kolkata")
 
+
+def _make_labels(start_min: int, end_min: int, step: int) -> list[str]:
+    """Column-suffix labels (e.g. '0915') from start to end at a given step."""
+    out: list[str] = []
+    m = start_min
+    while m <= end_min:
+        out.append(f"{m // 60:02d}{m % 60:02d}")
+        m += step
+    return out
+
+
 # 5-min candle labels: "0915" .. "1510" (column suffix for price_/vwap_).
-CANDLE_LABELS: list[str] = []
-_m = 9 * 60 + 15
-while _m <= 15 * 60 + 10:
-    CANDLE_LABELS.append(f"{_m // 60:02d}{_m % 60:02d}")
-    _m += 5
+CANDLE_LABELS: list[str] = _make_labels(9 * 60 + 15, 15 * 60 + 10, 5)
+
+# 15-min candle labels: "0915" .. "1500" (column suffix for price_/vwap_).
+CANDLE_LABELS_15: list[str] = _make_labels(9 * 60 + 15, 15 * 60, 15)
 
 _OPEN_IST_MIN = 9 * 60 + 15
 _CLOSE_IST_MIN = 15 * 60 + 30
@@ -68,6 +79,16 @@ def current_candle_label(now: datetime | None = None) -> str | None:
         return None
     lbl = f"{(minutes // 5 * 5) // 60:02d}{(minutes // 5 * 5) % 60:02d}"
     return lbl if lbl in CANDLE_LABELS else None
+
+
+def current_candle_label_15(now: datetime | None = None) -> str | None:
+    """Label of the currently-forming 15-min candle (0915 -> 1500), or None."""
+    now = now or datetime.now(IST)
+    minutes = now.hour * 60 + now.minute
+    if minutes < _OPEN_IST_MIN or minutes > _CLOSE_IST_MIN:
+        return None
+    lbl = f"{(minutes // 15 * 15) // 60:02d}{(minutes // 15 * 15) % 60:02d}"
+    return lbl if lbl in CANDLE_LABELS_15 else None
 
 
 # ── Status store (read by GET /api/candles/status) ──
@@ -121,19 +142,24 @@ def _snapshot_fields():
             StockField.NAME, StockField.PRICE,
             StockField.OPEN_5, StockField.HIGH_5, StockField.LOW_5,
             StockField.CLOSE_5, StockField.VWAP_5,
+            StockField.OPEN_15, StockField.HIGH_15, StockField.LOW_15,
+            StockField.CLOSE_15, StockField.VWAP_15,
             StockField.EMA200_5, StockField.CHANGE_PERCENT,
         ]
         _SS_COLUMNS = [
             "Symbol", "Name", "Price", "Open|5", "High|5", "Low|5",
-            "Close|5", "Vwap|5", "Ema200|5", "Change %",
+            "Close|5", "Vwap|5",
+            "Open|15", "High|15", "Low|15", "Close|15", "Vwap|15",
+            "Ema200|5", "Change %",
         ]
     return _SS_FIELDS, _SS_COLUMNS
 
 
 def snapshot_rows() -> dict[str, dict]:
-    """One tvscreener scan -> {base_symbol: {o,h,l,c,vwap,ema,change}}.
+    """One tvscreener scan -> {base_symbol: {o,h,l,c,vwap,ema,change,o15,h15,l15,c15,vwap15}}.
 
     Skips symbols with no usable OHLC. Returns only rows we can store.
+    Both the 5-min and 15-min forming candles come from the same scan.
     """
     import tvscreener as tvs
     from tvscreener import Market
@@ -163,9 +189,16 @@ def snapshot_rows() -> dict[str, dict]:
             continue
         if None in (o, h, lo, c) or h == 0:
             continue
+        # 15-min forming candle (fail-open -> None if TV returns nothing).
+        try:
+            o15 = float(r["Open|15"]) if r["Open|15"] is not None else None
+            h15 = float(r["High|15"]) if r["High|15"] is not None else None
+            l15 = float(r["Low|15"]) if r["Low|15"] is not None else None
+            c15 = float(r["Close|15"]) if r["Close|15"] is not None else None
+            v15 = float(r["Vwap|15"]) if r["Vwap|15"] is not None else None
+        except (TypeError, ValueError):
+            o15 = h15 = l15 = c15 = v15 = None
         ema = float(r["Ema200|5"]) if r["Ema200|5"] is not None else None
-        vwap = float(r["Vwap|5"]) if r["Vwap|5"] is not None else None
-        change = float(r["Change %"]) if r["Change %"] is not None else None
         # NOTE: the "above 200 EMA" filter is applied at the payload layer via
         # common.above_200_ema_symbols() using the 9:15 CANDLE CLOSE vs the
         # prior-day EMA (same definition as the Advance ORB toggle). The live
@@ -174,22 +207,23 @@ def snapshot_rows() -> dict[str, dict]:
         row = {
             "o": o, "h": h, "l": lo, "c": c,
             "vwap": vwap, "ema": ema, "change": change,
+            "o15": o15, "h15": h15, "l15": l15, "c15": c15, "vwap15": v15,
         }
         out[base] = row
     return out
 
 
 # ── JSON fallback storage (always-on, Supabase-independent) ─────
-def _json_reead() -> dict:
-    if not _CANDLES_JSON.exists():
+def _json_reead(path: Path) -> dict:
+    if not path.exists():
         return {}
     try:
-        return json.loads(_CANDLES_JSON.read_text("utf-8"))
+        return json.loads(path.read_text("utf-8"))
     except Exception:
         return {}
 
 
-def _json_upsert(rows: list[dict]) -> int:
+def _json_upsert(rows: list[dict], path: Path) -> int:
     """Merge rows into the local JSON file keyed by ``date|symbol``.
 
     Role: the file holds ONLY the latest trading day's rows.  On the first
@@ -201,7 +235,7 @@ def _json_upsert(rows: list[dict]) -> int:
         return 0
     today = rows[0].get("date")
     with _JSON_LOCK:
-        data = _json_reead()
+        data = _json_reead(path)
         if today:
             # Prune the previous day(s) so only today's candle data survives.
             data = {k: v for k, v in data.items() if k.split("|")[0] == today}
@@ -212,16 +246,21 @@ def _json_upsert(rows: list[dict]) -> int:
             rec.setdefault("date", r.get("date"))
             rec.setdefault("symbol", r.get("symbol"))
             data[key] = rec
-        tmp = _CANDLES_JSON.with_suffix(".json.tmp")
+        tmp = path.with_suffix(".json.tmp")
         tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), "utf-8")
-        tmp.replace(_CANDLES_JSON)
+        tmp.replace(path)
     return len(rows)
 
 
 # ── Storage ─────────────────────────────────────────────────────
 def save_rows(rows: list[dict]) -> int:
-    """Persist the candle rows to the local JSON file (Supabase disabled)."""
-    return _json_upsert(rows)
+    """Persist the candle rows to the 5-min local JSON file."""
+    return _json_upsert(rows, _CANDLES_JSON)
+
+
+def save_rows_15(rows: list[dict]) -> int:
+    """Persist the candle rows to the 15-min local JSON file."""
+    return _json_upsert(rows, _CANDLES_15_JSON)
 
 
 # ── Single tick ─────────────────────────────────────────────────
@@ -230,8 +269,9 @@ def record_once() -> dict:
     now = datetime.now(IST)
     today = now.strftime("%Y-%m-%d")
     lbl = current_candle_label(now)
+    lbl15 = current_candle_label_15(now)
 
-    if lbl is None:
+    if lbl is None and lbl15 is None:
         return {"saved": 0, "candle": None, "message": f"{today} — outside candle window"}
 
     with _rec_lock:
@@ -251,6 +291,7 @@ def record_once() -> dict:
         snap = snapshot_rows()
         matched = 0
         payloads: list[dict] = []
+        payloads15: list[dict] = []
         for base in universe:
             if base not in keep:
                 continue
@@ -273,11 +314,33 @@ def record_once() -> dict:
                 p["change_pct_915"] = row["change"]
             payloads.append(p)
 
+            if lbl15 is not None:
+                # 15-min candle columns (only present when a 15-min candle can be
+                # forming). Requires the 15-min OHLC to actually be returned.
+                c15 = row.get("c15")
+                if c15 is not None:
+                    p15 = {
+                        "date": today,
+                        "symbol": base,
+                        f"price_{lbl15}_O": row.get("o15"),
+                        f"price_{lbl15}_H": row.get("h15"),
+                        f"price_{lbl15}_L": row.get("l15"),
+                        f"price_{lbl15}_C": c15,
+                        f"vwap_{lbl15}": row.get("vwap15"),
+                    }
+                    # EMA200 + Change% stored only on the 09:15 candle.
+                    if lbl15 == "0915":
+                        p15["ema200_0915"] = row["ema"]
+                        p15["change_pct_0915"] = row["change"]
+                    payloads15.append(p15)
+
         saved = errors = 0
         if payloads:
             saved = save_rows(payloads)
+        if payloads15:
+            save_rows_15(payloads15)
 
-        msg = f"{today} {lbl}: {saved}/{len(payloads)} rows"
+        msg = f"{today} {lbl}: {saved}/{len(payloads)} rows (+15m {len(payloads15)})"
         _set_status(running=True, last_tick=f"{now.strftime('%H:%M:%S')} {today}",
                     last_candle=lbl, today=today, universe=len(universe),
                     matched=matched, saved=saved, errors=errors, last_message=msg)
