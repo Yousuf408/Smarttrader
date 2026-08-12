@@ -66,6 +66,7 @@ from advance_orb.equal_low_scanner import EqualLowSession, equal_low_inside_915
 from advance_orb.candle_recorder import (
     candle_recorder_loop as candle_rec_loop,
     get_status as candle_rec_status,
+    load_orb_candles_9_15,
 )
 
 # Ensure the strategy_trades table exists (run once at startup)
@@ -550,6 +551,28 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, near_high: bool = True
             # candle we already fetch instead of showing empty cells.
             df['high915'] = df['name'].map(lambda s: _y_hi.get(s))
             df['low915'] = df['name'].map(lambda s: _y_lo.get(s))
+
+        # 15-MIN: source the 9:15 opening candle (high/low/open/close) and the
+        # inside-9:15 check from OUR OWN TradingView JSON store instead of
+        # Yahoo Finance.  TradingView's live 9:15 bar is the exact candle the
+        # Advance ORB scans, and we already record it every ~30s.  We start
+        # with the 15-min timeframe only (per user) — 5-min stays on Yahoo
+        # until 15-min is validated.  When the store lacks a symbol (not yet
+        # recorded / below-EMA universe), we fall back to the Yahoo values
+        # that were filled above so the row is never wrongly dropped.
+        if timeframe == 15:
+            _store_915 = load_orb_candles_9_15(timeframe=15)
+            if _store_915:
+                for _s in df["name"].tolist():
+                    _sd = _store_915.get(_s)
+                    if not _sd:
+                        continue  # store miss → keep the Yahoo values above
+                    df.loc[df["name"] == _s, "high915"] = _sd["high915"]
+                    df.loc[df["name"] == _s, "low915"] = _sd["low915"]
+                    df.loc[df["name"] == _s, "open915"] = _sd["open915"]
+                    df.loc[df["name"] == _s, "close915"] = _sd["close915"]
+                    df.loc[df["name"] == _s, "close920"] = _sd["close920"]
+                    df.loc[df["name"] == _s, "inside_915"] = _sd["inside_915"]
         # "Share Low" column: detect whether the opening candles share the same
         # low.  Using just the lows the screener already fetched (low915 +
         # c2_lo/c3_lo/c4_lo) — never an additional Yahoo call per symbol.

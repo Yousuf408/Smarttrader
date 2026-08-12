@@ -265,6 +265,41 @@ def save_rows_15(rows: list[dict]) -> int:
     return _json_upsert(rows, _CANDLES_15_JSON)
 
 
+def load_orb_candles_9_15(timeframe: int = 15) -> dict[str, dict]:
+    """Read the opening 9:15 candle (+ the 2nd candle for the inside check)
+    straight from our own TradingView JSON store.
+
+    Returns ``{symbol: {open915, high915, low915, close915, close920,
+    inside_915, ema200}}`` or ``{}`` when the store is missing/empty.  For
+    15-min the opening candle is the 09:15–09:30 bar and the 2nd candle used
+    for ``inside_915`` is 09:30; for 5-min it is 09:20.
+    """
+    path = _CANDLES_15_JSON if int(timeframe) == 15 else _CANDLES_JSON
+    second = "0930" if int(timeframe) == 15 else "0920"
+    data = _json_reead(path)
+    out: dict[str, dict] = {}
+    for key, rec in data.items():
+        _, sym = (key.split("|", 1) + ["", ""])[:2]
+        if not sym:
+            continue
+        o = rec.get("price_0915_O")
+        h = rec.get("price_0915_H")
+        l = rec.get("price_0915_L")
+        c = rec.get("price_0915_C")
+        c2 = rec.get(f"price_{second}_C")
+        if o is None or h is None or l is None or c is None:
+            continue  # 9:15 bar not complete yet for this symbol
+        inside = None
+        if c2 is not None and h > 0 and l is not None:
+            inside = bool(float(l) <= float(c2) <= float(h))
+        out[sym] = {
+            "open915": o, "high915": h, "low915": l, "close915": c,
+            "close920": c2, "inside_915": inside,
+            "ema200": rec.get("ema200_0915"),
+        }
+    return out
+
+
 # ── Single tick ─────────────────────────────────────────────────
 def record_once() -> dict:
     """Fetch the universe + snapshot and PATCH the forming-candle columns."""
