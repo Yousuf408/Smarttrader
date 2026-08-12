@@ -1741,8 +1741,8 @@ def nifty_ohlc_page():
 
 
 @app.get("/api/nifty/ohlc")
-def nifty_ohlc_data():
-    return _nifty_ohlc_payload()
+def nifty_ohlc_data(timeframe: int = 5):
+    return _nifty_ohlc_payload(timeframe=timeframe)
 
 
 # =================================================================

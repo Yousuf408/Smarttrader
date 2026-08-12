@@ -84,11 +84,19 @@
 <body>
 <div class="wrap">
   <header>
-    <h1>ORB Universe — 5-Min OHLC
-      <small>All stocks from Advance ORB (TradingView) · stored to Supabase</small>
+    <h1>ORB Universe — <span id="titleTimeframe">5-min</span> OHLC
+      <small>All stocks from Advance ORB (TradingView) · candles from our own JSON store</small>
     </h1>
     <div class="topbar">
       <span id="marketPill" class="pill"><span class="dot"></span><span id="marketLbl">—</span></span>
+      <label class="meta" style="display:flex;align-items:center;gap:6px">
+        Timeframe
+        <select id="tfSel" style="background:var(--card2);color:var(--text);border:1px solid var(--border);
+          border-radius:8px;padding:7px 10px;font-size:13px;font-weight:600;cursor:pointer">
+          <option value="5" selected>5-min</option>
+          <option value="15">15-min</option>
+        </select>
+      </label>
       <button class="btn ghost" id="refreshBtn" onclick="loadData(true)">↻ Refresh now</button>
     </div>
   </header>
@@ -115,6 +123,10 @@
 const API = '/api/nifty/ohlc';
 let lastPayload = null;
 let timer = null;
+let currentTF = 5;
+
+function tf(){ return parseInt(el('tfSel').value, 10); }
+function apiURL(){ return API + '?timeframe=' + tf(); }
 
 function el(id){ return document.getElementById(id); }
 function fmt(n, d=2){
@@ -133,7 +145,6 @@ function renderStats(d){
   const s = d.stats;
   const box = el('statsRow');
   const gain = s.gainer, loss = s.loser;
-  const ema = s.above_ema;
   box.innerHTML = `
     <div class="stat"><div class="lbl">Total Stocks Fetching</div>
       <div class="val">${d.rows.length}</div>
@@ -143,10 +154,7 @@ function renderStats(d){
       <div class="sub up">${gain ? gain.change_pct.toFixed(2)+'% · ₹'+fmt(gain.price) : ''}</div></div>
     <div class="stat"><div class="lbl">Top Loser</div>
       <div class="val down">${loss ? loss.symbol : '—'}</div>
-      <div class="sub down">${loss ? loss.change_pct.toFixed(2)+'% · ₹'+fmt(loss.price) : ''}</div></div>
-    <div class="stat"><div class="lbl">Above 5m 200 EMA</div>
-      <div class="val">${ema.count}<span style="color:var(--muted)"> / ${ema.total}</span></div>
-      <div class="sub">${ema.symbols.join(', ') || 'None'}</div></div>`;
+      <div class="sub down">${loss ? loss.change_pct.toFixed(2)+'% · ₹'+fmt(loss.price) : ''}</div></div>`;
 }
 
 function fmtTime(lbl){
@@ -206,9 +214,10 @@ function renderMarket(d){
 function exportCSV(){
   const d = lastPayload; if(!d || !d.rows) return;
   const labels = d.candle_labels || [];
+  const tfPrefix = (currentTF === 15 ? '15m_' : '5m_');
   const head = ['Stock','LTP','Change_Pct'];
   for(const lbl of labels){
-    head.push('5m_'+lbl+'_Open','5m_'+lbl+'_High','5m_'+lbl+'_Low','5m_'+lbl+'_Close','5m_'+lbl+'_VWAP');
+    head.push(tfPrefix+lbl+'_Open',tfPrefix+lbl+'_High',tfPrefix+lbl+'_Low',tfPrefix+lbl+'_Close',tfPrefix+lbl+'_VWAP');
   }
   const lines = [head.join(',')];
   const order = d.rows.slice().sort((a,b)=>b.change_pct-a.change_pct);
@@ -238,9 +247,11 @@ async function loadData(manual){
   if(manual) setLoading(true);
   el('errBanner').style.display = 'none';
   try{
-    const resp = await fetch(API, {cache:'no-store'});
+    const resp = await fetch(apiURL(), {cache:'no-store'});
     if(!resp.ok) throw new Error('HTTP '+resp.status);
     lastPayload = await resp.json();
+    currentTF = tf();
+    el('titleTimeframe').textContent = currentTF + '-min';
     renderMarket(lastPayload);
     renderStats(lastPayload);
     renderTable(lastPayload);
@@ -267,6 +278,7 @@ function startAutoRefresh(){
 document.addEventListener('visibilitychange', ()=>{
   if(!document.hidden){ loadData(true); startAutoRefresh(); }
 });
+el('tfSel').addEventListener('change', ()=>{ loadData(true); startAutoRefresh(); });
 startAutoRefresh();
 </script>
 </body>

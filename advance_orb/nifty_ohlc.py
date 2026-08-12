@@ -29,8 +29,16 @@ from pathlib import Path
 import tvscreener as tvs
 from tvscreener import StockField, Market
 
-# Wide-table store of all 5-min candles for the latest day (1 stock = 1 row).
-_CANDLES_STORE = Path(__file__).resolve().parent.parent / "stocks" / "orb_candles_5min.json"
+# Wide-table store of all candles for the latest day (1 stock = 1 row).
+# One file per timeframe, written by the candle recorder (5-min file) and the
+# recorder's 15-min twin (15-min file).  The page reads whichever our own JSON
+# store holds for the selected timeframe.
+_CANDLES_STORE_5 = Path(__file__).resolve().parent.parent / "stocks" / "orb_candles_5min.json"
+_CANDLES_STORE_15 = Path(__file__).resolve().parent.parent / "stocks" / "orb_candles_15min.json"
+
+
+def _store_path(timeframe: int = 5) -> Path:
+    return _CANDLES_STORE_15 if int(timeframe) == 15 else _CANDLES_STORE_5
 
 # TradingView field set for the 5-minute interval.
 _FIELDS = [
@@ -201,15 +209,16 @@ def _store_rows(rows: list[dict]) -> int:
     return save_rows(payloads)
 
 
-def _load_day_candles() -> tuple[dict[str, dict], list[str]]:
+def _load_day_candles(path: Path) -> tuple[dict[str, dict], list[str]]:
     """Read the wide candle store -> {symbol: {lbl: {o,h,l,c,vwap}}}, labels.
 
     Falls back to the live-snapshot rows when the store is empty/missing (e.g.
     a fresh day before market opens) so the page never shows an empty table.
+    ``path`` selects the 5-min or 15-min JSON store per the dropdown.
     """
-    if _CANDLES_STORE.exists():
+    if path.exists():
         try:
-            data = json.loads(_CANDLES_STORE.read_text("utf-8"))
+            data = json.loads(path.read_text("utf-8"))
         except Exception:
             data = {}
     else:
@@ -250,12 +259,17 @@ def _load_day_candles() -> tuple[dict[str, dict], list[str]]:
     return by_symbol, ordered
 
 
-def build_payload():
-    """Build the full response for the frontend (+ persist to JSON file)."""
+def build_payload(timeframe: int = 5):
+    """Build the full response for the frontend (+ persist to JSON file).
+
+    ``timeframe`` selects which of our own JSON candle stores (5-min or 15-min)
+    fills the wide candle table.  The live snapshot rows remain the 5-min ORB
+    universe snapshot; only the stored-candle table switches files.
+    """
     rows, error = _SERVICE.snapshot()
     stored = _store_rows(rows)
     now = _ist_now()
-    store_by_symbol, candle_labels = _load_day_candles()
+    store_by_symbol, candle_labels = _load_day_candles(_store_path(timeframe))
 
     # Attach all stored day-candles to each row (column-wise wide table).
     for r in rows:
