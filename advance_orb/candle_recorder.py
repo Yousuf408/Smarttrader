@@ -199,6 +199,8 @@ def snapshot_rows() -> dict[str, dict]:
         except (TypeError, ValueError):
             o15 = h15 = l15 = c15 = v15 = None
         ema = float(r["Ema200|5"]) if r["Ema200|5"] is not None else None
+        vwap = float(r["Vwap|5"]) if r["Vwap|5"] is not None else None
+        change = float(r["Change %"]) if r["Change %"] is not None else None
         # NOTE: the "above 200 EMA" filter is applied at the payload layer via
         # common.above_200_ema_symbols() using the 9:15 CANDLE CLOSE vs the
         # prior-day EMA (same definition as the Advance ORB toggle). The live
