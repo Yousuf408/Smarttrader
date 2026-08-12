@@ -133,6 +133,9 @@ function renderStats(d){
   const gain = s.gainer, loss = s.loser;
   const ema = s.above_ema;
   box.innerHTML = `
+    <div class="stat"><div class="lbl">Total Stocks Fetching</div>
+      <div class="val">${d.rows.length}</div>
+      <div class="sub">ORB-universe stocks in this fetch</div></div>
     <div class="stat"><div class="lbl">Top Gainer</div>
       <div class="val up">${loss ? '' : ''}${gain ? gain.symbol : '—'}</div>
       <div class="sub up">${gain ? gain.change_pct.toFixed(2)+'% · ₹'+fmt(gain.price) : ''}</div></div>
