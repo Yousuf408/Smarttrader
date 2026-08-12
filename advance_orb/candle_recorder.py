@@ -36,6 +36,11 @@ _CANDLES_JSON = Path(__file__).resolve().parent.parent / "stocks" / "orb_candles
 _CANDLES_15_JSON = Path(__file__).resolve().parent.parent / "stocks" / "orb_candles_15min.json"
 _JSON_LOCK = threading.Lock()
 
+# Frozen ORB universe per trading day: captured ONCE at the first tick of the
+# day, then reused for the whole session so a stock keeps being recorded even
+# after it drops out of the live scan mid-day (gives full candle series).
+_DAY_FROZEN_UNIVERSE: dict[str, list[str]] = {}
+
 IST = ZoneInfo("Asia/Kolkata")
 
 
@@ -167,7 +172,7 @@ def snapshot_rows() -> dict[str, dict]:
     ss = tvs.StockScreener()
     ss.set_markets(Market.INDIA)
     ss.specific_fields = fields
-    ss.set_range(0, 800)  # wide enough to cover the ORB universe (mcap-desc)
+    ss.set_range(0, 3000)  # cover the whole ORB universe (mcap-desc) so every stock gets candles
     df = ss.get()
     if df is None or df.empty:
         return {}
@@ -312,26 +317,23 @@ def record_once() -> dict:
         return {"saved": 0, "candle": None, "message": f"{today} — outside candle window"}
 
     with _rec_lock:
-        universe = universe_symbols()
+        # Freeze the ORB scan-list once per trading day.  Once captured, the
+        # same stock set is recorded the whole day, so a stock that leaves the
+        # live scan mid-session still gets a full candle series.
+        if today not in _DAY_FROZEN_UNIVERSE or not _DAY_FROZEN_UNIVERSE[today]:
+            _DAY_FROZEN_UNIVERSE[today] = universe_symbols()
+        universe = _DAY_FROZEN_UNIVERSE[today]
         if not universe:
             _set_status(running=True, last_tick=today, last_candle=lbl,
                         today=today, universe=0, matched=0, saved=0,
                         errors=0, last_message="no ORB universe from TradingView")
             return {"saved": 0, "candle": lbl, "message": "empty universe"}
 
-        # User rule: keep only stocks whose 9:15 candle CLOSE is above the
-        # 200 EMA (same definition as the Advance ORB toggle — 9:15 close vs
-        # prior-day EMA, ≤3% cap, fail-open on missing data).
-        from advance_orb.common import above_200_ema_symbols
-        keep = above_200_ema_symbols(universe)
-
         snap = snapshot_rows()
         matched = 0
         payloads: list[dict] = []
         payloads15: list[dict] = []
         for base in universe:
-            if base not in keep:
-                continue
             row = snap.get(base)
             if not row:
                 continue
