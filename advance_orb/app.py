@@ -603,6 +603,15 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, near_high: bool = True
                 return None
             return float(_h) / float(_l) * 100 - 100.0
         df["candle_range_pct"] = df.apply(lambda r: _range_pct(r), axis=1)
+        # "1st candle range" hard cap (user rule): a stock whose opening 9:15
+        # candle range is TOO wide is dropped from the breakout table — it is
+        # not a clean ORB setup.  Threshold is per timeframe: ≤ 2% on 15-min,
+        # ≤ 1.5% on 5-min.  Rows without a computable range (None) are kept.
+        _range_cap = 2.0 if timeframe == 15 else 1.5
+        df = df[df["candle_range_pct"].apply(
+            lambda v: v is None or float(v) <= _range_cap
+        )].copy()
+        candidate_symbols = df["name"].dropna().astype(str).tolist()
         # "Share Low" column: detect whether the opening candles share the same
         # low.  Using just the lows the screener already fetched (low915 +
         # c2_lo/c3_lo/c4_lo) — never an additional Yahoo call per symbol.
