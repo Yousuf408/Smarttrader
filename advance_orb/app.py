@@ -573,6 +573,18 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, near_high: bool = True
                     df.loc[df["name"] == _s, "close915"] = _sd["close915"]
                     df.loc[df["name"] == _s, "close920"] = _sd["close920"]
                     df.loc[df["name"] == _s, "inside_915"] = _sd["inside_915"]
+
+        # "1st Range%" = the opening (9:15) candle's % range: (high − low) / low,
+        # computed from the high915/low915 that are now filled above (our own TV
+        # store for 15-min, Yahoo for 5-min).  This column used to be seeded None
+        # and never populated, so it always rendered empty.
+        def _range_pct(r):
+            _h = r.get("high915")
+            _l = r.get("low915")
+            if pd.isna(_h) or pd.isna(_l) or _l is None or float(_l) <= 0:
+                return None
+            return float(_h) / float(_l) * 100 - 100.0
+        df["candle_range_pct"] = df.apply(lambda r: _range_pct(r), axis=1)
         # "Share Low" column: detect whether the opening candles share the same
         # low.  Using just the lows the screener already fetched (low915 +
         # c2_lo/c3_lo/c4_lo) — never an additional Yahoo call per symbol.
