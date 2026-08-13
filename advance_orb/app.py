@@ -1260,6 +1260,12 @@ def refresh_advance_orb(tickers: str = "", timeframe: int = 5):
         if not symbols:
             return {"refreshed": []}
 
+        # Timeframe-aware inside_915/close920 for the live tick overlay: read
+        # them from OUR JSON store (09:30 close as the 2nd candle on 15-min,
+        # 09:20 on 5-min) so the refresh matches the scan instead of always
+        # emitting False/None.
+        _refresh_store = load_orb_candles_9_15(timeframe=int(timeframe))
+
         opening_candle_map: dict | None = None
         # Re-check ≤1.5% opening-candle rule
         tv_candles = batch_tv_opening_candles(symbols, timeframe=int(timeframe))
@@ -1336,13 +1342,20 @@ def refresh_advance_orb(tickers: str = "", timeframe: int = 5):
                 volume_str = "0"
             relvol_str = "0x"
 
-            # Pull live 9:20 candle data from the TradingView 5-min map
-            candle = (opening_candle_map or {}).get(name)
-            inside_915_val = False
+            # inside_915 / close920 come from OUR timeframe-aware JSON store
+            # (the 2nd candle's close: 09:30 on 15-min, 09:20 on 5-min), NOT
+            # the TradingView opening-candle map whose trailing slots are
+            # always None — using those emitted inside_915=False and
+            # close920=None for every tick, clobbering the scan's correct
+            # values in the live-tick overlay.
+            _sd = (_refresh_store or {}).get(name)
+            inside_915_val = None
             close920_val = None
-            if isinstance(candle, tuple) and len(candle) >= 10:
-                inside_915_val = bool(candle[9])
-                close920_val = round(float(candle[8]), 2) if candle[8] is not None else None
+            if _sd:
+                inside_915_val = _sd.get("inside_915")
+                close920_val = _sd.get("close920")
+                if close920_val is not None:
+                    close920_val = round(float(close920_val), 2)
 
             refreshed.append({
                 "Symbol": name,
