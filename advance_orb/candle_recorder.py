@@ -255,6 +255,10 @@ def _json_upsert(rows: list[dict], path: Path) -> int:
             rec.setdefault("date", r.get("date"))
             rec.setdefault("symbol", r.get("symbol"))
             data[key] = rec
+        # Count summary pinned at the very top of the file.
+        stock_count = sum(1 for k in data if k.split("|")[0] == today)
+        meta = {"stock_count": stock_count, "date": today}
+        data = {"__meta__": meta, **data}
         tmp = path.with_suffix(".json.tmp")
         tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), "utf-8")
         tmp.replace(path)
