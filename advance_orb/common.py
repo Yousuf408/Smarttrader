@@ -30,9 +30,6 @@ PRICE_MAX = 4000  # 200 to 4000 INR per user's old-condition spec
 GAP_THRESHOLD = 2.0
 MARKET_CAP_MIN = 41_000_000_000  # 41 Billion INR
 SMALL_CANDLE_THRESHOLD = 1.5
-# "Buy side" default: only stocks trading ABOVE their day's open.
-# Filters out names drifting down so the universe shrinks (670 -> ~310).
-CHANGE_FROM_OPEN_MIN = 0.0
 
 # ── 200-period EMA (5-min closes, Yahoo Finance) ──
 EMA_SPAN = 200
@@ -56,6 +53,8 @@ def fetch_tradingview_stocks() -> list[dict]:
 
     Screen: type=stock AND exchange=NSE AND
             close 200–4000 INR AND market_cap_basic > 41B INR.
+    Every matching stock is returned regardless of its % change from the
+    day's open (down-drifting names are included too).
     Returns all matching rows as
         [{name, close, change, gap, volume, relative_volume,
           market_cap_basic, sector, open, high, low}, ...]
@@ -89,7 +88,6 @@ def fetch_tradingview_stocks() -> list[dict]:
             {"left": "close", "operation": "greater", "right": PRICE_MIN},
             {"left": "close", "operation": "less", "right": PRICE_MAX},
             {"left": "market_cap_basic", "operation": "greater", "right": MARKET_CAP_MIN},
-            {"left": "change_from_open", "operation": "greater", "right": CHANGE_FROM_OPEN_MIN},
         ],
         "sort": {"sortBy": "market_cap_basic", "sortOrder": "desc"},
     }
@@ -126,12 +124,7 @@ def fetch_tradingview_stocks() -> list[dict]:
         # truth. Exclude both gap-ups and gap-downs at or beyond 2%.
         if abs(gap) >= GAP_THRESHOLD:
             continue
-        # "Buy side" default: require the stock to be trading at/above its
-        # day's open. Together with the server-side filter this also guards
-        # against a stale scan returning a drifting stock.
-        change_from_open = float(d[12]) if isinstance(d[12], (int, float)) else CHANGE_FROM_OPEN_MIN
-        if change_from_open < CHANGE_FROM_OPEN_MIN:
-            continue
+        change_from_open = float(d[12]) if isinstance(d[12], (int, float)) else 0.0
         rows.append({
             "name": name,
             "close": float(close),
@@ -152,7 +145,7 @@ def fetch_tradingview_stocks() -> list[dict]:
     with _tv_scan_lock:
         _tv_scan_cache = rows
         _tv_scan_cached_at = time.time()
-    logger.info("tv-scan: %d NSE stocks (200–4000 INR, mcap > 41B, chg-from-open > %s)", len(rows), CHANGE_FROM_OPEN_MIN)
+    logger.info("tv-scan: %d NSE stocks (200–4000 INR, mcap > 41B, all change%% included)", len(rows))
     return rows
 
 
