@@ -19,6 +19,7 @@ from advance_orb.common import (
     SMALL_CANDLE_THRESHOLD, MAX_TV_STOCKS,
     compute_200_ema_batch, _calc_qty_for_broker,
     _build_ticks_by_symbol, ws_auto_subscribe,
+    fetch_tradingview_stocks,
 )
 from advance_orb.candle_recorder import load_orb_candles_both
 from broker.angel_margin_calculator import (
@@ -60,63 +61,87 @@ def get_big_players(budget: int = 100000, parts: int = 4):
         raise HTTPException(status_code=400, detail="parts must be between 1 and 20")
 
     try:
-        # ─── Step 1: Build candidate list from watchlist + WebSocket ───
-        # TV SCAN COMMENTED OUT for WS-only testing (Jul 31).
-        # tv_query = (Query().select(...)...)
-        #
-        # Instead: use the 727-stock watchlist directly. Gap% is computed
-        # from WebSocket LTP and cache's yesterday_close.
-        # Always use latest_ticks (loaded from saved file at startup, plus
-        # live WS ticks as they arrive).  The old guard
-        # ``angel_is_connected() and angel_ws_connected()`` caused the
-        # strategy to return empty when the WS was disconnected, even though
-        # the saved ticks file has all 700+ stocks' last-known prices.
-        ws_ticks = angel_ws_ticks()
-        cache_data = candle_tracker._cache if hasattr(candle_tracker, '_cache') else {}
+        # ─── Step 1: Universe — same TradingView list as Advance ORB ───
+        # Preferred source: the full NSE TradingView scan (~600 stocks), identical
+        # to Advance ORB, so the Big Players scan log lists every scanned stock —
+        # not just the watchlist subset.  Falls back to the watchlist + WebSocket
+        # path below when the TradingView scanner is unreachable.
+        tv_rows = fetch_tradingview_stocks()
 
-        raw_rows: list[dict] = []
-        for sym in candle_tracker.token_by_symbol:
-            tok = candle_tracker.token_by_symbol[sym]
-            ws = ws_ticks.get(str(tok), {})
-            cached = cache_data.get(sym, {})
+        # ─── Step 1b: Candidate list from the TradingView scan ───
+        # When the scanner answers, use its full universe (~600) as the scan log
+        # — identical to Advance ORB.  The watchlist + WebSocket path below is the
+        # fallback only when the scanner is unreachable.
+        if tv_rows:
+            ws_ticks = angel_ws_ticks()
+            cache_data = candle_tracker._cache if hasattr(candle_tracker, '_cache') else {}
+            ws_by_sym = {
+                str(candle_tracker.token_by_symbol[sym]): sym
+                for sym in candle_tracker.token_by_symbol
+            }
+            raw_rows: list[dict] = []
+            live = ws_ticks if isinstance(ws_ticks, dict) else {}
+            for t in tv_rows:
+                base = str(t["name"] or "").strip()
+                if not base:
+                    continue
+                raw_rows.append({
+                    "name": base,
+                    "close": float(t["close"]),
+                    "change": t["change"],
+                    "gap": t["gap"],
+                    "volume": t["volume"],
+                    "relative_volume": t["relative_volume"],
+                    "market_cap_basic": t["market_cap_basic"],
+                    "sector": t["sector"],
+                })
+        else:
+            # ─── Fallback: watchlist + WebSocket ───
+            ws_ticks = angel_ws_ticks()
+            cache_data = candle_tracker._cache if hasattr(candle_tracker, '_cache') else {}
+            raw_rows: list[dict] = []
+            for sym in candle_tracker.token_by_symbol:
+                tok = candle_tracker.token_by_symbol[sym]
+                ws = ws_ticks.get(str(tok), {})
+                cached = cache_data.get(sym, {})
 
-            # Validate WS symbol — Angel One returns currency derivative data
-            # for tokens shared across NSE equity and CDS segments.
-            # If the symbol doesn't match {SYM}-EQ, fall back to yesterday's close.
-            ws_symbol = (ws.get("symbol") or "").upper()
-            expected_symbol = f"{sym}-EQ"
-            ltp = ws.get("ltp")
-            change_pct = ws.get("change_pct", 0)
+                # Validate WS symbol — Angel One returns currency derivative data
+                # for tokens shared across NSE equity and CDS segments.
+                # If the symbol doesn't match {SYM}-EQ, fall back to yesterday's close.
+                ws_symbol = (ws.get("symbol") or "").upper()
+                expected_symbol = f"{sym}-EQ"
+                ltp = ws.get("ltp")
+                change_pct = ws.get("change_pct", 0)
 
-            if not ws_symbol or ws_symbol != expected_symbol.upper():
-                # Bad WS data — use yesterday's close as fallback price
-                yc = cached.get("yesterday_close")
-                if yc and float(yc) > 0 and PRICE_MIN < float(yc) <= PRICE_MAX:
-                    ltp = float(yc)
-                    change_pct = 0
-                    gap_pct = 0
+                if not ws_symbol or ws_symbol != expected_symbol.upper():
+                    # Bad WS data — use yesterday's close as fallback price
+                    yc = cached.get("yesterday_close")
+                    if yc and float(yc) > 0 and PRICE_MIN < float(yc) <= PRICE_MAX:
+                        ltp = float(yc)
+                        change_pct = 0
+                        gap_pct = 0
+                    else:
+                        continue
                 else:
-                    continue
-            else:
-                if ltp is None or float(ltp) <= 0:
-                    continue
-                yc = cached.get("yesterday_close")
-                gap_pct = ((float(ltp) - float(yc)) / float(yc) * 100) if yc and float(yc) > 0 else None
-                if gap_pct is None or abs(gap_pct) >= GAP_THRESHOLD:
-                    continue
-                if not (PRICE_MIN < float(ltp) <= PRICE_MAX):
-                    continue
+                    if ltp is None or float(ltp) <= 0:
+                        continue
+                    yc = cached.get("yesterday_close")
+                    gap_pct = ((float(ltp) - float(yc)) / float(yc) * 100) if yc and float(yc) > 0 else None
+                    if gap_pct is None or abs(gap_pct) >= GAP_THRESHOLD:
+                        continue
+                    if not (PRICE_MIN < float(ltp) <= PRICE_MAX):
+                        continue
 
-            raw_rows.append({
-                "name": sym,
-                "close": float(ltp),
-                "change": change_pct,
-                "gap": gap_pct,
-                "volume": ws.get("volume", 0),
-                "relative_volume": 0.0,
-                "market_cap_basic": 0,
-                "sector": "N/A",
-            })
+                raw_rows.append({
+                    "name": sym,
+                    "close": float(ltp),
+                    "change": change_pct,
+                    "gap": gap_pct,
+                    "volume": ws.get("volume", 0),
+                    "relative_volume": 0.0,
+                    "market_cap_basic": 0,
+                    "sector": "N/A",
+                })
 
         df = pd.DataFrame(raw_rows) if raw_rows else pd.DataFrame()
 
@@ -165,10 +190,23 @@ def get_big_players(budget: int = 100000, parts: int = 4):
         # MaxQty from broker's real margin
         _calc_qty_for_broker(df, budget, parts)
 
+        def _fnum(v, nd=2):
+            """Coerce to float with rounding, or None on NaN/None so the JSON
+            scan-log payload never carries a non-compliant NaN."""
+            if v is None:
+                return None
+            try:
+                f = float(v)
+            except (TypeError, ValueError):
+                return None
+            if pd.isna(f):
+                return None
+            return round(f, nd)
+
         def _calc_entry_sl_risk(row):
             low = row.get('low915')
             high = row.get('high915')
-            if pd.isna(low) or pd.isna(high) or high <= low:
+            if low is None or high is None or pd.isna(low) or pd.isna(high) or high <= low:
                 return 0, 0, 0
             entry_price = low + 0.65 * (high - low)
             sl_price = low
@@ -177,23 +215,19 @@ def get_big_players(budget: int = 100000, parts: int = 4):
                 return 0, 0, 0
             return round(entry_price, 2), round(sl_price, 2), round(risk_per_share, 2)
 
-        # Evaluate Big Players strategy per stock
+        # Evaluate Big Players strategy per stock.
+        #
+        # The scan log lists EVERY stock from the TradingView universe (all ~600),
+        # matching Advance ORB.  The small-candle / above-EMA conditions no longer
+        # drop a stock out of the table — they just feed the Breakout status, so a
+        # stock that fails them still appears (Breakout "Waiting").  Only rows with
+        # outright missing price data are skipped.
         bp_strategy = BigPlayersStrategy()
         result = []
         for _, row in df.iterrows():
             symbol = row['name']
-            if symbol not in small_candle_symbols:
-                continue
 
             candle = opening_candle_map.get(symbol) or {}
-            close915 = candle.get("close915")
-            ema = row.get('ema')
-            if close915 is None or ema is None or pd.isna(ema):
-                continue
-            pct_diff = abs((close915 - ema) / ema) * 100
-            if not (close915 > ema and pct_diff <= 2.0):
-                continue
-
             today_low = candle.get("day_low")
 
             row_dict = {
@@ -208,21 +242,21 @@ def get_big_players(budget: int = 100000, parts: int = 4):
             entry_price, sl_price, risk_per_share = _calc_entry_sl_risk(row)
             breakout_status = bp_strategy.calculate_breakout_status(row_dict)
             support_price = bp_strategy.calculate_support_price(row_dict)
-            broker_max_qty = int(row.get("MaxQty", 0))
+            broker_max_qty = int(_fnum(row.get("MaxQty", 0), nd=0) or 0)
             loss_if_hit = round(broker_max_qty * risk_per_share, 2) if risk_per_share > 0 else 0
             result.append({
                 "Symbol": symbol,
-                "Price": round(row['close'], 2),
-                "CHG%": round(row['change'], 2),
+                "Price": _fnum(row['close']),
+                "CHG%": _fnum(row['change']),
                 "Breakout": breakout_status,
-                "SupportPrice": support_price,
-                "EntryPrice": entry_price,
-                "SL": sl_price,
-                "MaxQty": broker_max_qty,
-                "RiskRs": loss_if_hit,
-                "TodayLow": round(today_low, 2) if today_low else None,
-                "low915": round(row['low915'], 2) if pd.notna(row.get('low915')) else None,
-                "high915": round(row['high915'], 2) if pd.notna(row.get('high915')) else None,
+                "SupportPrice": _fnum(support_price),
+                "EntryPrice": _fnum(entry_price),
+                "SL": _fnum(sl_price),
+                "MaxQty": _fnum(row.get("MaxQty", 0), nd=0),
+                "RiskRs": _fnum(loss_if_hit),
+                "TodayLow": _fnum(today_low),
+                "low915": _fnum(row.get('low915')),
+                "high915": _fnum(row.get('high915')),
             })
 
         # Sort by CHG% descending (highest gainers first)
