@@ -172,12 +172,20 @@ function renderTable(d){
     card.innerHTML = `<div class="empty">No data returned. The market may be closed or TradingView is unavailable.</div>`;
     return;
   }
-  // Wide table: one column-group per candle timeframe, each with O/H/L/C + VWAP.
+  // Wide table: one column-group per candle timeframe.  5-min groups show
+  // O/H/L/C + VWAP; 15-min groups also add Volume (per candle) plus 200 EMA
+  // and Change % (day-level, repeated on each group).
+  const is15 = currentTF === 15;
+  const groupCols = is15 ? 8 : 5;
   const groupHead = ['<th rowspan="2">Stock</th><th rowspan="2">LTP (₹)</th><th rowspan="2">Δ %</th>'];
   const subHead = [];
   for(const lbl of labels){
-    groupHead.push(`<th colspan="5" class="cf">${fmtTime(lbl)}</th>`);
-    subHead.push('<th>Open</th><th>High</th><th>Low</th><th>Close</th><th class="tfsep">VWAP</th>');
+    groupHead.push(`<th colspan="${groupCols}" class="cf">${fmtTime(lbl)}</th>`);
+    if(is15){
+      subHead.push('<th>Open</th><th>High</th><th>Low</th><th>Close</th><th>VWAP</th><th>Volume</th><th>200 EMA</th><th class="tfsep">Chg %</th>');
+    }else{
+      subHead.push('<th>Open</th><th>High</th><th>Low</th><th>Close</th><th class="tfsep">VWAP</th>');
+    }
   }
   let html = `<table><thead><tr>${groupHead.join('')}</tr><tr>${subHead.join('')}</tr></thead><tbody>`;
   for(const r of rows){
@@ -188,13 +196,21 @@ function renderTable(d){
     const c = r.candles || {};
     const cells = labels.map(lbl=>{
       const cd = c[lbl] || {};
-      const o=cd.o, h=cd.h, lo=cd.l, cl=cd.c, vw=cd.vwap;
+      const o=cd.o, h=cd.h, lo=cd.l, cl=cd.c, vw=cd.vwap, vol=cd.vol, ema=cd.ema, chg=cd.chg;
       let ccls='flat';
       if(o!=null && h!=null && cl!=null){ ccls = cl>o ? 'up' : (cl<o ? 'down' : 'flat'); }
       const vwls = (o!=null && vw!=null) ? (vw>o ? 'up':'down') : '';
-      return `<td>${fmt(o)}</td><td class="${cl!=null&&h!=null&&h>=cl?'up':'flat'}">${fmt(h)}</td>
+      let cell = `<td>${fmt(o)}</td><td class="${cl!=null&&h!=null&&h>=cl?'up':'flat'}">${fmt(h)}</td>
         <td class="${lo!=null&&cl!=null&&lo<=cl?'down':'flat'}">${fmt(lo)}</td>
-        <td class="${ccls}">${fmt(cl)}</td><td class="tfsep ${vwls||'flat'}">${fmt(vw)}</td>`;
+        <td class="${ccls}">${fmt(cl)}</td><td class="${vwls||'flat'}">${fmt(vw)}</td>`;
+      if(is15){
+        const chgCls = chg==null ? 'flat' : (chg>0 ? 'up' : (chg<0 ? 'down' : 'flat'));
+        cell += `<td class="muted">${fmtVol(vol)}</td><td class="${ema!=null&&o!=null&&o>ema?'up':'flat'}">${fmt(ema)}</td>
+          <td class="tfsep chg ${chgCls}">${chg==null ? '—' : (chg>0?'+':'')+chg.toFixed(2)+'%'}</td>`;
+      }else{
+        cell += `<td class="tfsep">${fmt(vw)}</td>`;
+      }
+      return cell;
     }).join('');
     html += `<tr>
       <td class="sym"><span class="t">${r.name}${tags.join('')}</span><span class="s">${r.symbol}</span></td>

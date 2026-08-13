@@ -210,11 +210,15 @@ def _store_rows(rows: list[dict]) -> int:
 
 
 def _load_day_candles(path: Path) -> tuple[dict[str, dict], list[str]]:
-    """Read the wide candle store -> {symbol: {lbl: {o,h,l,c,vwap}}}, labels.
+    """Read the wide candle store -> {symbol: {lbl: {o,h,l,c,vwap,vol,ema,chg}}}, labels.
 
-    Falls back to the live-snapshot rows when the store is empty/missing (e.g.
-    a fresh day before market opens) so the page never shows an empty table.
-    ``path`` selects the 5-min or 15-min JSON store per the dropdown.
+    Per-candle groups carry Open/High/Low/Close/VWAP/Volume.  The 200 EMA and
+    Change % are day-level values (stored once on the 09:15 candle) and are
+    repeated onto every candle group of that symbol so the table can show them
+    per group.  Falls back to the live-snapshot rows when the store is
+    empty/missing (e.g. a fresh day before market opens) so the page never
+    shows an empty table.  ``path`` selects the 5-min or 15-min JSON store per
+    the dropdown.
     """
     if path.exists():
         try:
@@ -232,10 +236,12 @@ def _load_day_candles(path: Path) -> tuple[dict[str, dict], list[str]]:
             continue
         per: dict[str, dict] = {}
         for col, val in rec.items():
-            # columns look like price_1300_O  /  vwap_1300
+            # columns look like price_1300_O  /  vwap_1300  /  volume_1300
             parts = col.split("_")
             if parts[0] == "vwap" and len(parts) == 2:
                 per.setdefault(parts[1], {})["vwap"] = val
+            elif parts[0] == "volume" and len(parts) == 2:
+                per.setdefault(parts[1], {})["vol"] = val
             elif (
                 len(parts) == 3
                 and parts[0] == "price"
@@ -243,6 +249,9 @@ def _load_day_candles(path: Path) -> tuple[dict[str, dict], list[str]]:
             ):
                 lbl, ohlc = parts[1], parts[2].lower()
                 per.setdefault(lbl, {})[ohlc] = val
+        # Day-level 200 EMA / change% live on the 09:15 anchor row.
+        anchor_ema = rec.get("ema200_0915")
+        anchor_chg = rec.get("change_pct_0915")
         # Keep a candle label only when it actually holds an open/close price.
         for lbl, c in list(per.items()):
             if not c.get("o") and not c.get("c"):
@@ -251,6 +260,9 @@ def _load_day_candles(path: Path) -> tuple[dict[str, dict], list[str]]:
             c.setdefault("h", None)
             c.setdefault("l", None)
             c.setdefault("vwap", None)
+            c.setdefault("vol", None)
+            c.setdefault("ema", anchor_ema)
+            c.setdefault("chg", anchor_chg)
         if per:
             by_symbol[sym] = per
             labels.update(per.keys())

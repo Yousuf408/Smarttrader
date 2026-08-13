@@ -148,13 +148,13 @@ def _snapshot_fields():
             StockField.OPEN_5, StockField.HIGH_5, StockField.LOW_5,
             StockField.CLOSE_5, StockField.VWAP_5,
             StockField.OPEN_15, StockField.HIGH_15, StockField.LOW_15,
-            StockField.CLOSE_15, StockField.VWAP_15,
+            StockField.CLOSE_15, StockField.VWAP_15, StockField.VOLUME_15,
             StockField.EMA200_5, StockField.CHANGE_PERCENT,
         ]
         _SS_COLUMNS = [
             "Symbol", "Name", "Price", "Open|5", "High|5", "Low|5",
             "Close|5", "Vwap|5",
-            "Open|15", "High|15", "Low|15", "Close|15", "Vwap|15",
+            "Open|15", "High|15", "Low|15", "Close|15", "Vwap|15", "Volume|15",
             "Ema200|5", "Change %",
         ]
     return _SS_FIELDS, _SS_COLUMNS
@@ -201,8 +201,9 @@ def snapshot_rows() -> dict[str, dict]:
             l15 = float(r["Low|15"]) if r["Low|15"] is not None else None
             c15 = float(r["Close|15"]) if r["Close|15"] is not None else None
             v15 = float(r["Vwap|15"]) if r["Vwap|15"] is not None else None
+            vol15 = float(r["Volume|15"]) if r["Volume|15"] is not None else None
         except (TypeError, ValueError):
-            o15 = h15 = l15 = c15 = v15 = None
+            o15 = h15 = l15 = c15 = v15 = vol15 = None
         ema = float(r["Ema200|5"]) if r["Ema200|5"] is not None else None
         vwap = float(r["Vwap|5"]) if r["Vwap|5"] is not None else None
         change = float(r["Change %"]) if r["Change %"] is not None else None
@@ -215,6 +216,7 @@ def snapshot_rows() -> dict[str, dict]:
             "o": o, "h": h, "l": lo, "c": c,
             "vwap": vwap, "ema": ema, "change": change,
             "o15": o15, "h15": h15, "l15": l15, "c15": c15, "vwap15": v15,
+            "vol15": vol15,
         }
         out[base] = row
     return out
@@ -374,6 +376,7 @@ def record_once() -> dict:
                         f"price_{lbl15}_L": row.get("l15"),
                         f"price_{lbl15}_C": c15,
                         f"vwap_{lbl15}": row.get("vwap15"),
+                        f"volume_{lbl15}": row.get("vol15"),
                     }
                     # EMA200 + Change% stored only on the 09:15 candle.
                     if lbl15 == "0915":
