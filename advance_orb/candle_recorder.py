@@ -64,7 +64,7 @@ _OPEN_IST_MIN = 9 * 60 + 15
 _CLOSE_IST_MIN = 15 * 60 + 30
 _RECORD_START_MIN = 9 * 60 + 13   # a touch early so the 09:15 candle is caught
 _RECORD_END_MIN = 15 * 60 + 20    # after the last (15:10) candle closes at 15:15
-_POLL_S = 30.0
+_POLL_S = 5.0
 _IDLE_S = 60.0
 
 # Single-flight across the whole recorder (only one fetch round at a time).
