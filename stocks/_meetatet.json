@@ -1,0 +1,14 @@
+{
+  "__meta__": {
+    "stock_count": 1,
+    "date": "2099-01-01"
+  },
+  "2099-01-01|META_TEST": {
+    "date": "2099-01-01",
+    "symbol": "META_TEST",
+    "price_0915_O": 1,
+    "price_0915_H": 2,
+    "price_0915_L": 1,
+    "price_0915_C": 2
+  }
+}
