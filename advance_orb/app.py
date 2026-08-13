@@ -580,6 +580,11 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, near_high: bool = True
         # were filled above so the row is never wrongly dropped.  ``_store_915``
         # was already loaded once above (before the filters) and is reused here.
         if _store_915:
+            # The inside_915 column can be True/False/None.  Convert it to an
+            # object column first so assigning a None (a store value when the
+            # 2nd candle hasn't printed yet) doesn't raise pandas'
+            # "Invalid value 'nan' for dtype 'bool'" when the column is bool.
+            df["inside_915"] = df["inside_915"].astype(object)
             for _s in df["name"].tolist():
                 _sd = _store_915.get(_s)
                 if not _sd:
