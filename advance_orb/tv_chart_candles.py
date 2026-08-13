@@ -34,6 +34,13 @@ _TV_C2_CACHE: dict[
     tuple[float, float],           # (stored_at, c2_close)
 ] = {}
 _TV_C2_CACHE_TTL = 20 * 60 * 60  # 20 h — full trading session
+# Cache for finalized per-bar OHLC (keyed by date, timeframe, symbol, bar_label).
+# Only written after the bar has closed so it never holds a forming-bar value.
+_TV_BAR_OHLC_CACHE: dict[
+    tuple[str, int, str, str],     # (date, timeframe, symbol, bar_label "HHMM")
+    tuple[float, tuple[float, float, float, float]],  # (stored_at, (o, h, l, c))
+] = {}
+_TV_BAR_OHLC_CACHE_TTL = 20 * 60 * 60  # 20 h — full trading session
 _TV_CACHE_LOCK = threading.Lock()
 _TV_TOKEN_TTL = 10 * 60
 # TradingView throttles rapid logins (captcha / "having a little trouble").
@@ -131,6 +138,22 @@ def _candle_close_at(
     return None
 
 
+def _candle_ohlc_at(
+    rows: list[list[float]], hour: int, minute: int
+) -> tuple[float, float, float, float] | None:
+    """Return the TRUE (finalized) OHLC of the bar that opens at (hour:minute) IST.
+
+    Layout from ``_series_rows``: [timestamp, open, high, low, close, volume].
+    Only valid after the bar has closed; callers must check wall-clock time.
+    """
+    today = dt.datetime.now(IST).date()
+    for row in sorted(rows, key=lambda x: x[0]):
+        stamp = dt.datetime.fromtimestamp(row[0], IST)
+        if stamp.date() == today and stamp.hour == hour and stamp.minute == minute:
+            return row[1], row[2], row[3], row[4]  # o, h, l, c
+    return None
+
+
 def _yesterday_high(rows: list[list[float]]) -> float | None:
     """Max 5-min bar high of the previous trading day (= that day's daily
     high on the daily timeframe) — computed from TradingView's own bars."""
@@ -184,6 +207,49 @@ async def _batch_tv_opening_candles_async(
                 result[symbol] = (*candle, _yesterday_high(rows))
 
 
+async def _batch_tv_bar_ohlc_async(
+    result: dict[str, tuple[float, float, float, float] | None],
+    token: str,
+    timeframe: int,
+    bar_hour: int,
+    bar_min: int,
+) -> None:
+    """Fetch the finalized OHLC of the bar opening at (bar_hour:bar_min) for each symbol.
+
+    Uses the same authenticated TV chart feed as other batch functions.  Only
+    called after the bar has closed, so the historical series always contains
+    the final, authoritative value — never a forming-bar snapshot.
+    """
+    chart = _id("cs_")
+    async with websockets.connect(
+        "wss://data.tradingview.com/socket.io/websocket",
+        origin="https://data.tradingview.com",
+        ping_interval=None,
+        max_size=2**26,
+    ) as ws:
+        await ws.send(_frame("set_auth_token", [token]))
+        await ws.send(_frame("chart_create_session", [chart, ""]))
+        for index, symbol in enumerate(result):
+            tv_symbol = f"NSE:{symbol.removesuffix('.NS')}"
+            alias = f"symbol_{index}"
+            series = f"s{index}"
+            await ws.send(_frame("resolve_symbol", [
+                chart, alias,
+                f'={{"symbol":"{tv_symbol}","adjustment":"splits","session":"regular"}}',
+            ]))
+            await ws.send(_frame("create_series", [chart, series, series, alias, f"{timeframe}", 10]))
+            raw = ""
+            while True:
+                message = await ws.recv()
+                raw += message
+                if "series_completed" in message:
+                    break
+            rows = _series_rows(raw)
+            ohlc = _candle_ohlc_at(rows, bar_hour, bar_min)
+            if ohlc is not None:
+                result[symbol] = ohlc
+
+
 async def _batch_tv_c2_close_async(
     result: dict[str, float | None],
     token: str,
@@ -225,6 +291,103 @@ async def _batch_tv_c2_close_async(
             c2c = _candle_close_at(rows, c2_hour, c2_min)
             if c2c is not None:
                 result[symbol] = c2c
+
+
+def batch_tv_confirmed_bar_ohlc(
+    symbols: list[str],
+    timeframe: int,
+    bar_hour: int,
+    bar_min: int,
+) -> dict[str, tuple[float, float, float, float] | None]:
+    """Return the finalized OHLC for the bar opening at (bar_hour:bar_min) IST.
+
+    Only runs when that bar has already closed (wall-clock > bar_open + timeframe).
+    Returns ``{symbol: (open, high, low, close)}`` from the authenticated TV chart
+    feed — never tvscreener forming-bar data.  Results are cached for the full
+    trading session so repeated calls (every ~30 s poll) hit memory, not the network.
+
+    ``timeframe`` is minutes (5 or 15).
+    """
+    timeframe = int(timeframe)
+    bar_close_min = bar_hour * 60 + bar_min + timeframe
+    now = dt.datetime.now(IST)
+    now_min = now.hour * 60 + now.minute
+    syms = [str(s).strip().upper() for s in symbols if s]
+    result: dict[str, tuple[float, float, float, float] | None] = {s: None for s in syms}
+    if now_min < bar_close_min:
+        return result  # bar hasn't closed yet — never return provisional data
+
+    bar_label = f"{bar_hour:02d}{bar_min:02d}"
+    username = os.getenv("TRADINGVIEW_USERNAME", "").strip()
+    password = os.getenv("TRADINGVIEW_PASSWORD", "")
+    if not username or not password or not syms:
+        return result
+
+    today = now.strftime("%Y-%m-%d")
+    now_ts = time.time()
+    with _TV_CACHE_LOCK:
+        missing_syms: list[str] = []
+        for sym in syms:
+            cached = _TV_BAR_OHLC_CACHE.get((today, timeframe, sym, bar_label))
+            if cached and now_ts - cached[0] < _TV_BAR_OHLC_CACHE_TTL:
+                result[sym] = cached[1]
+            else:
+                missing_syms.append(sym)
+    if not missing_syms:
+        return result
+
+    global _TV_TOKEN_CACHE, _TV_LOGIN_FAIL_AT
+    with _TV_CACHE_LOCK:
+        token = (
+            _TV_TOKEN_CACHE[1]
+            if _TV_TOKEN_CACHE and now_ts - _TV_TOKEN_CACHE[0] < _TV_TOKEN_TTL
+            else ""
+        )
+        fail_at = _TV_LOGIN_FAIL_AT if _TV_LOGIN_FAIL_AT is not None else _read_fail_marker()
+        login_blocked = fail_at is not None and now_ts - fail_at < _TV_LOGIN_COOLDOWN_S
+    if not token and login_blocked:
+        logger.warning(
+            "TradingView bar-OHLC skipped: throttled %.0fs ago — cooling down",
+            now_ts - (fail_at or 0),
+        )
+        return result
+
+    missing_result: dict[str, tuple[float, float, float, float] | None] = {s: None for s in missing_syms}
+    try:
+        login_attempted = False
+        token_ok = bool(token)
+        if not token:
+            login_attempted = True
+            login = requests.post(
+                "https://www.tradingview.com/accounts/signin/",
+                data={"username": username, "password": password, "remember": "on"},
+                headers={"User-Agent": "Mozilla/5.0", "Referer": "https://www.tradingview.com"},
+                timeout=20,
+            ).json()
+            token = (login.get("user") or {}).get("auth_token", "")
+            token_ok = bool(token)
+            if not token:
+                logger.warning(
+                    "TradingView bar-OHLC login failed: %s",
+                    login.get("error", "unknown error"),
+                )
+                _mark_login_fail(now_ts)
+                return result
+            with _TV_CACHE_LOCK:
+                _TV_TOKEN_CACHE = (now_ts, token)
+
+        asyncio.run(_batch_tv_bar_ohlc_async(missing_result, token, timeframe, bar_hour, bar_min))
+        with _TV_CACHE_LOCK:
+            for sym, ohlc in missing_result.items():
+                if ohlc is not None:
+                    _TV_BAR_OHLC_CACHE[(today, timeframe, sym, bar_label)] = (now_ts, ohlc)
+                    result[sym] = ohlc
+    except Exception as exc:
+        logger.warning("TradingView bar-OHLC fetch (%02d:%02d, %dm) failed: %s",
+                       bar_hour, bar_min, timeframe, exc)
+        if login_attempted and not token_ok:
+            _mark_login_fail(now_ts)
+    return result
 
 
 def batch_tv_opening_candles(

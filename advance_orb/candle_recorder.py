@@ -524,6 +524,54 @@ def record_once() -> dict:
         except Exception as exc:  # noqa: BLE001
             print(f"[candles] finalized-opening backfill failed: {exc}")
 
+        # ── Full OHLC backfill for every just-closed bar ────────────────────
+        # The forming-bar snapshot stores provisional OHLC; after a bar closes
+        # we fetch the finalized (true) OHLC from the TV chart series and
+        # overwrite it so the stored values match the TradingView chart exactly.
+        # Results are cached per (date, timeframe, symbol, bar_label) for the
+        # full session, so the WebSocket round-trip only happens ONCE per bar.
+        try:
+            from advance_orb.tv_chart_candles import batch_tv_confirmed_bar_ohlc
+            prev_lbl5 = _prev_candle_label(lbl, CANDLE_LABELS)
+            prev_lbl15 = _prev_candle_label(lbl15, CANDLE_LABELS_15)
+
+            if prev_lbl5 is not None:
+                ph = int(prev_lbl5[:2]); pm = int(prev_lbl5[2:])
+                ohlc5 = batch_tv_confirmed_bar_ohlc(universe, timeframe=5, bar_hour=ph, bar_min=pm)
+                bf5_ohlc: list[dict] = [
+                    {
+                        "date": today, "symbol": sym,
+                        f"price_{prev_lbl5}_O": ohlc[0],
+                        f"price_{prev_lbl5}_H": ohlc[1],
+                        f"price_{prev_lbl5}_L": ohlc[2],
+                        f"price_{prev_lbl5}_C": ohlc[3],
+                    }
+                    for sym, ohlc in ohlc5.items()
+                    if ohlc is not None
+                ]
+                if bf5_ohlc:
+                    save_rows(bf5_ohlc)
+
+            if prev_lbl15 is not None:
+                ph15 = int(prev_lbl15[:2]); pm15 = int(prev_lbl15[2:])
+                ohlc15 = batch_tv_confirmed_bar_ohlc(universe, timeframe=15, bar_hour=ph15, bar_min=pm15)
+                bf15_ohlc: list[dict] = [
+                    {
+                        "date": today, "symbol": sym,
+                        f"price_{prev_lbl15}_O": ohlc[0],
+                        f"price_{prev_lbl15}_H": ohlc[1],
+                        f"price_{prev_lbl15}_L": ohlc[2],
+                        f"price_{prev_lbl15}_C": ohlc[3],
+                    }
+                    for sym, ohlc in ohlc15.items()
+                    if ohlc is not None
+                ]
+                if bf15_ohlc:
+                    save_rows_15(bf15_ohlc)
+        except Exception as exc:  # noqa: BLE001
+            # Never let a TV chart fetch failure break the main recorder.
+            print(f"[candles] bar-OHLC backfill failed: {exc}")
+
         msg = f"{today} {lbl}: {saved}/{len(payloads)} rows (+15m {len(payloads15)})"
         _set_status(running=True, last_tick=f"{now.strftime('%H:%M:%S')} {today}",
                     last_candle=lbl, today=today, universe=len(universe),
