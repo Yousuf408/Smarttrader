@@ -386,13 +386,15 @@ async function updateCacheStatus() {
 
 let _manualFetchTimer = null;
 
-async function startManualFetch() {
-    const btn = document.getElementById('manualFetchBtn');
+async function startManualFetch(timeframes /* '5' | '15' | '5,15' */) {
     const status = document.getElementById('manualFetchStatus');
     const bar = document.getElementById('manualFetchBar');
-    if (!btn || !status || !bar) return;
+    if (!status || !bar) return;
+    const workersSel = document.getElementById('manualFetchWorkers');
+    const workers = workersSel ? workersSel.value : 4;
+    const tfs = timeframes || '5,15';
     try {
-        const res = await fetch('/api/candles/manual-fetch/start', { method: 'POST' });
+        const res = await fetch(`/api/candles/manual-fetch/start?timeframes=${encodeURIComponent(tfs)}&workers=${encodeURIComponent(workers)}`, { method: 'POST' });
         const data = await res.json().catch(() => ({}));
         if (data && data.already_running) {
             setFetchStatus('🟡 A fetch is already running…');

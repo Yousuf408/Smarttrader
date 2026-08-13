@@ -1848,10 +1848,14 @@ def candles_status():
 # on demand.  Runs in a background thread so the UI can poll progress.
 # =================================================================
 @app.post("/api/candles/manual-fetch/start")
-def manual_fetch_start():
+def manual_fetch_start(timeframes: str = "5,15", workers: int = 4):
     try:
+        # e.g. ?timeframes=5  /  ?timeframes=15  /  ?timeframes=5,15  (default both)
+        tfs = tuple(int(x) for x in timeframes.split(",") if x.strip())
+        if not tfs:
+            tfs = (5, 15)
         from advance_orb.manual_candle_fetch import start_manual_fetch
-        return start_manual_fetch(timeframes=(5, 15))
+        return start_manual_fetch(timeframes=tfs, workers=workers)
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=500, detail=f"manual-fetch failed to start: {exc}") from exc
 

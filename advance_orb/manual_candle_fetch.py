@@ -87,56 +87,89 @@ def _fetch_symbol_ohlc(tv, symbol: str, exchange: str, interval,
     return out
 
 
-def run_job(timeframes=(5, 15)) -> dict:
-    """Background entrypoint.  Throws on universe/tvdatafeed load failure."""
+def _run_timeframe(tf: int, universe: list[str], today: str,
+                   workers: int) -> tuple[int, int]:
+    """Fetch one timeframe (5 or 15) across the universe in parallel.
+
+    ``workers`` TvDatafeed instances are created (one per pool worker) because
+    each instance holds its own websocket; sharing a single instance across
+    threads is not thread-safe.  Returns ``(saved, errors)``.
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
     from tvDatafeed import TvDatafeed, Interval as TvInterval
 
-    universe = universe_symbols()
-    if not universe:
-        raise RuntimeError("no ORB universe from TradingView")
+    exchange = "NSE"
+    interval = TvInterval.in_5_minute if tf == 5 else TvInterval.in_15_minute
+    n_bars = 100 if tf == 5 else 40
+    sink = save_rows if tf == 5 else save_rows_15
 
-    now = dt.datetime.now(IST)
-    today = now.strftime("%Y-%m-%d")
-    tv = TvDatafeed()
-    saved = errors = 0
+    with _LOCK:
+        _PROGRESS.update(running=True, phase=str(tf), current_symbol=None,
+                         done=0, total=len(universe),
+                         last_message=f"Fetching {tf}-min candles ({workers} workers)…")
 
-    for tf in timeframes:
-        exchange = "NSE"
-        interval = TvInterval.in_5_minute if tf == 5 else TvInterval.in_15_minute
-        n_bars = 100 if tf == 5 else 40
-        sink = save_rows if tf == 5 else save_rows_15
+    # Thread-local TvDatafeed instance per worker.
+    _tls = threading.local()
 
-        with _LOCK:
-            _PROGRESS.update(running=True, phase=str(tf), current_symbol=None,
-                             done=0, total=len(universe), errors=errors,
-                             saved=saved, last_message=f"Fetching {tf}-min candles…")
+    def _worker_pool():
+        if not hasattr(_tls, "_tv"):
+            _tls._tv = TvDatafeed()
+        return _tls._tv
 
-        batch: list[dict] = []
-        for i, sym in enumerate(universe, start=1):
-            with _LOCK:
-                _PROGRESS["current_symbol"] = sym
-                _PROGRESS["done"] = i
-            try:
-                bars = _fetch_symbol_ohlc(tv, sym, exchange, interval, n_bars)
-                if bars:
-                    rec: dict = {"date": today, "symbol": sym}
-                    for _, flds in bars:
-                        rec.update(flds)
-                    batch.append(rec)
+    def _job(i, sym):
+        try:
+            bars = _fetch_symbol_ohlc(_worker_pool(), sym, exchange, interval, n_bars)
+            return (i, sym, bars, None)
+        except Exception as exc:  # noqa: BLE001
+            return (i, sym, None, str(exc)[:160])
+
+    saved = errors = done = 0
+    batch: list[dict] = []
+    results: list[tuple[int, str, list, str | None]] = []
+
+    with ThreadPoolExecutor(max_workers=workers) as ex:
+        futs = [ex.submit(_job, i, sym) for i, sym in enumerate(universe)]
+        for fut in as_completed(futs):
+            i, sym, bars, err = fut.result()
+            done += 1
+            if err is not None:
+                errors += 1
+                with _LOCK:
+                    _PROGRESS.update(errors=errors, saved=saved,
+                                     current_symbol=sym, done=done,
+                                     last_message=f"{sym}: {err}")
+                continue
+            if bars:
+                rec: dict = {"date": today, "symbol": sym}
+                for _, flds in bars:
+                    rec.update(flds)
+                batch.append(rec)
                 if len(batch) >= _FLUSH_EVERY:
                     saved += sink(batch)
                     batch = []
-                    with _LOCK:
-                        _PROGRESS["saved"] = saved
-            except Exception as exc:  # noqa: BLE001
-                errors += 1
-                with _LOCK:
-                    _PROGRESS["errors"] = errors
-                    _PROGRESS["last_message"] = f"{sym}: {exc}"
-        if batch:
-            saved += sink(batch)
             with _LOCK:
-                _PROGRESS["saved"] = saved
+                _PROGRESS.update(errors=errors, saved=saved,
+                                 current_symbol=sym, done=done)
+    if batch:
+        saved += sink(batch)
+        with _LOCK:
+            _PROGRESS.update(errors=errors, saved=saved)
+    return saved, errors
+
+
+def run_job(timeframes=(5, 15), workers: int = 4) -> dict:
+    """Background entrypoint.  Throws on universe/tvdatafeed load failure."""
+    from advance_orb.candle_recorder import universe_symbols as _us
+    universe = _us()
+    if not universe:
+        raise RuntimeError("no ORB universe from TradingView")
+
+    today = dt.datetime.now(IST).strftime("%Y-%m-%d")
+    saved = errors = 0
+    for tf in timeframes:
+        s, e = _run_timeframe(tf, universe, today, workers=workers)
+        saved += s
+        errors += e
 
     with _LOCK:
         _PROGRESS.update(running=False, phase=None, current_symbol=None, done=0,
@@ -147,7 +180,7 @@ def run_job(timeframes=(5, 15)) -> dict:
     return dict(_PROGRESS)
 
 
-def start_manual_fetch(timeframes=(5, 15)) -> dict:
+def start_manual_fetch(timeframes=(5, 15), workers: int = 4) -> dict:
     """Start the background fetch job if none is running.  Returns status."""
     with _LOCK:
         if _PROGRESS["running"]:
@@ -158,7 +191,7 @@ def start_manual_fetch(timeframes=(5, 15)) -> dict:
                          finished_at=None, last_message="Starting…")
 
     threading.Thread(
-        target=lambda: run_job(timeframes),
+        target=lambda: run_job(timeframes, workers),
         daemon=True,
         name="manual-candle-fetch",
     ).start()
