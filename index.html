@@ -511,6 +511,26 @@
             </div>
 
             <div class="panel-glass">
+                <div class="panel-head"><h3>🕯️ Candles — Get Data</h3></div>
+                <div class="panel-body">
+                    <div class="settings-group" style="flex-direction:column; align-items:stretch; gap:10px;">
+                        <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+                            <button id="manualFetchBtn" class="btn btn-primary" onclick="startManualFetch()">🕯️ Get Data</button>
+                            <span style="font-size:12px; opacity:0.8;">
+                                Manually fetch <b>5-min + 15-min</b> candle OHLC from TradingView for the whole universe into the JSON store.
+                            </span>
+                        </div>
+                        <div id="manualFetchProgress" style="display:flex; flex-direction:column; gap:6px;">
+                            <div style="width:100%; height:8px; background:rgba(255,255,255,0.12); border-radius:6px; overflow:hidden;">
+                                <div id="manualFetchBar" style="height:100%; width:0%; background:var(--accent,#3b82f6); transition:width .3s;"></div>
+                            </div>
+                            <div id="manualFetchStatus" style="font-size:12px; color:var(--text-muted); min-height:16px;">Idle.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel-glass">
                 <div class="panel-head"><h3>⚡ Risk Management</h3></div>
                 <div class="panel-body settings-grid">
                     <div class="settings-group"><label>Max Risk Per Trade (%)</label><input type="number" value="2" /></div>

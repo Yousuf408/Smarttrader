@@ -1842,6 +1842,30 @@ def candles_status():
 
 
 # =================================================================
+# MANUAL CANDLE FETCH — "Get Data" button.
+# Pulls the full 5-min + 15-min candle history from TradingView
+# (tvdatafeed) into the existing orb_candles_5min/15min.json stores
+# on demand.  Runs in a background thread so the UI can poll progress.
+# =================================================================
+@app.post("/api/candles/manual-fetch/start")
+def manual_fetch_start():
+    try:
+        from advance_orb.manual_candle_fetch import start_manual_fetch
+        return start_manual_fetch(timeframes=(5, 15))
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"manual-fetch failed to start: {exc}") from exc
+
+
+@app.get("/api/candles/manual-fetch/status")
+def manual_fetch_status():
+    try:
+        from advance_orb.manual_candle_fetch import manual_fetch_status
+        return manual_fetch_status()
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"manual-fetch status failed: {exc}") from exc
+
+
+# =================================================================
 # SPA FALLBACK — any GET that doesn't match an explicit route or
 # a static-asset mount, and isn't under /api/ /js/ /style.css,
 # returns index.html. Lets the user paste a deep link like
