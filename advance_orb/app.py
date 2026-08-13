@@ -350,13 +350,17 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, near_high: bool = True
                 ltp = ws.get("ltp")
                 change_pct = ws.get("change_pct", 0)
 
+                price_is_live = True  # assume live tick unless proven otherwise
                 if not ws_symbol or ws_symbol != expected_symbol.upper():
-                    # Bad WS data — use yesterday's close as fallback price
+                    # Bad WS data — use yesterday's close as fallback price.
+                    # Mark price_is_live=False so the inside_915 live-price
+                    # guard does NOT treat yesterday's close as a breakout.
                     yc = cached.get("yesterday_close")
                     if yc and float(yc) > 0 and PRICE_MIN < float(yc) <= PRICE_MAX:
                         ltp = float(yc)
                         change_pct = 0
                         gap_pct = 0
+                        price_is_live = False
                     else:
                         continue
                 else:
@@ -368,6 +372,14 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, near_high: bool = True
                         continue
                     if not (PRICE_MIN < float(ltp) <= PRICE_MAX):
                         continue
+                    # Even when the WS symbol matches {SYM}-EQ, angel_ws.py
+                    # may have seeded the entry with yesterday_close (for
+                    # tokens that were missing/collision-prone after the REST
+                    # seed) and tagged it with price_is_stale=True.  Detect
+                    # that provenance flag so the inside_915 guard never
+                    # fires on a stale baseline price masquerading as a live tick.
+                    if ws.get("price_is_stale", False):
+                        price_is_live = False
 
                 raw_rows.append({
                     "name": sym,
@@ -383,6 +395,10 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, near_high: bool = True
                     # completed slot-0 data (e.g. after a server restart
                     # before the first 5-min boundary fires).
                     "tick_open": ws.get("open"),
+                    # False when price is yesterday's close (bad WS symbol).
+                    # The inside_915 live-price guard must be skipped for
+                    # such rows — stale price ≠ live breakout signal.
+                    "price_is_live": price_is_live,
                 })
 
         df = pd.DataFrame(raw_rows) if raw_rows else pd.DataFrame()
@@ -758,11 +774,39 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, near_high: bool = True
                 if pd.notna(row.get("close920"))
                 else None
             )
-            entry["inside_915"] = (
+            # Derive inside_915 from the stored candle value first …
+            _i915 = (
                 bool(row["inside_915"])
                 if "inside_915" in row.index and pd.notna(row.get("inside_915"))
                 else None
             )
+            # … then cross-check against the CURRENT LIVE PRICE.
+            # A candle whose stored snapshot says "inside" may have since
+            # broken out (price now above high915 or below low915).  Reject
+            # it here so the screener never shows a broken-out candle as
+            # "Inside 9:15".  This catches stale snapshots for ANY candle,
+            # not just the 09:30 bar.  We only override True → False (never
+            # override False or None — those are already conservative).
+            #
+            # Guard: skip the check when price_is_live is False (the WS
+            # fallback path substituted yesterday's close for a row with a
+            # bad/mismatched symbol).  Yesterday's close ≠ current price,
+            # and comparing it against today's 9:15 range would produce
+            # spurious breakout signals.  The TV path and valid WS ticks
+            # are always considered live (price_is_live defaults to True).
+            _price_is_live = row.get("price_is_live", True)
+            if pd.isna(_price_is_live):
+                _price_is_live = True  # pandas NaN for missing column → treat as live
+            if _i915 is True and bool(_price_is_live):
+                _h915 = row.get("high915")
+                _l915 = row.get("low915")
+                if (
+                    pd.notna(_h915) and pd.notna(_l915)
+                    and float(_h915) > 0 and float(_l915) > 0
+                    and (close_price > float(_h915) or close_price < float(_l915))
+                ):
+                    _i915 = False
+            entry["inside_915"] = _i915
             _sl = _shared_low.get(symbol)
             entry["share_low"] = _sl
 
@@ -1356,6 +1400,26 @@ def refresh_advance_orb(tickers: str = "", timeframe: int = 5):
                 close920_val = _sd.get("close920")
                 if close920_val is not None:
                     close920_val = round(float(close920_val), 2)
+            # Live-price guard: if the stored snapshot says "inside" but the
+            # current live tick has already broken above high915 or below
+            # low915, clear the flag.
+            # Provenance check: angel_ws.py seeds missing/collision tokens
+            # with yesterday_close and tags them price_is_stale=True.  Those
+            # entries have a valid {SYM}-EQ symbol and a positive LTP, so
+            # `close_val > 0` alone does NOT prove the tick is live.  Skip
+            # the guard whenever price_is_stale is set so we never clear a
+            # genuinely-inside candle using a stale baseline price.
+            # We only override True → False; False / None are already safe.
+            _ws_tick_is_live = not ws.get("price_is_stale", False)
+            if inside_915_val is True and _sd and _ws_tick_is_live:
+                _h915 = _sd.get("high915")
+                _l915 = _sd.get("low915")
+                if (
+                    _h915 is not None and _l915 is not None
+                    and float(_h915) > 0 and float(_l915) > 0
+                    and (close_val > float(_h915) or close_val < float(_l915))
+                ):
+                    inside_915_val = False
 
             refreshed.append({
                 "Symbol": name,

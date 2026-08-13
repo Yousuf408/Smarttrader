@@ -571,6 +571,11 @@ def start_websocket(feed_token=None, watchlist=None):
                         "symbol": f"{name}-EQ",
                         "token": tok,
                         "timestamp": now_ts,
+                        # Explicit provenance flag: this entry was seeded
+                        # from yesterday's close, NOT a live WS tick.
+                        # Consumers (scan + refresh) must NOT use this LTP
+                        # as a live breakout signal against today's candle.
+                        "price_is_stale": True,
                     }
                     missing_filled += 1
             if missing_filled:
