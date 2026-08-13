@@ -333,6 +333,55 @@ def load_orb_candles_9_15(timeframe: int = 15) -> dict[str, dict]:
     return out
 
 
+def load_orb_candles_both() -> dict[str, dict]:
+    """Merge the 5-min and 15-min ORB candle stores into one per-symbol map.
+
+    For each symbol we use whichever store has the data — both files are read
+    and missing fields are filled from the other timeframe.  This is the
+    single source for Big Players and the Breakout table so they keep working
+    even when CandleTracker has not completed its 9:15 slot yet (relying on
+    ``batch_opening_candle`` left those tables empty early in the session).
+
+    Returns ``{symbol: {open915, high915, low915, close915, close920,
+    ema200, day_low}}``.
+    """
+    def _from_rec(rec: dict, ema_key: str) -> dict:
+        lows: list[float] = []
+        for k, v in rec.items():
+            if k.startswith("price_") and k.endswith("_L") and isinstance(v, (int, float)):
+                lows.append(float(v))
+        return {
+            "open915": rec.get("price_0915_O"),
+            "high915": rec.get("price_0915_H"),
+            "low915": rec.get("price_0915_L"),
+            "close915": rec.get("price_0915_C"),
+            # 2nd candle close: 09:20 on 5-min, 09:30 on 15-min.
+            "close920": rec.get("price_0920_C", rec.get("price_0930_C")),
+            "ema200": rec.get(ema_key) or rec.get("ema200_0915") or rec.get("ema200_915"),
+            "day_low": min(lows) if lows else None,
+        }
+
+    merged: dict[str, dict] = {}
+    for key, rec in _json_reead(_CANDLES_JSON).items():
+        _, sym = (key.split("|", 1) + ["", ""])[:2]
+        if not sym or rec.get("price_0915_H") is None:
+            continue
+        merged[sym] = _from_rec(rec, ema_key="ema200_915")
+    for key, rec in _json_reead(_CANDLES_15_JSON).items():
+        _, sym = (key.split("|", 1) + ["", ""])[:2]
+        if not sym or rec.get("price_0915_H") is None:
+            continue
+        facts = _from_rec(rec, ema_key="ema200_0915")
+        if sym not in merged:
+            merged[sym] = facts
+        else:
+            # Fill any gaps from the other timeframe's store.
+            for k, v in facts.items():
+                if merged[sym].get(k) is None and v is not None:
+                    merged[sym][k] = v
+    return merged
+
+
 # ── Single tick ─────────────────────────────────────────────────
 def record_once() -> dict:
     """Fetch the universe + snapshot and PATCH the forming-candle columns."""

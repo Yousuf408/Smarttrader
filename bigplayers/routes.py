@@ -17,9 +17,10 @@ from server.candle_tracker import candle_tracker
 from advance_orb.common import (
     PRICE_MIN, PRICE_MAX, GAP_THRESHOLD, MARKET_CAP_MIN,
     SMALL_CANDLE_THRESHOLD, MAX_TV_STOCKS,
-    batch_opening_candle, compute_200_ema_batch, _calc_qty_for_broker,
+    compute_200_ema_batch, _calc_qty_for_broker,
     _build_ticks_by_symbol, ws_auto_subscribe,
 )
+from advance_orb.candle_recorder import load_orb_candles_both
 from broker.angel_margin_calculator import (
     is_connected as angel_is_connected,
     fill_margin_cache_async,
@@ -131,19 +132,34 @@ def get_big_players(budget: int = 100000, parts: int = 4):
 
         candidate_symbols = df['name'].dropna().astype(str).tolist()
 
-        # Get candle + EMA data
-        opening_candle_map = batch_opening_candle(candidate_symbols)
+        # Get candle + EMA data.
+        #
+        # Source is OUR OWN TradingView JSON store (5-min + 15-min merged,
+        # whichever has each symbol) instead of CandleTracker.  CandleTracker
+        # only has a completed 9:15 slot after its first boundary fires, so
+        # relying on ``batch_opening_candle`` left the table blank (0 stocks)
+        # early in a session.  The JSON store is written by the candle recorder
+        # (~every 30s) so it's populated sooner and covers both timeframes.
+        opening_candle_map = load_orb_candles_both()
         small_candle_symbols = {
-            s for s, t in opening_candle_map.items()
-            if isinstance(t, tuple) and t and t[0]
+            s for s, d in opening_candle_map.items()
+            if (d.get("high915") is not None and d.get("low915")
+                and float(d["low915"]) > 0
+                and ((float(d["high915"]) - float(d["low915"])) / float(d["low915"]) * 100)
+                <= SMALL_CANDLE_THRESHOLD)
         }
         ema_map = compute_200_ema_batch(candidate_symbols)
+        for _s, _d in opening_candle_map.items():
+            if _s in ema_map or ema_map.get(_s) is not None:
+                continue
+            if _d.get("ema200") is not None:
+                ema_map[_s] = float(_d["ema200"])
         df['ema'] = df['name'].map(ema_map)
         df['high915'] = df['name'].map(
-            lambda s: opening_candle_map.get(s, (False, None, None))[1]
+            lambda s: (opening_candle_map.get(s) or {}).get("high915")
         )
         df['low915'] = df['name'].map(
-            lambda s: opening_candle_map.get(s, (False, None, None, None))[3]
+            lambda s: (opening_candle_map.get(s) or {}).get("low915")
         )
 
         # MaxQty from broker's real margin
@@ -169,8 +185,8 @@ def get_big_players(budget: int = 100000, parts: int = 4):
             if symbol not in small_candle_symbols:
                 continue
 
-            candle = opening_candle_map.get(symbol)
-            close915 = candle[4] if candle and len(candle) >= 5 else None
+            candle = opening_candle_map.get(symbol) or {}
+            close915 = candle.get("close915")
             ema = row.get('ema')
             if close915 is None or ema is None or pd.isna(ema):
                 continue
@@ -178,7 +194,7 @@ def get_big_players(budget: int = 100000, parts: int = 4):
             if not (close915 > ema and pct_diff <= 2.0):
                 continue
 
-            today_low = candle[6] if candle and len(candle) >= 7 else None
+            today_low = candle.get("day_low")
 
             row_dict = {
                 'Symbol': symbol,
@@ -255,8 +271,14 @@ def refresh_big_players(tickers: str = ""):
         if not symbols:
             return {"refreshed": []}
 
-        opening_candle_map = batch_opening_candle(symbols)
+        # Source 9:15 candle data from OUR OWN JSON store (5-min + 15-min
+        # merged, whichever has each symbol) — same as the main endpoints.
+        opening_candle_map = load_orb_candles_both()
         ema_map = compute_200_ema_batch(symbols)
+        for _s, _d in opening_candle_map.items():
+            if ema_map.get(_s) is not None or _d.get("ema200") is None:
+                continue
+            ema_map[_s] = float(_d["ema200"])
         bp_strategy = BigPlayersStrategy()
 
         # TV SCAN COMMENTED OUT for WS-only testing (Jul 31).
@@ -283,8 +305,8 @@ def refresh_big_players(tickers: str = ""):
                 continue
 
             # EMA rule: 9:15 close > 200 EMA within 2%
-            candle = opening_candle_map.get(name)
-            close915 = candle[4] if candle and len(candle) >= 5 else None
+            candle = opening_candle_map.get(name) or {}
+            close915 = candle.get("close915")
             ema = ema_map.get(name)
             if close915 is None or ema is None:
                 continue
@@ -292,9 +314,9 @@ def refresh_big_players(tickers: str = ""):
             if not (close915 > ema and pct_diff <= 2.0):
                 continue
 
-            high915 = candle[1] if candle and len(candle) >= 2 else None
-            low915 = candle[3] if candle and len(candle) >= 4 else None
-            today_low = candle[6] if candle and len(candle) >= 7 else None
+            high915 = candle.get("high915")
+            low915 = candle.get("low915")
+            today_low = candle.get("day_low")
             ema = ema_map.get(name)
 
             row_dict = {

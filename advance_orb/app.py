@@ -67,6 +67,7 @@ from advance_orb.candle_recorder import (
     candle_recorder_loop as candle_rec_loop,
     get_status as candle_rec_status,
     load_orb_candles_9_15,
+    load_orb_candles_both,
 )
 
 # Ensure the strategy_trades table exists (run once at startup)
@@ -595,22 +596,30 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, near_high: bool = True
         # recorded / below-EMA universe), we fall back to the Yahoo values that
         # were filled above so the row is never wrongly dropped.  ``_store_915``
         # was already loaded once above (before the filters) and is reused here.
-        if _store_915:
+        # ``_store_both`` merges the 5-min and 15-min JSON stores so the candle
+        # columns + Breakout table pull from whichever file has the symbol,
+        # instead of leaving a row blank when only the other timeframe recorded
+        # it.  inside_915 stays timeframe-=accurate from the selected file.
+        _store_both = load_orb_candles_both()
+        if _store_915 or _store_both:
             # The inside_915 column can be True/False/None.  Convert it to an
             # object column first so assigning a None (a store value when the
             # 2nd candle hasn't printed yet) doesn't raise pandas'
             # "Invalid value 'nan' for dtype 'bool'" when the column is bool.
             df["inside_915"] = df["inside_915"].astype(object)
             for _s in df["name"].tolist():
-                _sd = _store_915.get(_s)
-                if not _sd:
-                    continue  # store miss → keep the Yahoo values above
-                df.loc[df["name"] == _s, "high915"] = _sd["high915"]
-                df.loc[df["name"] == _s, "low915"] = _sd["low915"]
-                df.loc[df["name"] == _s, "open915"] = _sd["open915"]
-                df.loc[df["name"] == _s, "close915"] = _sd["close915"]
-                df.loc[df["name"] == _s, "close920"] = _sd["close920"]
-                df.loc[df["name"] == _s, "inside_915"] = _sd["inside_915"]
+                _mb = (_store_both or {}).get(_s)
+                if _mb:
+                    df.loc[df["name"] == _s, "high915"] = _mb["high915"]
+                    df.loc[df["name"] == _s, "low915"] = _mb["low915"]
+                    df.loc[df["name"] == _s, "open915"] = _mb["open915"]
+                    df.loc[df["name"] == _s, "close915"] = _mb["close915"]
+                    df.loc[df["name"] == _s, "close920"] = _mb["close920"]
+                # inside_915 only from the timeframe-matching store so the
+                # inside-3-candles / inside-9:15 checks stay correct.
+                _sd = (_store_915 or {}).get(_s)
+                if _sd is not None and _sd.get("inside_915") is not None:
+                    df.loc[df["name"] == _s, "inside_915"] = _sd["inside_915"]
 
         # "1st Range%" = the opening (9:15) candle's % range: (high − low) / low,
         # computed from the high915/low915 that are now filled above (our own TV
