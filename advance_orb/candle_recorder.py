@@ -493,6 +493,37 @@ def record_once() -> dict:
             # Never let a TV chart fetch failure break the main recorder.
             print(f"[candles] c2-close backfill failed: {exc}")
 
+        # ── Finalized 09:15 opening-candle backfill (match TV chart exactly) ─
+        # The forming snapshot above stores the provisional 09:15 bar (the value
+        # as of the last ~30s poll), so the store's open/high/low/close can differ
+        # from TradingView's finalized opening candle.  Once that bar has fully
+        # closed, batch_tv_opening_candles returns the authoritative (open, high,
+        # low, close) straight from the TV chart historical series (never Yahoo/
+        # Angel) and we overwrite the stored 09:15 row with it — so what Big
+        # Players / Breakout / Advance ORB read always equals TradingView.
+        try:
+            from advance_orb.tv_chart_candles import batch_tv_opening_candles
+            for tf_width in (5, 15):
+                if tf_width == 5 and lbl is None:
+                    continue
+                if tf_width == 15 and lbl15 is None:
+                    continue
+                oc = batch_tv_opening_candles(universe, timeframe=tf_width)
+                bf_opening: list[dict] = [
+                    {"date": today, "symbol": sym,
+                     "price_0915_O": float(v[0]), "price_0915_H": float(v[1]),
+                     "price_0915_L": float(v[2]), "price_0915_C": float(v[3])}
+                    for sym, v in oc.items()
+                    if v is not None and all(x is not None for x in v[:4])
+                ]
+                if bf_opening:
+                    if tf_width == 5:
+                        save_rows(bf_opening)
+                    else:
+                        save_rows_15(bf_opening)
+        except Exception as exc:  # noqa: BLE001
+            print(f"[candles] finalized-opening backfill failed: {exc}")
+
         msg = f"{today} {lbl}: {saved}/{len(payloads)} rows (+15m {len(payloads15)})"
         _set_status(running=True, last_tick=f"{now.strftime('%H:%M:%S')} {today}",
                     last_candle=lbl, today=today, universe=len(universe),
