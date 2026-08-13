@@ -71,6 +71,20 @@ _IDLE_S = 60.0
 _rec_lock = threading.Lock()
 
 
+def _prev_candle_label(lbl: str | None, labels: list[str]) -> str | None:
+    """Return the label immediately before ``lbl`` in ``labels``, or None.
+
+    Used to identify the just-closed candle so its true close can be written.
+    """
+    if lbl is None:
+        return None
+    try:
+        idx = labels.index(lbl)
+        return labels[idx - 1] if idx > 0 else None
+    except ValueError:
+        return None
+
+
 def current_candle_label(now: datetime | None = None) -> str | None:
     """Label of the currently-forming 5-min candle, or None outside a candle.
 
@@ -393,6 +407,42 @@ def record_once() -> dict:
             saved = save_rows(payloads)
         if payloads15:
             save_rows_15(payloads15)
+
+        # ── True-close backfill for the 2nd candle (inside-9:15 fix) ───────
+        # The forming-candle snapshot above stores the provisional close (as of
+        # the last ~30s poll), which may miss a last-second breakout.  Once the
+        # 2nd candle is fully sealed, batch_tv_confirmed_c2_close fetches the
+        # authoritative finalized close from the TV chart historical series (NOT
+        # the forming-bar screener field) and writes it into the JSON store so
+        # load_orb_candles_9_15 computes inside_915 from the correct bar close.
+        #
+        # batch_tv_confirmed_c2_close only runs when past the 2nd candle's
+        # close time (09:25 for 5-min, 09:45 for 15-min) and uses _TV_C2_CACHE
+        # (separate from the opening-candle cache) so a pre-close screener call
+        # can never poison the store with a provisional value.
+        try:
+            from advance_orb.tv_chart_candles import batch_tv_confirmed_c2_close
+            if lbl is not None:
+                tv5 = batch_tv_confirmed_c2_close(universe, timeframe=5)
+                bf5: list[dict] = [
+                    {"date": today, "symbol": sym, "price_0920_C": float(c2c)}
+                    for sym, c2c in tv5.items()
+                    if c2c is not None
+                ]
+                if bf5:
+                    save_rows(bf5)
+            if lbl15 is not None:
+                tv15 = batch_tv_confirmed_c2_close(universe, timeframe=15)
+                bf15: list[dict] = [
+                    {"date": today, "symbol": sym, "price_0930_C": float(c2c)}
+                    for sym, c2c in tv15.items()
+                    if c2c is not None
+                ]
+                if bf15:
+                    save_rows_15(bf15)
+        except Exception as exc:  # noqa: BLE001
+            # Never let a TV chart fetch failure break the main recorder.
+            print(f"[candles] c2-close backfill failed: {exc}")
 
         msg = f"{today} {lbl}: {saved}/{len(payloads)} rows (+15m {len(payloads15)})"
         _set_status(running=True, last_tick=f"{now.strftime('%H:%M:%S')} {today}",

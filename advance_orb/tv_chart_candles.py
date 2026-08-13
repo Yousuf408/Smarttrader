@@ -23,7 +23,17 @@ import websockets
 logger = logging.getLogger("advance_orb.tv_chart")
 IST = dt.timezone(dt.timedelta(hours=5, minutes=30))
 _TV_TOKEN_CACHE: tuple[float, str] | None = None
-_TV_CANDLE_CACHE: dict[tuple[str, str], tuple[float, tuple[float, float, float, float, float | None]] | None] = {}
+_TV_CANDLE_CACHE: dict[
+    tuple[str, int, str],
+    tuple[float, tuple[float, float, float, float, float | None]],
+] = {}
+# Separate cache for confirmed second-candle closes (only written after the
+# 2nd candle's close time, so it never holds a provisional forming-bar value).
+_TV_C2_CACHE: dict[
+    tuple[str, int, str],          # (date, timeframe, symbol)
+    tuple[float, float],           # (stored_at, c2_close)
+] = {}
+_TV_C2_CACHE_TTL = 20 * 60 * 60  # 20 h — full trading session
 _TV_CACHE_LOCK = threading.Lock()
 _TV_TOKEN_TTL = 10 * 60
 # TradingView throttles rapid logins (captcha / "having a little trouble").
@@ -103,6 +113,24 @@ def _first_candle(rows: list[list[float]]) -> tuple[float, float, float, float] 
     return None
 
 
+def _candle_close_at(
+    rows: list[list[float]], hour: int, minute: int
+) -> float | None:
+    """Return the TRUE (finalized) close of the bar that opens at (hour:minute) IST.
+
+    This reads directly from the authenticated TV chart series, which contains
+    completed historical bars — not a forming-bar snapshot.  The result is only
+    valid after the bar has closed; callers must check wall-clock time before
+    relying on it.
+    """
+    today = dt.datetime.now(IST).date()
+    for row in sorted(rows, key=lambda x: x[0]):
+        stamp = dt.datetime.fromtimestamp(row[0], IST)
+        if stamp.date() == today and stamp.hour == hour and stamp.minute == minute:
+            return row[4]  # index 4 = close (tvDatafeed layout: ts,o,h,l,c,v)
+    return None
+
+
 def _yesterday_high(rows: list[list[float]]) -> float | None:
     """Max 5-min bar high of the previous trading day (= that day's daily
     high on the daily timeframe) — computed from TradingView's own bars."""
@@ -154,6 +182,49 @@ async def _batch_tv_opening_candles_async(
             candle = _first_candle(rows)
             if candle:
                 result[symbol] = (*candle, _yesterday_high(rows))
+
+
+async def _batch_tv_c2_close_async(
+    result: dict[str, float | None],
+    token: str,
+    timeframe: int,
+    c2_hour: int,
+    c2_min: int,
+) -> None:
+    """Fetch the confirmed close of the 2nd candle for each symbol.
+
+    Uses the same authenticated TV chart feed as the opening-candle path but
+    is a SEPARATE async function so the two caches stay independent and the
+    2nd-candle close is NEVER mixed with the provisional opening-candle data.
+    """
+    chart = _id("cs_")
+    async with websockets.connect(
+        "wss://data.tradingview.com/socket.io/websocket",
+        origin="https://data.tradingview.com",
+        ping_interval=None,
+        max_size=2**26,
+    ) as ws:
+        await ws.send(_frame("set_auth_token", [token]))
+        await ws.send(_frame("chart_create_session", [chart, ""]))
+        for index, symbol in enumerate(result):
+            tv_symbol = f"NSE:{symbol.removesuffix('.NS')}"
+            alias = f"symbol_{index}"
+            series = f"s{index}"
+            await ws.send(_frame("resolve_symbol", [
+                chart, alias,
+                f'={{"symbol":"{tv_symbol}","adjustment":"splits","session":"regular"}}',
+            ]))
+            await ws.send(_frame("create_series", [chart, series, series, alias, f"{timeframe}", 10]))
+            raw = ""
+            while True:
+                message = await ws.recv()
+                raw += message
+                if "series_completed" in message:
+                    break
+            rows = _series_rows(raw)
+            c2c = _candle_close_at(rows, c2_hour, c2_min)
+            if c2c is not None:
+                result[symbol] = c2c
 
 
 def batch_tv_opening_candles(
@@ -239,5 +310,111 @@ def batch_tv_opening_candles(
         if login_attempted and not token_ok:
             # Login itself failed (e.g. anti-bot HTML/non-JSON response) —
             # treat it as throttling so we cool down instead of re-hammering.
+            _mark_login_fail(now_ts)
+    return result
+
+
+def batch_tv_confirmed_c2_close(
+    symbols: list[str],
+    timeframe: int = 5,
+) -> dict[str, float | None]:
+    """Return the CONFIRMED (finalized) close of the 2nd candle for each symbol.
+
+    The 2nd candle is 09:20 on the 5-min frame and 09:30 on the 15-min frame.
+    This function ONLY runs when that candle has already closed, so the TV chart
+    historical series always contains the final, authoritative OHLC — never a
+    provisional forming-bar value.
+
+    Uses a SEPARATE cache (``_TV_C2_CACHE``) from ``batch_tv_opening_candles``
+    so the two data contracts never interfere: opening-candle fetches can happen
+    before the 2nd candle closes; confirmed-c2 fetches happen only after.
+
+    Returns ``{symbol: float}`` for symbols where the confirmed close was found,
+    ``{symbol: None}`` otherwise.  All values come from the authenticated TV
+    chart feed — never Yahoo or Angel One.
+    """
+    timeframe = int(timeframe)
+    # 2nd candle close times: 09:25 for 5-min, 09:45 for 15-min.
+    c2_close_min = 9 * 60 + 15 + 2 * timeframe
+    now = dt.datetime.now(IST)
+    now_min = now.hour * 60 + now.minute
+    if now_min < c2_close_min:
+        # 2nd candle hasn't closed yet — never return provisional data.
+        return {str(s).strip().upper(): None for s in symbols if s}
+
+    c2_hour, c2_min = (9, 20) if timeframe == 5 else (9, 30)
+    syms = [str(s).strip().upper() for s in symbols if s]
+    result: dict[str, float | None] = {s: None for s in syms}
+
+    username = os.getenv("TRADINGVIEW_USERNAME", "").strip()
+    password = os.getenv("TRADINGVIEW_PASSWORD", "")
+    if not username or not password or not syms:
+        return result
+
+    today = now.strftime("%Y-%m-%d")
+    now_ts = time.time()
+    # Serve from cache where available.
+    with _TV_CACHE_LOCK:
+        missing_syms = []
+        for sym in syms:
+            cached = _TV_C2_CACHE.get((today, timeframe, sym))
+            if cached and now_ts - cached[0] < _TV_C2_CACHE_TTL:
+                result[sym] = cached[1]
+            else:
+                missing_syms.append(sym)
+    if not missing_syms:
+        return result
+
+    global _TV_TOKEN_CACHE, _TV_LOGIN_FAIL_AT
+    with _TV_CACHE_LOCK:
+        token = (
+            _TV_TOKEN_CACHE[1]
+            if _TV_TOKEN_CACHE and now_ts - _TV_TOKEN_CACHE[0] < _TV_TOKEN_TTL
+            else ""
+        )
+        fail_at = _TV_LOGIN_FAIL_AT if _TV_LOGIN_FAIL_AT is not None else _read_fail_marker()
+        login_blocked = fail_at is not None and now_ts - fail_at < _TV_LOGIN_COOLDOWN_S
+    if not token and login_blocked:
+        logger.warning(
+            "TradingView c2-close skipped: throttled %.0fs ago — cooling down",
+            now_ts - (fail_at or 0),
+        )
+        return result
+
+    missing_result: dict[str, float | None] = {s: None for s in missing_syms}
+    try:
+        login_attempted = False
+        token_ok = bool(token)
+        if not token:
+            login_attempted = True
+            login = requests.post(
+                "https://www.tradingview.com/accounts/signin/",
+                data={"username": username, "password": password, "remember": "on"},
+                headers={"User-Agent": "Mozilla/5.0", "Referer": "https://www.tradingview.com"},
+                timeout=20,
+            ).json()
+            token = (login.get("user") or {}).get("auth_token", "")
+            token_ok = bool(token)
+            if not token:
+                logger.warning(
+                    "TradingView c2-close login failed: %s",
+                    login.get("error", "unknown error"),
+                )
+                _mark_login_fail(now_ts)
+                return result
+            with _TV_CACHE_LOCK:
+                _TV_TOKEN_CACHE = (now_ts, token)
+
+        asyncio.run(
+            _batch_tv_c2_close_async(missing_result, token, timeframe, c2_hour, c2_min)
+        )
+        with _TV_CACHE_LOCK:
+            for sym, c2c in missing_result.items():
+                if c2c is not None:
+                    _TV_C2_CACHE[(today, timeframe, sym)] = (now_ts, c2c)
+                    result[sym] = c2c
+    except Exception as exc:
+        logger.warning("TradingView c2-close fetch failed: %s", exc)
+        if login_attempted and not token_ok:
             _mark_login_fail(now_ts)
     return result
