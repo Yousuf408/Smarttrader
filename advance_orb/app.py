@@ -637,8 +637,14 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, near_high: bool = True
         # not a clean ORB setup.  Threshold is per timeframe: ≤ 2% on 15-min,
         # ≤ 1.5% on 5-min.  Rows without a computable range (None) are kept.
         _range_cap = 2.0 if timeframe == 15 else 1.5
+        # Keep rows with NO computable range (no stored candle yet / below-EMA
+        # universe).  _range_pct returns None for those, but pandas stores None
+        # in a float column as NaN, so the old "v is None" check was always
+        # False and float(NaN) <= cap is also False — wrongly dropping every
+        # row the store hasn't recorded yet (~267 stocks) and shrinking the
+        # scan far below the TradingView universe.  Use pd.isna() to keep them.
         df = df[df["candle_range_pct"].apply(
-            lambda v: v is None or float(v) <= _range_cap
+            lambda v: pd.isna(v) or float(v) <= _range_cap
         )].copy()
         candidate_symbols = df["name"].dropna().astype(str).tolist()
         # "Share Low" column: detect whether the opening candles share the same
