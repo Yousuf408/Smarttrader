@@ -46,3 +46,5 @@ ehthumbs.db
 # Runtime-generated tick/candle caches (rebuilt by WebSocket at runtime)
 stocks/latest_ticks.json
 stocks/candles.json
+stocks/orb_candles_5min.json
+stocks/orb_candles_15min.json
