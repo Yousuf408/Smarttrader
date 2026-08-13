@@ -433,6 +433,14 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, near_high: bool = True
         # is only a fallback for symbols the store hasn't recorded yet.
         _store_915 = load_orb_candles_9_15(timeframe=timeframe)
 
+        # The scan log always shows the FULL TradingView universe.  Filters such
+        # as Near High / body range / Inside 9:15 / Above 200 EMA are NOT applied
+        # to ``df`` here — they are evaluated client-side and scope only the
+        # Breakout table (see js/screener.js renderBreakoutTable).  We still fetch
+        # yahoo_open_high when a filter toggle needs it so the per-row columns
+        # (open915, yesterday_high, ema, close915, candle_range_pct, inside_915)
+        # are populated for every row returned to the scan log.
+
         if near_high:
             yahoo_near_high_symbols = set()
             for _s, _yd in (yahoo_open_high or {}).items():
@@ -444,8 +452,7 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, near_high: bool = True
                     continue
                 if 0.98 * float(_prev_high) <= float(_open) <= 1.02 * float(_prev_high):
                     yahoo_near_high_symbols.add(_s)
-            df = df[df["name"].isin(yahoo_near_high_symbols)].copy()
-            candidate_symbols = df["name"].dropna().astype(str).tolist()
+            # NOTE: intentionally NOT slicing df — see comment above.
 
         # "Above 200 EMA" toggle: the opening candle's CLOSE must be ABOVE the
         # 200 EMA AND at most ABOVE_EMA_MAX_GAP% above it (opening-candle
@@ -485,8 +492,9 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, near_high: bool = True
                 _gap_pct = (float(_close) - float(_ema)) / float(_ema) * 100
                 if float(_close) > float(_ema) and _gap_pct <= ABOVE_EMA_MAX_GAP:
                     above_ema_symbols.add(_s)
-            df = df[df["name"].isin(above_ema_symbols)].copy()
-            candidate_symbols = df["name"].dropna().astype(str).tolist()
+            # NOTE: intentionally NOT slicing df — the scan log keeps the full
+            # TradingView universe; the Above-200-EMA filter is evaluated by the
+            # frontend and scopes only the Breakout table.
 
         # "3 Candles Inside 9:15" toggle: the CLOSE of the 9:20, 9:25 and
         # 9:30 candles must ALL sit inside the 9:15 candle's high–low range
@@ -525,8 +533,9 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, near_high: bool = True
                         break
                 if _ok:
                     inside3_symbols.add(_s)
-            df = df[df["name"].isin(inside3_symbols)].copy()
-            candidate_symbols = df["name"].dropna().astype(str).tolist()
+            # NOTE: intentionally NOT slicing df — the scan log keeps the full
+            # TradingView universe; the Inside-3-Candles filter is evaluated by
+            # the frontend and scopes only the Breakout table.
 
         # Open-candle batch: pull each symbol's 9:15 IST 5-min candle in
         # parallel. Returns (is_small, high915, open915, low915,
@@ -700,18 +709,10 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, near_high: bool = True
         for _, row in df.iterrows():
             symbol = row['name']
 
-            # Normal mode: open must be within ±2% of yesterday's high
-            # (TV daily high).  Only applied when the "Near High" toggle is ON —
-            # with no filter selected the full TradingView universe is shown.
-            # Only evaluated when both values exist (~09:20) otherwise keep.
-            if near_high:
-                _open = row.get("open915")
-                _yh = row.get("yesterday_high")
-                if pd.notna(_open) and pd.notna(_yh) and float(_yh) > 0:
-                    _lo_b = 0.98 * float(_yh)
-                    _hi_b = 1.02 * float(_yh)
-                    if not (_lo_b <= float(_open) <= _hi_b):
-                        continue
+            # NOTE: the Near High / 1st Range% / Inside 9:15 / Above 200 EMA
+            # filters are NOT applied here.  The scan log always carries the full
+            # TradingView universe; those filters scope only the Breakout table,
+            # which the frontend evaluates from the per-row columns below.
 
             # Format volume
             vol = row.get('volume', 0)

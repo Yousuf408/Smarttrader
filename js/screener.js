@@ -465,8 +465,53 @@ function orbRowHTML(row, headerColumns) {
 }
 
 let lastOrbColumns = [];
-/** Render the top "Breakout" table = only stocks whose LIVE price has
- * crossed above the 1st candle high (high915). Simple: price > 1st high. */
+/** Filter predicates for the Breakout table only.  These evaluated the
+ * strategy filters (Near High / 1st Range% / Inside 9:15 / Above 200 EMA)
+ * AGAINST THE BREAKOUT table alone — they never reduce the Signal Scan Logs
+ * table, which always shows the full TradingView universe.
+ * @returns {boolean} true if the stock passes every active filter. */
+function orbBreakoutFilter(r) {
+    // Base signal: LIVE price crossed above the 1st candle high.
+    const price = parseFloat(r.Price ?? r.price);
+    const high = parseFloat(r.high915);
+    if (!(Number.isFinite(price) && Number.isFinite(high) && high > 0 && price > high)) {
+        return false;
+    }
+    // Near High toggle: today's open within ±2% of yesterday's high.
+    if (nearHighEnabled) {
+        const op = parseFloat(r.open915);
+        const yh = parseFloat(r.yesterday_high);
+        if (Number.isFinite(op) && Number.isFinite(yh) && yh > 0) {
+            if (op < 0.98 * yh || op > 1.02 * yh) return false;
+        }
+    }
+    // 1st Range% cap: opening 9:15 candle range must be tight.  Only drops the
+    // stock from the BREAKOUT table — the scan log still lists it.
+    if (r.candle_range_pct !== undefined && r.candle_range_pct !== null) {
+        const range = parseFloat(r.candle_range_pct);
+        if (Number.isFinite(range)) {
+            const cap = (typeof orbTimeframe !== 'undefined' && orbTimeframe === 15) ? 2.0 : 1.5;
+            if (range > cap) return false;
+        }
+    }
+    // Inside 9:15 toggle: 2nd candle close inside the opening range.
+    if (_inside915Only && r.inside_915 !== true) {
+        return false;
+    }
+    // Above 200 EMA toggle: opening-candle close above the 200 EMA & within 4%.
+    if (aboveEmaEnabled) {
+        const c = parseFloat(r.close915);
+        const e = parseFloat(r.ema);
+        if (Number.isFinite(c) && Number.isFinite(e) && e > 0) {
+            const gap = (c - e) / e * 100;
+            if (!(c > e && gap <= 4.0)) return false;
+        }
+    }
+    return true;
+}
+
+/** Render the top "Breakout" table = stocks passing the active strategy
+ * filters AND whose LIVE price has crossed above the 1st candle high. */
 function renderBreakoutTable(data, columns) {
     const block = document.getElementById('breakoutBlock');
     if (!block) return;
@@ -474,11 +519,7 @@ function renderBreakoutTable(data, columns) {
     if (columns) lastOrbColumns = [...columns].filter(c => c !== 'GAP%');
     else lastOrbColumns = lastOrbColumns.filter(c => c !== 'GAP%');
     const headerColumns = [...lastOrbColumns, 'Action'];
-    const list = (data || []).filter(r => {
-        const price = parseFloat(r.Price ?? r.price);
-        const high = parseFloat(r.high915);
-        return Number.isFinite(price) && Number.isFinite(high) && high > 0 && price > high;
-    });
+    const list = (data || []).filter(orbBreakoutFilter);
     const head = document.getElementById('breakoutHead');
     const body = document.getElementById('breakoutBody');
     if (head) head.innerHTML = headerColumns.map(col => `<th>${col}</th>`).join('');
@@ -519,10 +560,9 @@ function renderStrategyData(result) {
         if (_d) _d.textContent = result.reference_date || '';
     }
 
-    // Apply Inside 9:15 filter for Advance ORB
-    if (strategyId === 'advanceorb' && _inside915Only) {
-        data = data.filter(r => r.inside_915 === true);
-    }
+    // NOTE: the Scan Logs table always shows the FULL TradingView universe.
+    // Filter toggles (Near High / 1st Range% / Inside 9:15 / Above 200 EMA) never
+    // reduce the scan log — they scope only the Breakout table (renderBreakoutTable).
 
     // Update table headers — Signal Scan Logs (no Action button; each stock
     // row still lives on so placeOrder / auto-buy work off the data).
