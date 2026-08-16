@@ -11,7 +11,7 @@ The project uses the `Start application` workflow, which runs the FastAPI app on
 To run it manually:
 
 ```bash
-uvicorn advance_orb.app:app --host 0.0.0.0 --port 5000
+uvicorn advance_orb.app:app --host 0.0.0.0 --port 5500
 ```
 
 The Advance ORB endpoint queries TradingView through `tradingview-screener`, so its results depend on TradingView availability and network access. The other dashboard strategies use the data already included in the frontend.
