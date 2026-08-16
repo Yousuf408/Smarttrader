@@ -43,6 +43,11 @@ ehthumbs.db
 *.bak
 *.swp
 
+# Python cache files
+__pycache__/
+*.pyc
+.pytest_cache/
+
 # Runtime-generated tick/candle caches (rebuilt by WebSocket at runtime)
 stocks/latest_ticks.json
 stocks/candles.json
