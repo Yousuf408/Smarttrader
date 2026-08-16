@@ -66,7 +66,11 @@ import yfinance as yf
 import pandas as pd
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from logzero import logger
+try:
+    from logzero import logger
+except Exception:  # pragma: no cover - optional dependency
+    import logging
+    logger = logging.getLogger("candle_tracker")
 
 # ─── constants ───────────────────────────────────────────────────────
 IST = timezone(timedelta(hours=5, minutes=30))

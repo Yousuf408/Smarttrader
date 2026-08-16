@@ -13,12 +13,25 @@
 # We fix this by patching the websocket namespace *before* importing the
 # SmartApi SDK, so that when ``smartWebSocketV2.py`` runs its module-level
 # ``import websocket`` it picks up our patched version.
-import websocket as _ws_ns
-from websocket._app import WebSocketApp as _WebSocketApp
-_ws_ns.WebSocketApp = _WebSocketApp
+try:
+    import websocket as _ws_ns
+    from websocket._app import WebSocketApp as _WebSocketApp
+    _ws_ns.WebSocketApp = _WebSocketApp
+except Exception:
+    _ws_ns = None
+    _WebSocketApp = None
 
-from SmartApi.smartWebSocketV2 import SmartWebSocketV2
-from logzero import logger
+try:
+    from SmartApi.smartWebSocketV2 import SmartWebSocketV2
+except Exception:  # pragma: no cover - optional dependency at runtime
+    SmartWebSocketV2 = None
+
+try:
+    from logzero import logger
+except Exception:  # pragma: no cover - fallback when logzero is absent
+    import logging
+    logger = logging.getLogger("angel_ws")
+
 import threading
 import time
 from datetime import datetime, timezone, timedelta
@@ -487,6 +500,13 @@ def start_websocket(feed_token=None, watchlist=None):
         dict: {"success": bool, "error": str|None}
     """
     global _sws, _thread, latest_ticks, _connected, WATCHLIST
+
+    if SmartWebSocketV2 is None:
+        logger.warning("⚠️ SmartApi SDK not installed; Angel One websocket unavailable")
+        return {
+            "success": False,
+            "error": "SmartApi SDK is not installed. Broker websocket features are unavailable."
+        }
 
     # Update watchlist if provided
     if watchlist:
