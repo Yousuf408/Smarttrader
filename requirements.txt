@@ -8,7 +8,6 @@ yfinance
 pyotp
 cryptography
 requests
-angelone
 websocket-client
 python-dotenv
 pydantic
