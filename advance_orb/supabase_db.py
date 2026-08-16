@@ -13,7 +13,11 @@ entry/target rules — strategy backends just call
 from datetime import date
 from typing import Any, Literal
 
-from supabase import create_client, Client
+try:
+    from supabase import create_client, Client
+except ImportError:  # pragma: no cover - optional runtime dependency
+    create_client = None
+    Client = Any
 
 # ── Credentials (hardcoded for portability, same pattern as ANGEL_PROXIES) ──
 _SUPABASE_URL = "https://atyqkbrmrosnoczktsmm.supabase.co"
