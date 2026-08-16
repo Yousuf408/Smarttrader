@@ -13,3 +13,4 @@ websocket-client==1.6.1
 python-dotenv==1.0.0
 pydantic==2.5.0
 httpx==0.25.0
+websockets>=12.0

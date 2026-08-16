@@ -18,7 +18,14 @@ import time
 from typing import Any
 
 import requests
-import websockets
+
+try:
+    import websockets
+except ModuleNotFoundError as exc:  # pragma: no cover - dependency guard
+    raise RuntimeError(
+        "Missing dependency: install the `websockets` package required by the "
+        "TradingView OHLC fetcher (pip install websockets)."
+    ) from exc
 
 logger = logging.getLogger("advance_orb.tv_chart")
 IST = dt.timezone(dt.timedelta(hours=5, minutes=30))
@@ -94,20 +101,62 @@ def _id(prefix: str) -> str:
     return prefix + "".join(random.choice(string.ascii_lowercase) for _ in range(12))
 
 
-def _series_rows(raw: str) -> list[list[float]]:
-    """Parse the series payload format used by the TV chart websocket."""
-    match = re.search(r'"s":\[(.+?)\}\]', raw, re.S)
-    if not match:
-        return []
-    rows: list[list[float]] = []
-    for item in match.group(1).split(',{"'):
-        parts = re.split(r"\[|:|,|\]", item)
-        try:
-            # tvDatafeed's stable payload indexes: timestamp, OHLCV.
-            values = [float(parts[i]) for i in range(4, 10)]
-            rows.append(values)
-        except (ValueError, IndexError):
+def _iter_payload_objects(raw: str):
+    """Yield JSON objects from TradingView's framed websocket payloads."""
+    candidates = re.findall(r"~m~\d+~m~(.*?)(?=~m~\d+~m~|$)", raw, flags=re.S)
+    for candidate in candidates:
+        text = candidate.strip()
+        if not text:
             continue
+        try:
+            payload = json.loads(text)
+        except json.JSONDecodeError:
+            continue
+        yield payload
+
+
+def _walk_series_payload(value):
+    """Recursively extract the `s` series from nested TradingView payloads."""
+    if isinstance(value, dict):
+        if "s" in value and isinstance(value["s"], list):
+            series = value["s"]
+            if series and isinstance(series[0], list):
+                rows: list[list[float]] = []
+                for row in series:
+                    if not isinstance(row, (list, tuple)) or len(row) < 6:
+                        continue
+                    try:
+                        rows.append([float(v) for v in row[:6]])
+                    except (TypeError, ValueError):
+                        continue
+                if rows:
+                    return rows
+        for child in value.values():
+            rows = _walk_series_payload(child)
+            if rows:
+                return rows
+    elif isinstance(value, list):
+        for child in value:
+            rows = _walk_series_payload(child)
+            if rows:
+                return rows
+    return []
+
+
+def _series_rows(raw: str) -> list[list[float]]:
+    """Parse the series payload format used by the TV chart websocket.
+
+    TradingView sends framed JSON messages (``~m~len~m~{...}``) and the OHLC
+    series is nested under the key ``"s"``.  A regex-based split on commas and
+    brackets is brittle and often misreads the payload after the next trading day
+    when the message structure changes slightly.  We decode the message payloads
+    and walk the nested object tree instead, which is stable across TV updates.
+    """
+    rows: list[list[float]] = []
+    for payload in _iter_payload_objects(raw):
+        found = _walk_series_payload(payload)
+        if found:
+            rows.extend(found)
     return rows
 
 
