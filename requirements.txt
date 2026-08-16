@@ -13,5 +13,3 @@ python-dotenv
 pydantic
 httpx
 websockets
-pycryptodome
-SmartApi
