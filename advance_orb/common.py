@@ -4,6 +4,7 @@ Shared constants and helper functions used by Advance ORB and Big Players strate
 
 from zoneinfo import ZoneInfo
 import datetime
+import json
 import logging
 import threading
 import time
@@ -38,7 +39,17 @@ ABOVE_EMA_MAX_GAP = 4.0   # "Above 200 EMA" toggle: open at most 4% above EMA
 
 IST = ZoneInfo("Asia/Kolkata")
 MAX_TV_STOCKS = 100
-YFINANCE_WORKERS = 8
+
+# Reduced from 8 to 4 workers — Render free tier (~0.5 CPU), 8 concurrent
+# yfinance downloads exhaust the CPU quota and the whole request times out.
+# 4 still parallelizes enough while leaving headroom for other server work.
+YFINANCE_WORKERS = 4
+
+# Hard cap on how long a single Yahoo batch may run before we bail out and
+# return whatever was already fetched.  Render free tier's request timeout
+# (~55s) means a 600-symbol batch can blow past it.  Returning partial data
+# gracefully + showing the full TV universe beats a 500/timeout error.
+YAHOO_BATCH_TIMEOUT = 25.0
 
 # ── TradingView scanner (Advance ORB universe) ─────────────────────
 TV_SCAN_URL = "https://scanner.tradingview.com/india/scan"
@@ -474,6 +485,85 @@ _ORB_YAHOO_DAY_LOCK = threading.Lock()
 # block on this lock and then serve from the day cache.
 _ORB_YAHOO_FETCH_LOCK = threading.Lock()
 
+# ── DISK PERSISTENCE for the ORB Yahoo day cache ──────────────────
+# _ORB_YAHOO_DAY holds the frozen day's facts in RAM only. On a fresh Render
+# deploy (new process, empty RAM), the first screener request re-downloads the
+# whole 600-stock batch from Yahoo — exactly what times it out.  Persisting the
+# day cache to disk means a redeploy reuses the already-computed facts instead
+# of re-fetching them.  File is keyed by date so a new trading day naturally
+# opens a fresh cache.
+import os as _os
+from pathlib import Path as _Path
+
+_ORB_YAHOO_CACHE_PATH = _Path(__file__).resolve().parent.parent / "stocks" / "orb_yahoo_day_cache.json"
+
+
+def _orb_yahoo_load_from_disk() -> dict:
+    """Load Yahoo day-cache rows from disk (if present).
+
+    JSON has no tuple keys, so the cache_key ("date", timeframe) is stored
+    as a string in the file and converted back to a tuple here.
+    """
+    try:
+        if not _ORB_YAHOO_CACHE_PATH.exists():
+            return {}
+        with open(_ORB_YAHOO_CACHE_PATH) as _f:
+            data = json.load(_f)
+        raw_caches = data.get("caches", {})
+        out: dict = {}
+        for _key, _rows in raw_caches.items():
+            # key was stored as "date|timeframe" — reconstruct the tuple.
+            if isinstance(_key, str):
+                _parts = _key.split("|")
+                try:
+                    _k = (_parts[0], int(_parts[1]))
+                except (IndexError, ValueError):
+                    continue
+            else:
+                _k = _key
+            out[_k] = _rows
+        return out
+    except Exception:
+        return {}
+
+
+def _orb_yahoo_save_to_disk() -> None:
+    """Persist the in-memory Yahoo day cache to disk (date-scoped, small)."""
+    try:
+        _ORB_YAHOO_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        # Keys are (date_str, timeframe) tuples — JSON can't hold tuple keys,
+        # so encode them as "date|timeframe" strings.
+        serializable = {}
+        for _key, _rows in _ORB_YAHOO_DAY.items():
+            if isinstance(_key, tuple) and len(_key) == 2:
+                serializable[f"{_key[0]}|{_key[1]}"] = _rows
+            else:
+                serializable[str(_key)] = _rows
+        payload = {
+            "last_updated": datetime.datetime.now(IST).isoformat(),
+            "caches": serializable,
+        }
+        with open(_ORB_YAHOO_CACHE_PATH, "w") as _f:
+            json.dump(payload, _f, default=str)
+    except Exception:
+        pass  # never break the request over a cache-write hiccup
+
+
+def _orb_yahoo_seed_disk_cache() -> None:
+    """Seed the RAM cache from disk at import time (called once below)."""
+    try:
+        disk = _orb_yahoo_load_from_disk()
+        if disk:
+            with _ORB_YAHOO_DAY_LOCK:
+                for _key, _rows in disk.items():
+                    if _key not in _ORB_YAHOO_DAY:
+                        _ORB_YAHOO_DAY[_key] = _rows
+            logger.info(
+                f"[yf] Seeded ORB Yahoo day cache from disk: {sum(len(v) for v in disk.values())} rows"
+            )
+    except Exception:
+        pass
+
 
 def batch_yahoo_orb_data(symbols: list[str], timeframe: int = 5) -> dict:
     """Fetch Yahoo candle data for many symbols in parallel.
@@ -503,15 +593,38 @@ def batch_yahoo_orb_data(symbols: list[str], timeframe: int = 5) -> dict:
         if not missing:
             return results
 
+        # ── Hard timeout guard ─────────────────────────────────────────
+        # On Render free tier each yfinance download can be slow / rate-limited.
+        # If the whole batch would exceed the cap, bail out and return whatever
+        # was already fetched (or an empty dict).  Returning partial/unfiltered
+        # data keeps the screener responsive instead of timing out the request.
         fresh: dict[str, dict | None] = {}
-        with ThreadPoolExecutor(max_workers=YFINANCE_WORKERS) as pool:
-            futures = {pool.submit(fetch_yahoo_orb_data, sym, int(timeframe)): sym for sym in missing}
-            for future in as_completed(futures):
-                sym = futures[future]
-                try:
-                    fresh[sym] = future.result()
-                except Exception:
-                    fresh[sym] = None
+        if missing:
+            import concurrent.futures as _cf
+            start_ts = time.time()
+            with ThreadPoolExecutor(max_workers=YFINANCE_WORKERS) as pool:
+                futures = {
+                    pool.submit(fetch_yahoo_orb_data, sym, int(timeframe)): sym
+                    for sym in missing
+                }
+                done_count = 0
+                for future in _cf.as_completed(futures):
+                    sym = futures[future]
+                    try:
+                        fresh[sym] = future.result()
+                    except Exception:
+                        fresh[sym] = None
+                    done_count += 1
+                    # Safety valve: if we've already burned the whole timeout,
+                    # stop waiting on the remaining futures. They'll keep running
+                    # in the threadpool and eventually finish, but this request
+                    # returns cleanly on time.
+                    if time.time() - start_ts > YAHOO_BATCH_TIMEOUT:
+                        logger.warning(
+                            f"[yf] Yahoo batch timed out after {YAHOO_BATCH_TIMEOUT:.0f}s "
+                            f"({done_count}/{len(missing)} done) — returning partial data"
+                        )
+                        break
         results.update(fresh)
         # Seal only complete rows into the day cache.  None / pre-second-candle
         # rows (close920 missing) are left unsealed so a later round upgrades
@@ -521,8 +634,16 @@ def batch_yahoo_orb_data(symbols: list[str], timeframe: int = 5) -> dict:
             for s, row in fresh.items():
                 if row and row.get("close920") is not None:
                     day_cache[s] = row
+        # Persist the sealed cache to disk so a fresh Render deploy reuses it
+        # instead of re-downloading all ~600 symbols from Yahoo.
+        if fresh:
+            _orb_yahoo_save_to_disk()
     return results
 
+
+# Seed the day-cache from disk at module import time so a fresh Render deploy
+# doesn't re-download the ~600-stock Yahoo batch before serving the screener.
+_orb_yahoo_seed_disk_cache()
 
 def above_200_ema_symbols(symbols: list[str], timeframe: int = 5) -> set[str]:
     """Symbols whose 9:15 opening-candle CLOSE sits ABOVE the 200 EMA.

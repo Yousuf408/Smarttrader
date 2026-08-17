@@ -79,7 +79,15 @@ MARKET_CLOSE_MIN = 15 * 60 + 45  # 15:45 IST
 SLOT_LENGTH = 5                  # minutes per slot
 EMA_SPAN = 200
 EMA_LOOKBACK_DAYS = 4
-CACHE_WORKERS = 8
+# Reduced from 8 to 2 on Render free tier (~0.5 CPU).  8 concurrent yfinance
+# downloads for 727 stocks at startup saturated the CPU and made the first
+# /api/strategies/advanceorb request time out.  2 workers keep the bootstrap
+# alive without starving the web server / screener of CPU time.
+CACHE_WORKERS = 2
+# Hard cap on how long the startup bootstrap runs before giving up.  On the
+# free tier each yfinance download can take 5-30 s; for 727 stocks that is
+# hours of background work.  A partial cache beats starving the server.
+BOOTSTRAP_MAX_SECONDS = 60.0
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 STOCKS_PATH = PROJECT_ROOT / "stocks" / "watchlist.json"
@@ -435,10 +443,23 @@ class CandleTracker:
                 result["yesterday_close"] = yc
             return (sym, result)
 
+        import time as _time
+        start_ts = _time.time()
         with ThreadPoolExecutor(max_workers=CACHE_WORKERS) as pool:
             futures = {pool.submit(_process, sym): sym for sym in symbols}
             for fut in as_completed(futures):
                 sym = futures[fut]
+                # ── Hard time budget ─────────────────────────────────
+                # On Render free tier (~0.5 CPU, no persistent disk) the
+                # bootstrap can run for hours and starve every API call.
+                # Stop after BOOTSTRAP_MAX_SECONDS — a partial cache is
+                # far better than blocking the server.
+                if _time.time() - start_ts > BOOTSTRAP_MAX_SECONDS:
+                    logger.warning(
+                        f"⏱️ Bootstrap stopped after {BOOTSTRAP_MAX_SECONDS:.0f}s "
+                        f"({done} cached, {skipped} skipped) — time budget exceeded."
+                    )
+                    break
                 try:
                     _, result = fut.result(timeout=60)
                     if result:
@@ -453,7 +474,7 @@ class CandleTracker:
                 if (done + skipped) % 100 == 0:
                     logger.info(f"📦 Bootstrap: {done} cached, {skipped} skipped ({done+skipped}/{total})")
 
-        logger.info(f"✅ Bootstrap complete: {done} stocks cached, {skipped} skipped")
+        logger.info(f"✅ Bootstrap finished: {done} cached, {skipped} skipped ({_time.time()-start_ts:.0f}s)")
         if done > 0:
             self._save_cache()
 

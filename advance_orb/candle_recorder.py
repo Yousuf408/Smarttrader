@@ -64,7 +64,12 @@ _OPEN_IST_MIN = 9 * 60 + 15
 _CLOSE_IST_MIN = 15 * 60 + 30
 _RECORD_START_MIN = 9 * 60 + 13   # a touch early so the 09:15 candle is caught
 _RECORD_END_MIN = 15 * 60 + 20    # after the last (15:10) candle closes at 15:15
-_POLL_S = 5.0
+# Poll cadence during market hours.  Was 5 s, which hammered TradingView with
+# a scan + 3 websocket batches every 5 seconds and caused the scanner to start
+# throttling/rate-limiting us — which in turn stopped orb_candles_*.json from
+# ever being written.  30 s is plenty for forming-candle snapshots (a 5-min
+# candle closes in 300 s) and keeps TradingView well within its limits.
+_POLL_S = 30.0
 _IDLE_S = 60.0
 
 # Single-flight across the whole recorder (only one fetch round at a time).
@@ -187,7 +192,22 @@ def snapshot_rows() -> dict[str, dict]:
     ss.set_markets(Market.INDIA)
     ss.specific_fields = fields
     ss.set_range(0, 3000)  # cover the whole ORB universe (mcap-desc) so every stock gets candles
-    df = ss.get()
+    # Guard the scanner call itself (tvscreener exposes no timeout and can hang
+    # indefinitely on Render when TradingView is throttling).  Run it in a
+    # worker thread and abandon it if it exceeds the budget — a failed tick
+    # beats a worker thread/lock stuck forever, which is what stopped the
+    # orb_candles_*.json files from ever being written.
+    import concurrent.futures as _cf
+    _snap_budget = 25.0
+    try:
+        with _cf.ThreadPoolExecutor(max_workers=1) as _ex:
+            df = _ex.submit(ss.get).result(timeout=_snap_budget)
+    except _cf.TimeoutError:
+        print(f"[candles] tvscreener snapshot timed out after {_snap_budget:.0f}s")
+        return {}
+    except Exception as exc:  # noqa: BLE001
+        print(f"[candles] tvscreener snapshot failed: {exc}")
+        return {}
     if df is None or df.empty:
         return {}
     try:

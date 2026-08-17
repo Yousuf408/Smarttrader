@@ -219,6 +219,20 @@ def _yesterday_high(rows: list[list[float]]) -> float | None:
     return day_highs[prev_day]
 
 
+# ── Per-request TradingView guards ────────────────────────────────
+# On Render free tier TradingView's websocket can stall (never sends
+# series_completed / drops the connection), so every recv loop is guarded
+# with an overall per-symbol deadline.  If it fires, that symbol is
+# reported as a miss and we move on instead of hanging the worker thread.
+_TV_WS_CONNECT_TIMEOUT = 10.0   # connect handshake cap
+_TV_SYMBOL_TIMEOUT = 12.0       # cap the whole resolve+series round-trip per symbol
+_TV_SEND_TIMEOUT = 5.0          # cap each websocket send
+
+# Max per-symbol budget already applies; additionally cap the WHOLE batch so a
+# huge universe (600+) can never keep the recorder thread busy for hours when
+# TradingView is degraded but not fully down.
+_TV_BATCH_TIMEOUT = 60.0  # wall-clock deadline for one batch call
+
 async def _batch_tv_opening_candles_async(
     result: dict[str, tuple[float, float, float, float] | None],
     token: str,
@@ -226,30 +240,39 @@ async def _batch_tv_opening_candles_async(
 ) -> None:
     chart = _id("cs_")
     quote = _id("qs_")
+    deadline = time.monotonic() + _TV_BATCH_TIMEOUT
     async with websockets.connect(
         "wss://data.tradingview.com/socket.io/websocket",
         origin="https://data.tradingview.com",
         ping_interval=None,
         max_size=2**26,
+        open_timeout=_TV_WS_CONNECT_TIMEOUT,
     ) as ws:
-        await ws.send(_frame("set_auth_token", [token]))
-        await ws.send(_frame("chart_create_session", [chart, ""]))
-        await ws.send(_frame("quote_create_session", [quote]))
+        await asyncio.wait_for(ws.send(_frame("set_auth_token", [token])), _TV_SEND_TIMEOUT)
+        await asyncio.wait_for(ws.send(_frame("chart_create_session", [chart, ""])), _TV_SEND_TIMEOUT)
+        await asyncio.wait_for(ws.send(_frame("quote_create_session", [quote])), _TV_SEND_TIMEOUT)
         for index, symbol in enumerate(result):
+            if time.monotonic() > deadline:
+                break  # whole-batch time budget exhausted
             tv_symbol = f"NSE:{symbol.removesuffix('.NS')}"
             alias = f"symbol_{index}"
             series = f"s{index}"
-            await ws.send(_frame("resolve_symbol", [
-                chart, alias,
-                f'={{"symbol":"{tv_symbol}","adjustment":"splits","session":"regular"}}',
-            ]))
-            await ws.send(_frame("create_series", [chart, series, series, alias, f"{timeframe}", 500]))
-            raw = ""
-            while True:
-                message = await ws.recv()
-                raw += message
-                if "series_completed" in message:
-                    break
+            try:
+                await asyncio.wait_for(ws.send(_frame("resolve_symbol", [
+                    chart, alias,
+                    f'={{"symbol":"{tv_symbol}","adjustment":"splits","session":"regular"}}',
+                ])), _TV_SEND_TIMEOUT)
+                await asyncio.wait_for(ws.send(_frame("create_series", [
+                    chart, series, series, alias, f"{timeframe}", 500,
+                ])), _TV_SEND_TIMEOUT)
+                raw = ""
+                while True:
+                    message = await asyncio.wait_for(ws.recv(), _TV_SYMBOL_TIMEOUT)
+                    raw += message
+                    if "series_completed" in message:
+                        break
+            except (asyncio.TimeoutError, websockets.ConnectionClosed):
+                continue  # skip this symbol; keep going
             rows = _series_rows(raw)
             candle = _first_candle(rows)
             if candle:
@@ -270,29 +293,38 @@ async def _batch_tv_bar_ohlc_async(
     the final, authoritative value — never a forming-bar snapshot.
     """
     chart = _id("cs_")
+    deadline = time.monotonic() + _TV_BATCH_TIMEOUT
     async with websockets.connect(
         "wss://data.tradingview.com/socket.io/websocket",
         origin="https://data.tradingview.com",
         ping_interval=None,
         max_size=2**26,
+        open_timeout=_TV_WS_CONNECT_TIMEOUT,
     ) as ws:
-        await ws.send(_frame("set_auth_token", [token]))
-        await ws.send(_frame("chart_create_session", [chart, ""]))
+        await asyncio.wait_for(ws.send(_frame("set_auth_token", [token])), _TV_SEND_TIMEOUT)
+        await asyncio.wait_for(ws.send(_frame("chart_create_session", [chart, ""])), _TV_SEND_TIMEOUT)
         for index, symbol in enumerate(result):
+            if time.monotonic() > deadline:
+                break  # whole-batch time budget exhausted
             tv_symbol = f"NSE:{symbol.removesuffix('.NS')}"
             alias = f"symbol_{index}"
             series = f"s{index}"
-            await ws.send(_frame("resolve_symbol", [
-                chart, alias,
-                f'={{"symbol":"{tv_symbol}","adjustment":"splits","session":"regular"}}',
-            ]))
-            await ws.send(_frame("create_series", [chart, series, series, alias, f"{timeframe}", 10]))
-            raw = ""
-            while True:
-                message = await ws.recv()
-                raw += message
-                if "series_completed" in message:
-                    break
+            try:
+                await asyncio.wait_for(ws.send(_frame("resolve_symbol", [
+                    chart, alias,
+                    f'={{"symbol":"{tv_symbol}","adjustment":"splits","session":"regular"}}',
+                ])), _TV_SEND_TIMEOUT)
+                await asyncio.wait_for(ws.send(_frame("create_series", [
+                    chart, series, series, alias, f"{timeframe}", 10,
+                ])), _TV_SEND_TIMEOUT)
+                raw = ""
+                while True:
+                    message = await asyncio.wait_for(ws.recv(), _TV_SYMBOL_TIMEOUT)
+                    raw += message
+                    if "series_completed" in message:
+                        break
+            except (asyncio.TimeoutError, websockets.ConnectionClosed):
+                continue  # skip this symbol; keep going
             rows = _series_rows(raw)
             ohlc = _candle_ohlc_at(rows, bar_hour, bar_min)
             if ohlc is not None:
@@ -313,29 +345,38 @@ async def _batch_tv_c2_close_async(
     2nd-candle close is NEVER mixed with the provisional opening-candle data.
     """
     chart = _id("cs_")
+    deadline = time.monotonic() + _TV_BATCH_TIMEOUT
     async with websockets.connect(
         "wss://data.tradingview.com/socket.io/websocket",
         origin="https://data.tradingview.com",
         ping_interval=None,
         max_size=2**26,
+        open_timeout=_TV_WS_CONNECT_TIMEOUT,
     ) as ws:
-        await ws.send(_frame("set_auth_token", [token]))
-        await ws.send(_frame("chart_create_session", [chart, ""]))
+        await asyncio.wait_for(ws.send(_frame("set_auth_token", [token])), _TV_SEND_TIMEOUT)
+        await asyncio.wait_for(ws.send(_frame("chart_create_session", [chart, ""])), _TV_SEND_TIMEOUT)
         for index, symbol in enumerate(result):
+            if time.monotonic() > deadline:
+                break  # whole-batch time budget exhausted
             tv_symbol = f"NSE:{symbol.removesuffix('.NS')}"
             alias = f"symbol_{index}"
             series = f"s{index}"
-            await ws.send(_frame("resolve_symbol", [
-                chart, alias,
-                f'={{"symbol":"{tv_symbol}","adjustment":"splits","session":"regular"}}',
-            ]))
-            await ws.send(_frame("create_series", [chart, series, series, alias, f"{timeframe}", 10]))
-            raw = ""
-            while True:
-                message = await ws.recv()
-                raw += message
-                if "series_completed" in message:
-                    break
+            try:
+                await asyncio.wait_for(ws.send(_frame("resolve_symbol", [
+                    chart, alias,
+                    f'={{"symbol":"{tv_symbol}","adjustment":"splits","session":"regular"}}',
+                ])), _TV_SEND_TIMEOUT)
+                await asyncio.wait_for(ws.send(_frame("create_series", [
+                    chart, series, series, alias, f"{timeframe}", 10,
+                ])), _TV_SEND_TIMEOUT)
+                raw = ""
+                while True:
+                    message = await asyncio.wait_for(ws.recv(), _TV_SYMBOL_TIMEOUT)
+                    raw += message
+                    if "series_completed" in message:
+                        break
+            except (asyncio.TimeoutError, websockets.ConnectionClosed):
+                continue  # skip this symbol; keep going
             rows = _series_rows(raw)
             c2c = _candle_close_at(rows, c2_hour, c2_min)
             if c2c is not None:

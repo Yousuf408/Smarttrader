@@ -113,7 +113,16 @@ class ORBOHLCService:
         ss.set_markets(Market.INDIA)
         ss.specific_fields = _FIELDS
         ss.set_range(0, 800)             # covers the ORB universe (mcap-desc)
-        df = ss.get()
+        # Guard the TradingView scanner call — tvscreener exposes no timeout
+        # and can hang indefinitely on Render when TradingView throttles us.
+        import concurrent.futures as _cf
+        _nifty_budget = 25.0
+        try:
+            with _cf.ThreadPoolExecutor(max_workers=1) as _ex:
+                df = _ex.submit(ss.get).result(timeout=_nifty_budget)
+        except _cf.TimeoutError:
+            self._last_error = f"TradingView snapshot timed out after {_nifty_budget:.0f}s"
+            raise RuntimeError(self._last_error)
         df = df[_COLUMNS]
 
         want = _orb_universe()
