@@ -490,7 +490,7 @@ def record_once() -> dict:
         # (separate from the opening-candle cache) so a pre-close screener call
         # can never poison the store with a provisional value.
         try:
-            from advance_orb.tv_chart_candles import batch_tv_confirmed_c2_close
+            from tradingview.tv_ohlc_ws import batch_tv_confirmed_c2_close
             if lbl is not None:
                 tv5 = batch_tv_confirmed_c2_close(universe, timeframe=5)
                 bf5: list[dict] = [
@@ -522,7 +522,7 @@ def record_once() -> dict:
         # Angel) and we overwrite the stored 09:15 row with it — so what Big
         # Players / Breakout / Advance ORB read always equals TradingView.
         try:
-            from advance_orb.tv_chart_candles import batch_tv_opening_candles
+            from tradingview.tv_ohlc_ws import batch_tv_opening_candles
             for tf_width in (5, 15):
                 if tf_width == 5 and lbl is None:
                     continue
@@ -551,7 +551,7 @@ def record_once() -> dict:
         # Results are cached per (date, timeframe, symbol, bar_label) for the
         # full session, so the WebSocket round-trip only happens ONCE per bar.
         try:
-            from advance_orb.tv_chart_candles import batch_tv_confirmed_bar_ohlc
+            from tradingview.tv_ohlc_ws import batch_tv_confirmed_bar_ohlc
             prev_lbl5 = _prev_candle_label(lbl, CANDLE_LABELS)
             prev_lbl15 = _prev_candle_label(lbl15, CANDLE_LABELS_15)
 

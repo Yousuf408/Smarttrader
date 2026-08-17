@@ -52,112 +52,16 @@ YFINANCE_WORKERS = 4
 YAHOO_BATCH_TIMEOUT = 25.0
 
 # ── TradingView scanner (Advance ORB universe) ─────────────────────
-TV_SCAN_URL = "https://scanner.tradingview.com/india/scan"
-TV_SCAN_TTL = 600          # 10 minutes — don't hammer the free endpoint
-_tv_scan_lock = threading.Lock()
-_tv_scan_cache: list[dict] = []
-_tv_scan_cached_at = 0.0
-
-
-def fetch_tradingview_stocks() -> list[dict]:
-    """NSE universe straight from TradingView (not the local watchlist).
-
-    Screen: type=stock AND exchange=NSE AND
-            close 200–4000 INR AND market_cap_basic > 41B INR.
-    Every matching stock is returned regardless of its % change from the
-    day's open (down-drifting names are included too).
-    Returns all matching rows as
-        [{name, close, change, gap, volume, relative_volume,
-          market_cap_basic, sector, open, high, low}, ...]
-    WARNING: open/high/low here are the FULL-DAY bar (the scan's base
-    row is the daily snapshot, and the `interval` param is ignored), so
-    they must NEVER be used as the 9:15 opening candle.  The True 9:15
-    values in Advance ORB come from CandleTracker slot 0 or the authenticated
-    TradingView chart feed in get_advance_orb().
-    Results are cached for TV_SCAN_TTL seconds.  On network / API
-    failure returns the stale cache if any, else an empty list (the
-    caller falls back to the WebSocket watchlist path).
-    """
-    global _tv_scan_cache, _tv_scan_cached_at
-    now = time.time()
-    with _tv_scan_lock:
-        if _tv_scan_cache and (now - _tv_scan_cached_at) < TV_SCAN_TTL:
-            return _tv_scan_cache
-
-    payload = {
-        "symbols": {"tickers": [], "query": {"types": []}},
-        "columns": [
-            "name", "description", "close", "change", "gap",
-            "volume", "relative_volume_10d_calc", "market_cap_basic",
-            "sector",
-            "open", "high", "low",
-            "change_from_open",
-        ],
-        "filter": [
-            {"left": "type", "operation": "equal", "right": "stock"},
-            {"left": "exchange", "operation": "equal", "right": "NSE"},
-            {"left": "close", "operation": "greater", "right": PRICE_MIN},
-            {"left": "close", "operation": "less", "right": PRICE_MAX},
-            {"left": "market_cap_basic", "operation": "greater", "right": MARKET_CAP_MIN},
-        ],
-        "sort": {"sortBy": "market_cap_basic", "sortOrder": "desc"},
-    }
-    headers = {
-        "Content-Type": "application/json",
-        "User-Agent": (
-            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
-            "(KHTML, like Gecko) Chrome/126.0 Safari/537.36"
-        ),
-    }
-    try:
-        import requests
-        resp = requests.post(TV_SCAN_URL, json=payload, headers=headers, timeout=30)
-        resp.raise_for_status()
-        body = resp.json()
-    except Exception as e:
-        logger.warning("tv-scan: TradingView scan failed: %s", e)
-        with _tv_scan_lock:
-            return _tv_scan_cache  # stale data beats an empty tab
-
-    rows: list[dict] = []
-    for item in body.get("data", []):
-        d = item.get("d") or []
-        if len(d) < 12:
-            continue
-        name = str(d[0] or "").strip().upper()
-        close = d[2]
-        if not name or not isinstance(close, (int, float)) or close <= 0:
-            continue
-        if not (PRICE_MIN < close <= PRICE_MAX):
-            continue
-        gap = float(d[4]) if isinstance(d[4], (int, float)) else 0.0
-        # Advance ORB uses TradingView's scanner gap value as the source of
-        # truth. Exclude both gap-ups and gap-downs at or beyond 2%.
-        if abs(gap) >= GAP_THRESHOLD:
-            continue
-        change_from_open = float(d[12]) if isinstance(d[12], (int, float)) else 0.0
-        rows.append({
-            "name": name,
-            "close": float(close),
-            "change": float(d[3]) if isinstance(d[3], (int, float)) else 0.0,
-            "gap": gap,
-            "volume": float(d[5]) if isinstance(d[5], (int, float)) else 0,
-            "relative_volume": float(d[6]) if isinstance(d[6], (int, float)) else 0.0,
-            "market_cap_basic": float(d[7]) if isinstance(d[7], (int, float)) else 0,
-            "sector": str(d[8]) if d[8] else "N/A",
-            "change_from_open": change_from_open,
-            # 9:15 IST opening bar OHLC straight from TradingView.
-            "open": float(d[9]) if len(d) > 9 and isinstance(d[9], (int, float)) else None,
-            "high": float(d[10]) if len(d) > 10 and isinstance(d[10], (int, float)) else None,
-            "low": float(d[11]) if len(d) > 11 and isinstance(d[11], (int, float)) else None,
-        })
-    rows.sort(key=lambda r: -r["market_cap_basic"])
-
-    with _tv_scan_lock:
-        _tv_scan_cache = rows
-        _tv_scan_cached_at = time.time()
-    logger.info("tv-scan: %d NSE stocks (200–4000 INR, mcap > 41B, all change%% included)", len(rows))
-    return rows
+# Moved to the dedicated shared module `tradingview/tv_stocks_filters.py`.
+# Re-exported here so existing callers
+# (`from advance_orb.common import fetch_tradingview_stocks`) keep working
+# unchanged during the refactor — the behavior and returned columns are
+# identical to the original implementation.
+from tradingview.tv_stocks_filters import (
+    fetch_tradingview_stocks,
+    TV_SCAN_URL,
+    TV_SCAN_TTL,
+)
 
 
 def compute_200_ema(symbol: str):
@@ -816,5 +720,3 @@ def ws_auto_subscribe(symbols: list[str]):
                 angel_ws_add(name, int(token_str))
         except Exception:
             pass
-
-

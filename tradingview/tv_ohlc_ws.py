@@ -2,6 +2,10 @@
 
 This deliberately uses the chart feed, not the TradingView scanner's daily bar.
 Credentials are read only from Replit Secrets/environment.
+
+Moved out of ``advance_orb/tv_chart_candles.py`` into the shared
+``tradingview`` package (the old module now re-exports from here).  The code
+and behaviour are unchanged.
 """
 from __future__ import annotations
 
@@ -27,7 +31,7 @@ except ModuleNotFoundError as exc:  # pragma: no cover - dependency guard
         "TradingView OHLC fetcher (pip install websockets)."
     ) from exc
 
-logger = logging.getLogger("advance_orb.tv_chart")
+logger = logging.getLogger("tradingview.tv_ohlc_ws")
 IST = dt.timezone(dt.timedelta(hours=5, minutes=30))
 _TV_TOKEN_CACHE: tuple[float, str] | None = None
 _TV_CANDLE_CACHE: dict[

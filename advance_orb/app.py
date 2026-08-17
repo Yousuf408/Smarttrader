@@ -61,7 +61,7 @@ except ImportError:
 from advance_orb.supabase_db import save_top5_strategy, ensure_table
 from advance_orb.auth_routes import router as auth_router
 from server.candle_tracker import candle_tracker
-from advance_orb.tv_chart_candles import batch_tv_opening_candles
+from tradingview.tv_ohlc_ws import batch_tv_opening_candles
 from advance_orb.equal_low_scanner import EqualLowSession, equal_low_inside_915
 from advance_orb.candle_recorder import (
     candle_recorder_loop as candle_rec_loop,
