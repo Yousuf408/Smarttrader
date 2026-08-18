@@ -62,7 +62,6 @@ from advance_orb.supabase_db import save_top5_strategy, ensure_table
 from advance_orb.auth_routes import router as auth_router
 from server.candle_tracker import candle_tracker
 from tradingview.tv_ohlc_ws import batch_tv_opening_candles
-from advance_orb.equal_low_scanner import EqualLowSession, equal_low_inside_915
 from advance_orb.candle_recorder import (
     candle_recorder_loop as candle_rec_loop,
     get_status as candle_rec_status,
@@ -646,27 +645,6 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, near_high: bool = True
         # Big Players), so a wide opening candle only shows a bigger 1st Range%
         # column value — it no longer removes the stock from the table.
         candidate_symbols = df["name"].dropna().astype(str).tolist()
-        # "Share Low" column: detect whether the opening candles share the same
-        # low.  Using just the lows the screener already fetched (low915 +
-        # c2_lo/c3_lo/c4_lo) — never an additional Yahoo call per symbol.
-        # Stocks that match an Equal Low are "pinned" for the session (kept
-        # fixed even if the 09:15 High is later broken), per the user rule.
-        _equal_low_session = EqualLowSession()
-        _shared_low: dict = {}
-        _y_low_src = yahoo_open_high or {}
-        for _s in candidate_symbols:
-            _yd = _y_low_src.get(_s) or {}
-            # Equal-Low using REAL candle timestamps from today's bars, and
-            # gated so a match is reported ONLY when BOTH the current and the
-            # matched previous candle lie inside the 09:15 high-low range.
-            _match = equal_low_inside_915(
-                (_yd.get("today_candles") or []),
-                _yd.get("high915"),
-                _yd.get("low915"),
-            )
-            if _match is not None:
-                _equal_low_session.pin_match(_s, _match)
-            _shared_low[_s] = _match
         # NOTE: the TradingView scan's open/high/low are the FULL-DAY bar,
         # not the 9:15 candle — they were once used to override high915/
         # low915 and produced nonsense ranges (e.g. a stock's whole-day
@@ -813,8 +791,7 @@ def get_advance_orb(budget: int = 100000, parts: int = 4, near_high: bool = True
                 ):
                     _i915 = False
             entry["inside_915"] = _i915
-            _sl = _shared_low.get(symbol)
-            entry["share_low"] = _sl
+            entry["share_low"] = None
 
             result.append(entry)
 
@@ -1839,34 +1816,6 @@ def nifty_ohlc_data(timeframe: int = 5):
 @app.get("/api/candles/status")
 def candles_status():
     return candle_rec_status()
-
-
-# =================================================================
-# MANUAL CANDLE FETCH — "Get Data" button.
-# Pulls the full 5-min + 15-min candle history from TradingView
-# (tvdatafeed) into the existing orb_candles_5min/15min.json stores
-# on demand.  Runs in a background thread so the UI can poll progress.
-# =================================================================
-@app.post("/api/candles/manual-fetch/start")
-def manual_fetch_start(timeframes: str = "5,15", workers: int = 4):
-    try:
-        # e.g. ?timeframes=5  /  ?timeframes=15  /  ?timeframes=5,15  (default both)
-        tfs = tuple(int(x) for x in timeframes.split(",") if x.strip())
-        if not tfs:
-            tfs = (5, 15)
-        from advance_orb.manual_candle_fetch import start_manual_fetch
-        return start_manual_fetch(timeframes=tfs, workers=workers)
-    except Exception as exc:  # noqa: BLE001
-        raise HTTPException(status_code=500, detail=f"manual-fetch failed to start: {exc}") from exc
-
-
-@app.get("/api/candles/manual-fetch/status")
-def manual_fetch_status():
-    try:
-        from advance_orb.manual_candle_fetch import manual_fetch_status
-        return manual_fetch_status()
-    except Exception as exc:  # noqa: BLE001
-        raise HTTPException(status_code=500, detail=f"manual-fetch status failed: {exc}") from exc
 
 
 # =================================================================
