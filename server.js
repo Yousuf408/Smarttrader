@@ -759,7 +759,7 @@ app.post('/api/data/purge-old-day', (req, res) => {
 });
 
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'healthy', timestamp: new Date().toISOString(), tradingview_cached_count: tvCache.data.length });
+  res.json({ status: 'healthy', timestamp: new Date().toISOString(), source: 'TradingView Scanner API' });
 });
 
 app.get('/api', (req, res) => {
@@ -780,7 +780,7 @@ app.get('/api', (req, res) => {
 // -------------------------------------------------------------
 // STATIC FILES & SPA SERVING
 // -------------------------------------------------------------
-app.use('/js', express.static(path.join(__dirname, 'js')));
+app.use(express.static(__dirname));
 app.use('/stocks', express.static(path.join(__dirname, 'stocks')));
 
 app.get('/style.css', (req, res) => {

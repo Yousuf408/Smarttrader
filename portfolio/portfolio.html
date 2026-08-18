@@ -1,0 +1,61 @@
+<!-- ============================================================= -->
+<!-- PORTFOLIO & BROKER POSITIONS -->
+<!-- ============================================================= -->
+<div id="page-portfolio" class="page">
+    <!-- HEADER -->
+    <div class="page-header">
+        <h2>⚡ Intraday Portfolio</h2>
+        <div class="header-actions">
+            <button class="btn btn-outline btn-sm" onclick="showToast('📤','Portfolio exported')">📥 Export</button>
+            <button class="btn btn-primary btn-sm" onclick="refreshPortfolio()">🔄 Refresh</button>
+        </div>
+    </div>
+
+    <!-- STATS ROW -->
+    <div class="stats-row" id="portfolioStats"></div>
+
+    <!-- INTRADAY METRICS -->
+    <div class="panel-glass">
+        <div class="panel-head">
+            <h3>📊 Intraday Metrics</h3>
+            <span style="font-size:10px;color:var(--text-muted);" id="marketStatus">
+                <span class="status-dot green"></span> Market Open
+            </span>
+        </div>
+        <div class="panel-body">
+            <div class="intraday-grid" id="intradayMetrics"></div>
+        </div>
+    </div>
+
+    <!-- HOLDINGS TABLE -->
+    <div class="panel-glass">
+        <div class="panel-head">
+            <h3>📊 Positions</h3>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                <span style="font-size:10px;color:var(--text-muted);">
+                    <span style="font-weight:600;color:var(--color-success);" id="gainersCount">▲ 0</span>
+                    <span style="margin-left:4px;font-weight:600;color:var(--color-danger);" id="losersCount">▼ 0</span>
+                </span>
+                <button class="btn btn-success btn-xs" onclick="showToast('📊','All positions squared off')">📊 Square Off</button>
+            </div>
+        </div>
+        <div class="panel-body table-wrap" id="holdingsTable" style="padding:0;"></div>
+        <div class="panel-footer">
+            <span id="holdingsCount">Showing 0 positions</span>
+            <span style="font-size:10px;color:var(--text-muted);" id="lastUpdated">Last updated: Just now</span>
+        </div>
+    </div>
+
+    <!-- QUICK ACTIONS -->
+    <div class="panel-glass">
+        <div class="panel-head"><h3>⚡ Quick Actions</h3></div>
+        <div class="panel-body">
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                <button class="btn btn-primary btn-sm" onclick="showToast('🔍','Opening screener...')">🔍 Find Stocks</button>
+                <button class="btn btn-success btn-sm" onclick="showToast('✅','All positions squared off')">🔒 Square Off All</button>
+                <button class="btn btn-danger btn-sm" onclick="showToast('⛔','Stop Loss applied to all')">⛔ Apply SL</button>
+                <button class="btn btn-outline btn-sm" onclick="showToast('📊','P&L summary shown')">📈 P&L Summary</button>
+            </div>
+        </div>
+    </div>
+</div>

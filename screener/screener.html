@@ -1,0 +1,201 @@
+<!-- ============================================================= -->
+<!-- SCREENER COMPONENT – TradingView Live Market Scanner -->
+<!-- ============================================================= -->
+<div id="page-screener" class="page">
+    <div class="panel-glass">
+        <div class="panel-head">
+            <div class="screener-controls">
+                <!-- ===== STRATEGY DROPDOWN ===== -->
+                <label>Strategy:</label>
+                <select id="strategySelect" class="strategy-select" onchange="onStrategyChange()">
+                    <option value="advanceorb">📈 Advance ORB</option>
+                    <option value="smartmoney">💰 SmartMoney</option>
+                    <option value="bigplayers">🏢 Big Players</option>
+                </select>
+                <!-- ===== BUDGET ===== -->
+                <div class="budget-control">
+                    <label for="budgetInput" class="field-label">Budget:</label>
+                    <span class="prefix-rupee">₹</span>
+                    <input type="text" id="budgetInput" inputmode="numeric" autocomplete="off" value="1,00,000" />
+                </div>
+                <!-- ===== PARTS STEPPER ===== -->
+                <div class="stepper stepper-narrow">
+                    <label for="partsInput" class="field-label">Parts:</label>
+                    <button type="button" onclick="stepParts(-1)" aria-label="Decrease parts">−</button>
+                    <input type="number" id="partsInput" value="4" min="1" max="20" step="1" />
+                    <button type="button" onclick="stepParts(1)" aria-label="Increase parts">+</button>
+                </div>
+                <!-- ===== TIMEFRAME (Advance ORB) ===== -->
+                <div class="stepper stepper-narrow" id="tfWrap">
+                    <label for="tfSelect" class="field-label">TF:</label>
+                    <select id="tfSelect" class="strategy-select" onchange="onTimeframeChange()" title="Candle timeframe — all ORB candle logic (opening range, inside checks, 200 EMA) uses this bar size">
+                        <option value="5">5 min</option>
+                        <option value="15">15 min</option>
+                    </select>
+                </div>
+                <button class="btn btn-primary btn-refresh" onclick="refreshScreener()">🔄</button>
+
+                <!-- ===== TOGGLES GROUP (compact, flex row) ===== -->
+                <div class="toggle-group">
+
+                    <!-- AUTO BUY (Advance ORB) -->
+                    <div class="toggle-item" id="autoBuyWrap">
+                        <span class="toggle-item-label">Auto Buy</span>
+                        <label class="toggle-switch toggle-xs">
+                            <input type="checkbox" id="autoBuyToggle" onchange="toggleAutoBuyMode()" />
+                            <span class="toggle-slider"></span>
+                        </label>
+                        <span class="toggle-item-status" id="toggleStatus">OFF</span>
+                    </div>
+
+                    <!-- FILTER NEAR HIGH (Advance ORB) -->
+                    <div class="toggle-item" id="nearHighWrap">
+                        <span class="toggle-item-label">Filter Near High</span>
+                        <label class="toggle-switch toggle-xs">
+                            <input type="checkbox" id="nearHighToggle" onchange="toggleNearHigh()" checked />
+                            <span class="toggle-slider"></span>
+                        </label>
+                        <span class="toggle-item-status active" id="nearHighStatus">ON</span>
+                    </div>
+
+                    <!-- ABOVE 200 EMA (Advance ORB) -->
+                    <div class="toggle-item" id="aboveEmaWrap">
+                        <span class="toggle-item-label">Above 200 EMA</span>
+                        <label class="toggle-switch toggle-xs">
+                            <input type="checkbox" id="aboveEmaToggle" onchange="toggleAboveEma()" />
+                            <span class="toggle-slider"></span>
+                        </label>
+                        <span class="toggle-item-status" id="aboveEmaStatus">OFF</span>
+                    </div>
+
+                    <!-- INSIDE 9:15 FILTER (Advance ORB) -->
+                    <div class="toggle-item" id="inside915Wrap">
+                        <span class="toggle-item-label">Inside 9:15</span>
+                        <label class="toggle-switch toggle-xs">
+                            <input type="checkbox" id="inside915Toggle" onchange="toggleInside915()" />
+                            <span class="toggle-slider"></span>
+                        </label>
+                        <span class="toggle-item-status" id="inside915Status">OFF</span>
+                    </div>
+
+                    <!-- 3 CANDLES INSIDE 9:15 FILTER (Advance ORB) -->
+                    <div class="toggle-item" id="inside3Wrap">
+                        <span class="toggle-item-label">3 In 9:15</span>
+                        <label class="toggle-switch toggle-xs">
+                            <input type="checkbox" id="inside3Toggle" onchange="toggleInside3()" />
+                            <span class="toggle-slider"></span>
+                        </label>
+                        <span class="toggle-item-status" id="inside3Status">OFF</span>
+                    </div>
+
+                    <!-- CALC MAXQTY (Advance ORB) — opt-in margin calc keeps load fast -->
+                    <div class="toggle-item" id="calcQtyWrap" style="display:none;">
+                        <span class="toggle-item-label">Calc MaxQty</span>
+                        <label class="toggle-switch toggle-xs">
+                            <input type="checkbox" id="calcQtyToggle" onchange="toggleCalcQty()" />
+                            <span class="toggle-slider"></span>
+                        </label>
+                        <span class="toggle-item-status" id="calcQtyStatus">OFF</span>
+                    </div>
+
+                    <!-- NEW LOW ONLY (Big Players) -->
+                    <div class="toggle-item" id="newLowFilterWrap" style="display:none;">
+                        <span class="toggle-item-label">New Low</span>
+                        <label class="toggle-switch toggle-xs">
+                            <input type="checkbox" id="newLowToggle" onchange="onNewLowToggle()" />
+                            <span class="toggle-slider"></span>
+                        </label>
+                        <span class="toggle-item-status" id="newLowStatus">OFF</span>
+                    </div>
+
+                    <!-- BP AUTO BUY (Big Players) -->
+                    <div class="toggle-item" id="bpAutoBuyWrap" style="display:none;">
+                        <span class="toggle-item-label">BP Auto</span>
+                        <label class="toggle-switch toggle-xs">
+                            <input type="checkbox" id="bpAutoBuyToggle" onchange="toggleBpAutoBuy()" />
+                            <span class="toggle-slider"></span>
+                        </label>
+                        <span class="toggle-item-status" id="bpAutoBuyStatus">OFF</span>
+                    </div>
+
+                    <!-- ===== ORDER MODE (always last) ===== -->
+                    <div class="toggle-item toggle-item-amo">
+                        <span class="toggle-item-label">Order Mode</span>
+                        <label class="toggle-switch toggle-xs">
+                            <input type="checkbox" id="amoToggle" onchange="toggleAmoMode()" />
+                            <span class="toggle-slider"></span>
+                        </label>
+                        <span class="amo-status-xs" id="amoStatus">MKT</span>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+        <div id="marketClosedBanner" style="display:none;margin:0 2px 8px;padding:8px 10px;border-radius:8px;background:linear-gradient(135deg,rgba(255,193,7,.15),rgba(255,152,0,.1));border:1px solid rgba(255,193,7,.35);color:#ffb648;font-size:12.5px;font-weight:600;">
+            ⏸️ Market Closed — showing <span id="marketClosedDate"></span> data (last trading day)
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 2px 4px;">
+            <span id="screenerCount" style="font-size:13px;font-weight:600;color:var(--text-muted);">Showing 0 stocks</span>
+            <span id="nearHighHint" style="font-size:12px;color:var(--text-muted);">open within ±2% of prev high</span>
+        </div>
+    </div>
+    <!-- ===== BREAKOUT TABLE (separate panel) ===== -->
+    <div id="breakoutBlock" class="panel-glass" style="display:none;margin-top:24px;">
+        <div class="panel-head">
+            <h3 style="color:var(--color-green,#22c55e);">🚀 Breakout Table</h3>
+            <span id="breakoutCount" style="font-size:13px;font-weight:600;color:var(--text-muted);">0 stocks</span>
+        </div>
+        <div class="panel-body" style="padding:0;">
+            <div class="table-wrap">
+                <table class="table-modern">
+                    <thead id="breakoutHead"></thead>
+                    <tbody id="breakoutBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <!-- ===== SIGNAL SCAN LOGS (separate panel) ===== -->
+    <div class="panel-glass" style="margin-top:24px;">
+        <div class="panel-head">
+            <h3>📡 Signal Scan Logs</h3>
+        </div>
+        <div class="panel-body" style="padding:0;">
+            <div class="table-wrap">
+                <table class="table-modern">
+                    <thead id="screenerHead">
+                        <tr>
+                            <th>Symbol</th>
+                            <th>Price</th>
+                            <th>CHG%</th>
+                            <th>GAP%</th>
+                            <th>Volume</th>
+                            <th>RELVOL</th>
+                            <th>Inside</th>
+                            <th>Breakout</th>
+                            <th>200 EMA</th>
+                            <th>9:15 HIGH</th>
+                            <th>PREV HIGH</th>
+                            <th>MaxQty</th>
+                            <th>Sector</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="screenerBody"></tbody>
+                </table>
+            </div>
+        </div>
+        <div class="panel-footer">
+            <div style="display:flex;gap:8px;">
+                <button class="btn btn-outline btn-sm">📥 Export</button>
+            </div>
+        </div>
+    </div>
+    <div class="panel-glass">
+        <div class="panel-head"><h3>📋 Strategy Details</h3></div>
+        <div class="panel-body info-grid">
+            <div><div class="info-label">Strategy</div><div class="info-value" id="infoStrategy">Advance ORB</div></div>
+            <div><div class="info-label">Entry Rule</div><div class="info-value" id="infoRule">Opening Range Breakout</div></div>
+            <div><div class="info-label">Risk Per Trade</div><div class="info-value" style="color:var(--color-success);" id="infoRisk">2%</div></div>
+        </div>
+    </div>
+</div>

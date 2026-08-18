@@ -1,0 +1,74 @@
+<!-- ============================================================= -->
+<!-- SETTINGS & BROKER CREDENTIALS -->
+<!-- ============================================================= -->
+<div id="page-settings" class="page">
+    <h2 class="section-title">⚙️ Settings</h2>
+
+    <div class="panel-glass">
+        <div class="panel-head"><h3>🔌 Broker Connection</h3></div>
+        <div class="panel-body">
+            <div class="settings-group">
+                <label>Select Broker</label>
+                <select id="brokerSelect" onchange="onBrokerSelectChange()">
+                    <option value="">— Choose —</option>
+                    <option value="dhan">Dhan</option>
+                    <option value="angel">Angel One</option>
+                    <option value="zerodha">Zerodha</option>
+                    <option value="fyers">Fyers</option>
+                    <option value="upstox">Upstox</option>
+                </select>
+            </div>
+
+            <!-- DHAN FIELDS -->
+            <div id="dhanFields" class="broker-fields" style="display:block;">
+                <div class="field-group field-full" style="display:flex; gap:8px; align-items:center;">
+                    <button type="button" class="btn btn-primary" onclick="openBrokerModal()">🔐 Connect Dhan</button>
+                    <button type="button" class="btn btn-outline" onclick="disconnectBroker()">Disconnect</button>
+                    <span id="brokerStatusBadge" class="badge" style="margin-left:auto;">⚪ Not connected</span>
+                </div>
+                <p class="broker-help-text" style="margin:8px 0 0 0; font-size:12px; opacity:0.7;">
+                    Enter your Dhan client ID + TOTP secret. Access token is minted live and held in-memory only — no broker creds are written to disk or pushed to GitHub.
+                </p>
+            </div>
+
+            <!-- ANGEL ONE FIELDS -->
+            <div id="angelFields" class="broker-fields" style="display:none;">
+                <div class="field-group field-full" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                    <button type="button" class="btn btn-primary" onclick="openBrokerModal()">🔐 Connect Angel One</button>
+                    <button type="button" class="btn btn-outline" onclick="disconnectBroker()">Disconnect</button>
+                    <span id="brokerStatusBadgeAngel" class="badge" style="margin-left:auto;">⚪ Not connected</span>
+                </div>
+                <p class="broker-help-text" style="margin:8px 0 0 0; font-size:12px; opacity:0.7;">
+                    Enter your Angel One API Key, Client ID, and Password. TOTP secret is optional if not required for your account.
+                </p>
+            </div>
+
+            <div id="otherBrokerFields"><p>🔑 Enter credentials for your selected broker.</p></div>
+        </div>
+    </div>
+
+    <div class="panel-glass">
+        <div class="panel-head"><h3>📦 Strategy Cache</h3></div>
+        <div class="panel-body">
+            <div class="settings-group" style="flex-direction:row; align-items:center; gap:8px;">
+                <span id="cacheStatusIndicator" class="badge" style="font-size:12px;">⏳ Loading…</span>
+                <span style="font-size:12px; opacity:0.7;">
+                    200 EMA + yesterday's stats for all 727 stocks. Auto-refreshes daily before market open.
+                </span>
+            </div>
+        </div>
+    </div>
+
+    <div class="panel-glass">
+        <div class="panel-head"><h3>⚡ Risk Management</h3></div>
+        <div class="panel-body settings-grid">
+            <div class="settings-group"><label>Max Risk Per Trade (%)</label><input type="number" value="2" /></div>
+            <div class="settings-group"><label>Max Daily Loss (%)</label><input type="number" value="5" /></div>
+            <div class="settings-group"><label>Max Positions</label><input type="number" value="10" /></div>
+            <div class="settings-group"><label>Stop Loss (%)</label><input type="number" value="3" /></div>
+        </div>
+        <div style="padding:0 24px 24px 24px;">
+            <button class="btn btn-primary" onclick="showToast('✅ Saved','Settings saved successfully')">💾 Save Settings</button>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,47 @@
+<!-- ============================================================= -->
+<!-- TESTING PAGE – Live Ticks & Watchlist -->
+<!-- ============================================================= -->
+<div id="page-testing" class="page">
+    <div class="page-header" style="display:flex; align-items:center; justify-content:space-between; margin-bottom:24px;">
+        <h2>🧪 Live Ticks — All Subscribed Stocks</h2>
+        <div style="display:flex; align-items:center; gap:12px;">
+            <span id="testingCount" class="badge" style="font-size:13px;">0 stocks</span>
+            <span id="testingUpdated" style="font-size:12px; opacity:0.6;">—</span>
+        </div>
+    </div>
+    <div class="panel-glass">
+        <div class="panel-head">
+            <h3>📊 Stock Watchlist</h3>
+            <div style="display:flex; gap:8px;">
+                <span style="font-size:11px; opacity:0.6;" id="testingConnectionStatus">🔴 Disconnected</span>
+            </div>
+        </div>
+        <div class="panel-body" style="padding:0;">
+            <div class="table-wrap">
+                <table class="table-modern" id="testingTable">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Symbol</th>
+                            <th>LTP (₹)</th>
+                            <th>Change %</th>
+                            <th>Open</th>
+                            <th>Day High</th>
+                            <th>Day Low</th>
+                            <th>Volume</th>
+                            <th>Gap %</th>
+                            <th>Time</th>
+                        </tr>
+                    </thead>
+                    <tbody id="testingTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+        <div class="panel-footer" style="display:flex; justify-content:space-between; align-items:center;">
+            <span>Auto-refreshes every 2 seconds</span>
+            <div style="display:flex; gap:8px;">
+                <button class="btn btn-primary" onclick="loadTestingData()" style="padding:6px 14px; font-size:12px;">🔄 Refresh Now</button>
+            </div>
+        </div>
+    </div>
+</div>
