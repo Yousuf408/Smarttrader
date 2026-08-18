@@ -726,6 +726,89 @@ body.dark-theme .avatar-dropdown .dropdown-divider {
 .amo-status-xs.active { color: #6C5CE7; }
 .toggle-item-amo { border-color: rgba(108,92,231,0.2); }
 
+/* ================================================================
+   SCREENER QUICK FILTER TABS & SIGNAL BADGES
+   ================================================================ */
+.quick-filter-tabs {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+.quick-tab {
+    background: rgba(0, 0, 0, 0.04);
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    color: var(--text-secondary);
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+.quick-tab:hover {
+    background: rgba(108, 92, 231, 0.08);
+    color: var(--brand-start);
+    border-color: rgba(108, 92, 231, 0.25);
+    transform: translateY(-1px);
+}
+.quick-tab.active {
+    background: var(--gradient-brand);
+    color: #ffffff;
+    border-color: transparent;
+    box-shadow: 0 4px 12px rgba(108, 92, 231, 0.28);
+}
+.quick-tab .tab-count {
+    background: rgba(0, 0, 0, 0.08);
+    color: inherit;
+    padding: 1px 7px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 700;
+}
+.quick-tab.active .tab-count {
+    background: rgba(255, 255, 255, 0.25);
+    color: #ffffff;
+}
+.quick-tab.tab-breakout.active {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+.badge-signal {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 9px;
+    border-radius: 12px;
+    font-size: 11.5px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+.badge-breakout {
+    background: rgba(16, 185, 129, 0.12);
+    color: #059669;
+    border: 1px solid rgba(16, 185, 129, 0.28);
+}
+.badge-nearhigh {
+    background: rgba(245, 158, 11, 0.12);
+    color: #d97706;
+    border: 1px solid rgba(245, 158, 11, 0.28);
+}
+.badge-inside {
+    background: rgba(99, 102, 241, 0.12);
+    color: #4f46e5;
+    border: 1px solid rgba(99, 102, 241, 0.28);
+}
+.badge-normal {
+    background: rgba(100, 116, 139, 0.08);
+    color: #64748b;
+    border: 1px solid rgba(100, 116, 139, 0.15);
+}
+
 /* ❌ .btn-export-wl removed — Angel One WAF blocks watchlist REST API */
 
 /* ================================================================

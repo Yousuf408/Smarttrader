@@ -63,6 +63,99 @@ export async function getNiftyTotalMarketSymbols() {
 const median5dVolumeMap = new Map();
 let medianPrefetchInProgress = false;
 
+// -------------------------------------------------------------
+// 3-DAY FIRST 15-MIN CANDLE VOLUME ENGINE (Pine Script Logic)
+// -------------------------------------------------------------
+// Maps SYMBOL -> { today_15m_vol, prev_3d_max, prev_3d_vols, is_highest, extra_volume, formatted_extra }
+const first15mVolMap = new Map();
+let first15mPrefetchInProgress = false;
+
+export async function fetchFirst15mVolumeComparison(sym) {
+  const cleanSym = String(sym || '').replace(/[^A-Za-z0-9_-]/g, '').toUpperCase();
+  if (!cleanSym) return null;
+  if (first15mVolMap.has(cleanSym)) {
+    return first15mVolMap.get(cleanSym);
+  }
+  try {
+    const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${cleanSym}.NS?range=5d&interval=15m`, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
+    });
+    if (res.ok) {
+      const json = await res.json();
+      const result = json.chart?.result?.[0];
+      const timestamps = result?.timestamp || [];
+      const vols = result?.indicators?.quote?.[0]?.volume || [];
+      
+      const dayMap = {};
+      for (let i = 0; i < timestamps.length; i++) {
+        const ts = timestamps[i];
+        const v = vols[i] || 0;
+        // Convert to IST (UTC+5:30)
+        const dt = new Date((ts + 19800) * 1000);
+        const hours = dt.getUTCHours();
+        const mins = dt.getUTCMinutes();
+        const dateStr = dt.toISOString().slice(0, 10);
+        if (hours === 9 && mins === 15) {
+          dayMap[dateStr] = v;
+        }
+      }
+
+      const sortedDates = Object.keys(dayMap).sort();
+      if (sortedDates.length >= 2) {
+        const candleVols = sortedDates.map(d => dayMap[d]);
+        const todayVol = candleVols[candleVols.length - 1] || 0;
+        // Previous up to 3 trading days
+        const prevVols = candleVols.slice(Math.max(0, candleVols.length - 4), candleVols.length - 1);
+        
+        let isHighest = false;
+        let maxPrev = 0;
+        let extraVol = 0;
+
+        if (prevVols.length > 0 && todayVol > 0) {
+          maxPrev = Math.max(...prevVols);
+          // Check if today's volume is strictly greater than or equal to ALL previous 3 days
+          isHighest = prevVols.every(pv => todayVol >= pv);
+          if (isHighest && maxPrev > 0) {
+            extraVol = todayVol - maxPrev;
+          }
+        }
+
+        const record = {
+          today_15m_vol: todayVol,
+          prev_3d_max: maxPrev,
+          prev_3d_vols: prevVols,
+          is_highest: isHighest,
+          extra_volume: extraVol
+        };
+
+        first15mVolMap.set(cleanSym, record);
+        return record;
+      }
+    }
+  } catch (e) {
+    // Fail silently on individual requests
+  }
+  return null;
+}
+
+// Background prefetch for 3-day 15m volume comparison across screened symbols
+export async function prefetch15mVolumes(symbols) {
+  if (first15mPrefetchInProgress || !symbols || symbols.length === 0) return;
+  first15mPrefetchInProgress = true;
+  try {
+    const toFetch = symbols.filter(s => !first15mVolMap.has(s.toUpperCase())).slice(0, 100);
+    const BATCH_SIZE = 12;
+    for (let i = 0; i < toFetch.length; i += BATCH_SIZE) {
+      const batch = toFetch.slice(i, i + BATCH_SIZE);
+      await Promise.all(batch.map(fetchFirst15mVolumeComparison));
+    }
+  } catch (err) {
+    console.warn('Prefetch 15m volumes error:', err.message);
+  } finally {
+    first15mPrefetchInProgress = false;
+  }
+}
+
 export async function fetch5DayMedianVolume(sym) {
   const cleanSym = String(sym || '').replace(/[^A-Za-z0-9_-]/g, '').toUpperCase();
   if (!cleanSym) return null;
@@ -199,6 +292,19 @@ export async function fetchTradingViewScanner(minPrice = 200, maxPrice = 4000, l
       const gap = typeof d[10] === 'number' ? Math.round(d[10] * 100) / 100 : 0;
       const sector = d[11] || 'General';
 
+      const first15m = first15mVolMap.get(symbol);
+      let extra15mVol = 0;
+      let is15mHighest = false;
+      let first15mToday = 0;
+      let first15mPrevMax = 0;
+
+      if (first15m) {
+        first15mToday = first15m.today_15m_vol || 0;
+        first15mPrevMax = first15m.prev_3d_max || 0;
+        is15mHighest = first15m.is_highest || false;
+        extra15mVol = first15m.extra_volume || 0;
+      }
+
       mapped.push({
         symbol: symbol,
         name: name,
@@ -207,6 +313,10 @@ export async function fetchTradingViewScanner(minPrice = 200, maxPrice = 4000, l
         volume: vol,
         relvol: relvol,
         median5d_volume: median5d || null,
+        first_15m_vol: first15mToday,
+        first_15m_prev_max: first15mPrevMax,
+        is_15m_highest: is15mHighest,
+        extra_15m_vol: extra15mVol,
         sector: sector,
         yesterday_high: high,
         yesterday_low: low,
@@ -223,9 +333,10 @@ export async function fetchTradingViewScanner(minPrice = 200, maxPrice = 4000, l
       });
     }
 
-    // Trigger non-blocking background prefetch of 5-day medians for top volume stocks
+    // Trigger non-blocking background prefetch for 5-day medians and 15m candle comparisons
     if (symbolsList.length > 0) {
       prefetch5DayMedians(symbolsList);
+      prefetch15mVolumes(symbolsList);
     }
 
     if (mapped.length > 0) {

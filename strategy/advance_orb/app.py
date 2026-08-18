@@ -22,8 +22,8 @@ def get_advance_orb():
     inside915 = request.args.get('inside915', 'false').lower() == 'true'
 
     try:
-        from advance_orb.common import get_advance_orb_screened_data
-        data = get_advance_orb_screened_data(budget, parts, above_ema, inside915)
+        from strategy.advance_orb.strategy import run_advance_orb_screener
+        data = run_advance_orb_screener(budget, parts, above_ema, inside915)
         return jsonify(data)
     except Exception as e:
         logger.error(f"Error fetching ORB data: {e}")

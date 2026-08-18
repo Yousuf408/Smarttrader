@@ -292,8 +292,8 @@ app.get(['/api/market/live-ticks/stream', '/api/market/bigplayers-ticks/stream']
 // STRATEGIES ROUTES (Advance ORB, Big Players)
 // -------------------------------------------------------------
 const ADVANCE_ORB_COLUMNS = [
-  'Symbol', 'Price', 'CHG%', 'GAP%', 'Volume', 'RELVOL', 'Sector',
-  '200 EMA', '1st High', '1st Low', '1st Range%', 'Inside 9:15', 'Share Low', 'MaxQty'
+  'Symbol', 'Price', 'CHG%', 'Signal', 'Extra 15m Vol', '200 EMA', '1st High', '1st Low',
+  '1st Range%', 'Inside 9:15', 'GAP%', 'Volume', 'RELVOL', 'Sector', 'MaxQty', 'Action'
 ];
 
 const BIG_PLAYERS_COLUMNS = [
@@ -342,6 +342,11 @@ app.get('/api/strategies/advanceorb', async (req, res) => {
       '1st Range%': rangePct,
       'Inside 9:15': isInside915 ? 'Yes' : 'No',
       'Share Low': s.low915,
+      'Extra 15m Vol': s.extra_15m_vol || 0,
+      extra_15m_vol: s.extra_15m_vol || 0,
+      first_15m_vol: s.first_15m_vol || 0,
+      first_15m_prev_max: s.first_15m_prev_max || 0,
+      is_15m_highest: s.is_15m_highest || false,
       MaxQty: maxQty,
       ema: s.ema,
       open915: s.open915,
@@ -360,6 +365,9 @@ app.get('/api/strategies/advanceorb', async (req, res) => {
   });
 
   let data = mapped;
+  // Sort descending by CHG% (highest to lowest)
+  data.sort((a, b) => (parseFloat(b['CHG%']) || 0) - (parseFloat(a['CHG%']) || 0));
+
   // If explicitly requested to filter backend-side (e.g. CLI/export)
   if (filterByToggle) {
     if (aboveEma) data = data.filter(item => item.above_ema);
@@ -462,6 +470,9 @@ app.get('/api/strategies/bigplayers', async (req, res) => {
       high915: s.high915
     };
   });
+
+  // Sort descending by CHG% (highest to lowest)
+  data.sort((a, b) => (parseFloat(b['CHG%']) || 0) - (parseFloat(a['CHG%']) || 0));
 
   res.json({
     strategy: 'bigplayers',
@@ -791,7 +802,11 @@ app.get('/login.html', (req, res) => {
   res.sendFile(path.join(__dirname, 'login.html'));
 });
 
-app.get(['/nifty/ohlc', '/nifty_ohlc.html'], (req, res) => {
+app.get(['/nifty/ohlc', '/nifty_ohlc.html', '/testing/nifty_ohlc.html'], (req, res) => {
+  const ohlcPath = path.join(__dirname, 'testing', 'nifty_ohlc.html');
+  if (fs.existsSync(ohlcPath)) {
+    return res.sendFile(ohlcPath);
+  }
   res.sendFile(path.join(__dirname, 'nifty_ohlc.html'));
 });
 

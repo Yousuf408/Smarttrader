@@ -1,7 +1,7 @@
 <!-- ============================================================= -->
 <!-- SCREENER COMPONENT – TradingView Live Market Scanner -->
 <!-- ============================================================= -->
-<div id="page-screener" class="page">
+<div id="page-screener" class="page active">
     <div class="panel-glass">
         <div class="panel-head">
             <div class="screener-controls">
@@ -52,10 +52,10 @@
                     <div class="toggle-item" id="nearHighWrap">
                         <span class="toggle-item-label">Filter Near High</span>
                         <label class="toggle-switch toggle-xs">
-                            <input type="checkbox" id="nearHighToggle" onchange="toggleNearHigh()" checked />
+                            <input type="checkbox" id="nearHighToggle" onchange="toggleNearHigh()" />
                             <span class="toggle-slider"></span>
                         </label>
-                        <span class="toggle-item-status active" id="nearHighStatus">ON</span>
+                        <span class="toggle-item-status" id="nearHighStatus">OFF</span>
                     </div>
 
                     <!-- ABOVE 200 EMA (Advance ORB) -->
@@ -134,63 +134,57 @@
         <div id="marketClosedBanner" style="display:none;margin:0 2px 8px;padding:8px 10px;border-radius:8px;background:linear-gradient(135deg,rgba(255,193,7,.15),rgba(255,152,0,.1));border:1px solid rgba(255,193,7,.35);color:#ffb648;font-size:12.5px;font-weight:600;">
             ⏸️ Market Closed — showing <span id="marketClosedDate"></span> data (last trading day)
         </div>
-        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 2px 4px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 2px 4px;flex-wrap:wrap;gap:8px;">
             <span id="screenerCount" style="font-size:13px;font-weight:600;color:var(--text-muted);">Showing 0 stocks</span>
             <span id="nearHighHint" style="font-size:12px;color:var(--text-muted);">open within ±2% of prev high</span>
         </div>
     </div>
-    <!-- ===== BREAKOUT TABLE (separate panel) ===== -->
-    <div id="breakoutBlock" class="panel-glass" style="display:none;margin-top:24px;">
-        <div class="panel-head">
-            <h3 style="color:var(--color-green,#22c55e);">🚀 Breakout Table</h3>
-            <span id="breakoutCount" style="font-size:13px;font-weight:600;color:var(--text-muted);">0 stocks</span>
-        </div>
-        <div class="panel-body" style="padding:0;">
-            <div class="table-wrap">
-                <table class="table-modern">
-                    <thead id="breakoutHead"></thead>
-                    <tbody id="breakoutBody"></tbody>
-                </table>
+
+    <!-- ===== UNIFIED SMART SCREENER TABLE ===== -->
+    <div class="panel-glass" style="margin-top:20px;">
+        <div class="panel-head" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+            <div style="display:flex;align-items:center;gap:10px;">
+                <h3 id="screenerTableTitle" style="font-size:16px;font-weight:700;margin:0;">⚡ Live Market Scanner</h3>
+            </div>
+            
+            <!-- Quick View Filter Tabs -->
+            <div class="quick-filter-tabs" id="quickFilterTabs">
+                <button type="button" class="quick-tab active" id="tabAll" onclick="setQuickFilter('all')">
+                    All Stocks <span class="tab-count" id="countAll">0</span>
+                </button>
+                <button type="button" class="quick-tab tab-breakout" id="tabBreakout" onclick="setQuickFilter('breakout')">
+                    🚀 Breakout <span class="tab-count" id="countBreakout">0</span>
+                </button>
+                <button type="button" class="quick-tab" id="tabNearHigh" onclick="setQuickFilter('near_high')">
+                    🎯 Near High <span class="tab-count" id="countNearHigh">0</span>
+                </button>
+                <button type="button" class="quick-tab" id="tabAboveEma" onclick="setQuickFilter('above_ema')">
+                    📈 Above 200 EMA <span class="tab-count" id="countAboveEma">0</span>
+                </button>
+                <button type="button" class="quick-tab" id="tabInside915" onclick="setQuickFilter('inside915')">
+                    📐 Inside 9:15 <span class="tab-count" id="countInside915">0</span>
+                </button>
             </div>
         </div>
-    </div>
-    <!-- ===== SIGNAL SCAN LOGS (separate panel) ===== -->
-    <div class="panel-glass" style="margin-top:24px;">
-        <div class="panel-head">
-            <h3>📡 Signal Scan Logs</h3>
-        </div>
         <div class="panel-body" style="padding:0;">
             <div class="table-wrap">
                 <table class="table-modern">
-                    <thead id="screenerHead">
-                        <tr>
-                            <th>Symbol</th>
-                            <th>Price</th>
-                            <th>CHG%</th>
-                            <th>GAP%</th>
-                            <th>Volume</th>
-                            <th>RELVOL</th>
-                            <th>Inside</th>
-                            <th>Breakout</th>
-                            <th>200 EMA</th>
-                            <th>9:15 HIGH</th>
-                            <th>PREV HIGH</th>
-                            <th>MaxQty</th>
-                            <th>Sector</th>
-                            <th>Action</th>
-                        </tr>
-                    </thead>
+                    <thead id="screenerHead"></thead>
                     <tbody id="screenerBody"></tbody>
                 </table>
             </div>
         </div>
         <div class="panel-footer">
-            <div style="display:flex;gap:8px;">
-                <button class="btn btn-outline btn-sm">📥 Export</button>
+            <div style="display:flex;justify-content:space-between;align-items:center;width:100%;flex-wrap:wrap;gap:10px;">
+                <div id="filterSummaryText" style="font-size:12.5px;color:var(--text-muted);">
+                    Showing all scanned stocks sorted by CHG% (highest to lowest)
+                </div>
+                <button class="btn btn-outline btn-sm" onclick="exportScreenerCSV()">📥 Export CSV</button>
             </div>
         </div>
     </div>
-    <div class="panel-glass">
+
+    <div class="panel-glass" style="margin-top:20px;">
         <div class="panel-head"><h3>📋 Strategy Details</h3></div>
         <div class="panel-body info-grid">
             <div><div class="info-label">Strategy</div><div class="info-value" id="infoStrategy">Advance ORB</div></div>

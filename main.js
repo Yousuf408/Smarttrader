@@ -1,18 +1,11 @@
 // ================================================================
-// GLOBAL STATE & DOM
+// GLOBAL STATE & DOM HELPERS
 // ================================================================
 const DOM = {
-    pages: document.querySelectorAll('.page'),
-    navLinks: document.querySelectorAll('.sidebar-link'),
-    toast: document.getElementById('toast'),
-    toastTitle: document.getElementById('toastTitle'),
-    toastMessage: document.getElementById('toastMessage'),
-    modalOverlay: document.getElementById('modalOverlay'),
-    modalTitle: document.getElementById('modalTitle'),
-    modalStrategyName: document.getElementById('modalStrategyName'),
-    modalStrategyDesc: document.getElementById('modalStrategyDesc'),
-    modalEntryRule: document.getElementById('modalEntryRule'),
-    modalRisk: document.getElementById('modalRisk')
+    get navLinks() { return document.querySelectorAll('.sidebar-link'); },
+    get toast() { return document.getElementById('toast'); },
+    get toastTitle() { return document.getElementById('toastTitle'); },
+    get toastMessage() { return document.getElementById('toastMessage'); }
 };
 
 let autoBuyEnabled = false;
@@ -127,8 +120,6 @@ document.addEventListener('keydown', (e) => {
             's': 'screener',
             'p': 'portfolio',
             't': 'testing',
-            'g': 'strategies',
-            'b': 'backtest',
             'c': 'settings',
         };
         const key = e.key.toLowerCase();
@@ -148,13 +139,6 @@ document.addEventListener('keydown', (e) => {
                 else if (id === 'home') loadHome();
             }
         }
-        // Alt+N = New strategy (strategies page)
-        if (key === 'n') {
-            e.preventDefault();
-            openModal('new');
-        }
-        // Alt+Esc = close modal
-        if (key === 'Escape') closeModal();
     }
 });
 
@@ -370,26 +354,104 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 
 // ================================================================
-// NAVIGATION
+// DYNAMIC MODULAR PAGE LOADER & NAVIGATION
 // ================================================================
-function navigateTo(pageId) {
-    DOM.navLinks.forEach(a => a.classList.remove('active'));
+const pageCache = new Map();
+let currentPageId = null;
+
+const PAGE_CONFIG = {
+    home: {
+        url: '/home/home.html',
+        init: () => {
+            if (typeof loadHome === 'function') loadHome();
+        }
+    },
+    screener: {
+        url: '/screener/screener.html',
+        init: () => {
+            if (typeof initScreener === 'function') initScreener();
+            if (typeof onStrategyChange === 'function') onStrategyChange();
+        }
+    },
+    niftyohlc: {
+        url: '/nifty_ohlc/nifty_ohlc_page.html',
+        init: () => {}
+    },
+    portfolio: {
+        url: '/portfolio/portfolio.html',
+        init: () => {
+            if (typeof loadPortfolio === 'function') loadPortfolio();
+            if (typeof refreshPortfolio === 'function') refreshPortfolio();
+        }
+    },
+    testing: {
+        url: '/testing/testing.html',
+        init: () => {
+            if (typeof loadTesting === 'function') loadTesting();
+        }
+    },
+    settings: {
+        url: '/settings/settings.html',
+        init: () => {
+            if (typeof toggleBrokerFields === 'function') toggleBrokerFields();
+            if (typeof updateBrokerStatusBadge === 'function') updateBrokerStatusBadge();
+            if (typeof updateCacheStatus === 'function') updateCacheStatus();
+        }
+    }
+};
+
+async function loadPageHtml(pageId) {
+    if (pageCache.has(pageId)) {
+        return pageCache.get(pageId);
+    }
+    const config = PAGE_CONFIG[pageId];
+    if (!config) return null;
+    try {
+        const resp = await fetch(config.url);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status} fetching ${config.url}`);
+        const html = await resp.text();
+        pageCache.set(pageId, html);
+        return html;
+    } catch (err) {
+        console.error(`Failed to load page ${pageId}:`, err);
+        return `<div class="panel-glass" style="padding:24px;"><h3>⚠️ Failed to load page</h3><p style="color:var(--text-muted);">${err.message}</p></div>`;
+    }
+}
+
+async function navigateTo(pageId) {
+    const config = PAGE_CONFIG[pageId];
+    if (!config) return;
+
+    // Update active sidebar link
+    document.querySelectorAll('.sidebar-link').forEach(a => a.classList.remove('active'));
     const activeLink = document.querySelector(`.sidebar-link[data-page="${pageId}"]`);
     if (activeLink) activeLink.classList.add('active');
-    
-    DOM.pages.forEach(p => p.classList.remove('active'));
-    const targetPage = document.getElementById('page-' + pageId);
-    if (targetPage) targetPage.classList.add('active');
-    
+
     // Stop portfolio simulation when navigating away
-    if (pageId !== 'portfolio' && typeof stopSimulation === 'function') {
+    if (currentPageId === 'portfolio' && pageId !== 'portfolio' && typeof stopSimulation === 'function') {
         stopSimulation();
     }
+    // Stop testing auto-refresh when navigating away
+    if (currentPageId === 'testing' && pageId !== 'testing' && typeof stopTestingAutoRefresh === 'function') {
+        stopTestingAutoRefresh();
+    }
 
-    if (pageId === 'home') loadHome();
-    else if (pageId === 'strategies') loadStrategies();
-    else if (pageId === 'portfolio') loadPortfolio();
-    else if (pageId === 'testing') loadTesting();
+    currentPageId = pageId;
+
+    const mainContainer = document.getElementById('mainContainer');
+    if (!mainContainer) return;
+
+    const html = await loadPageHtml(pageId);
+    mainContainer.innerHTML = html;
+
+    // Execute page-specific init callback
+    try {
+        if (typeof config.init === 'function') {
+            config.init();
+        }
+    } catch (e) {
+        console.error(`Error initializing page ${pageId}:`, e);
+    }
 
     // Refresh market status on every navigation
     updateMarketStatus();
@@ -469,32 +531,4 @@ DOM.toast?.addEventListener?.('click', (e) => {
     if (e.target && e.target.classList && e.target.classList.contains('toast-close')) {
         hideToast(e.currentTarget);
     }
-});
-
-// ================================================================
-// MODAL FUNCTIONALITY
-// ================================================================
-function openModal(action) {
-    DOM.modalOverlay.classList.add('show');
-    if (action === 'new') {
-        DOM.modalTitle.textContent = '➕ Create New Strategy';
-        DOM.modalStrategyName.value = 'New Strategy';
-        DOM.modalStrategyDesc.value = 'Describe your strategy rules...';
-    } else {
-        DOM.modalTitle.textContent = '✏️ Edit Strategy';
-        DOM.modalStrategyName.value = 'Advance ORB';
-        DOM.modalStrategyDesc.value = 'Opening Range Breakout Strategy';
-    }
-}
-
-function closeModal() {
-    DOM.modalOverlay.classList.remove('show');
-}
-
-DOM.modalOverlay.addEventListener('click', function(e) {
-    if (e.target === this) closeModal();
-});
-
-document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape') closeModal();
 });

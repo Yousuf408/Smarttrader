@@ -219,10 +219,11 @@ async function _scheduleScreenerRefresh() {
     }, 300);
 }
 
-document.addEventListener("DOMContentLoaded", () => {
+function initScreener() {
     const bEl = _getBudgetInput();
     const pEl = _getPartsInput();
-    if (bEl) {
+    if (bEl && !bEl.dataset.listenerAttached) {
+        bEl.dataset.listenerAttached = "1";
         bEl.addEventListener("change", () => {
             const next = Math.max(5000, _readBudget());
             bEl.value = next;
@@ -230,7 +231,8 @@ document.addEventListener("DOMContentLoaded", () => {
             _scheduleScreenerRefresh();
         });
     }
-    if (pEl) {
+    if (pEl && !pEl.dataset.listenerAttached) {
+        pEl.dataset.listenerAttached = "1";
         pEl.addEventListener("change", () => {
             const next = Math.min(20, Math.max(1, _readParts()));
             pEl.value = next;
@@ -247,12 +249,16 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch (e) {}
     const tfSel = document.getElementById('tfSelect');
     if (tfSel) tfSel.value = String(orbTimeframe);
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+    initScreener();
 });
 
 // ================================================================
 // FETCH ADVANCE ORB FROM BACKEND API
 // ================================================================
-let nearHighEnabled = true;
+let nearHighEnabled = false;
 let aboveEmaEnabled = false;
 let _inside915Only = false;
 let _inside3Only = false;
@@ -400,9 +406,30 @@ function copySymbol(text, el) {
 /** Format one cell value for a column (mirrors the legacy inline logic). */
 function orbCellValue(row, col) {
     let value;
-    if (col === '200 EMA') {
-        const ema = parseFloat(row.ema);
-        value = Number.isFinite(ema) ? ema : '';
+    if (col === 'Signal' || col === 'Status' || col === 'Breakout') {
+        const price = parseFloat(row.Price ?? row.price);
+        const high = parseFloat(row.high915 ?? row['1st High'] ?? row.yesterday_high);
+        const isBreakout = (Number.isFinite(price) && Number.isFinite(high) && high > 0 && price >= (high * 0.99)) || row.Breakout === 'Confirmed';
+        const isNearHigh = (Number.isFinite(price) && Number.isFinite(high) && high > 0 && price >= (high * 0.98)) || row.near_high === true;
+        
+        if (isBreakout) {
+            return `<span class="badge-signal badge-breakout">🚀 Breakout</span>`;
+        } else if (isNearHigh) {
+            return `<span class="badge-signal badge-nearhigh">⏳ Testing High</span>`;
+        } else if (row.inside_915 === true || row['Inside 9:15'] === 'Yes') {
+            return `<span class="badge-signal badge-inside">📐 Inside 9:15</span>`;
+        } else {
+            return `<span class="badge-signal badge-normal">⚪ In Range</span>`;
+        }
+    } else if (col === '200 EMA') {
+        const ema = parseFloat(row.ema ?? row['200 EMA']);
+        const price = parseFloat(row.Price ?? row.price);
+        if (Number.isFinite(ema)) {
+            const isAbove = Number.isFinite(price) && price >= ema;
+            value = `<span style="color:${isAbove ? 'var(--color-success)' : 'inherit'};font-weight:${isAbove ? '600' : 'normal'}">${ema.toFixed(2)}</span>`;
+        } else {
+            value = '';
+        }
     } else if (col === '1st High' || col === '9:15 HIGH') {
         const high = parseFloat(row.high915);
         value = Number.isFinite(high) ? high.toFixed(2) : '';
@@ -412,7 +439,7 @@ function orbCellValue(row, col) {
     } else if (col === '1st Range%') {
         const range = parseFloat(row.candle_range_pct);
         value = Number.isFinite(range) ? `${range.toFixed(2)}%` : '';
-    } else if (col === 'Inside 9:15') {
+    } else if (col === 'Inside 9:15' || col === 'Inside') {
         value = row.inside_915 ? '✅' : (row.inside_915 === false ? '❌' : '—');
     } else if (col === 'Share Low') {
         if (row.share_low && typeof row.share_low === 'object') {
@@ -426,7 +453,7 @@ function orbCellValue(row, col) {
     } else if (col === 'Open 9:15') {
         const op = parseFloat(row.open915);
         value = Number.isFinite(op) ? `₹${op.toFixed(2)}` : '';
-    } else if (col === 'Prev High') {
+    } else if (col === 'Prev High' || col === 'PREV HIGH') {
         const ph = parseFloat(row.yesterday_high);
         value = Number.isFinite(ph) ? `₹${ph.toFixed(2)}` : '';
     } else {
@@ -434,15 +461,19 @@ function orbCellValue(row, col) {
         value = row[col] || row[colKey] || row[col.toLowerCase()] || '';
     }
     if (col === 'Price' && typeof value === 'number') value = `₹${value.toFixed(2)}`;
-    if (col === 'CHG%' && typeof value === 'number') value = `${value > 0 ? '+' : ''}${value.toFixed(2)}%`;
-    if (col === 'GAP%' && typeof value === 'number') value = `${value > 0 ? '+' : ''}${value.toFixed(2)}%`;
+    if (col === 'CHG%' && typeof value === 'number') {
+        const sign = value > 0 ? '+' : '';
+        const color = value >= 0 ? 'var(--color-success)' : 'var(--color-danger)';
+        value = `<span style="color:${color};font-weight:700;">${sign}${value.toFixed(2)}%</span>`;
+    }
+    if (col === 'GAP%' && typeof value === 'number') {
+        const sign = value > 0 ? '+' : '';
+        value = `${sign}${value.toFixed(2)}%`;
+    }
     return value;
 }
 
-/** Build a full <tr> for one stock given the header columns.
- * The Place Order (Action) button is only rendered when 'Action' is present
- * in headerColumns — so the Signal Scan table can drop its Action column
- * while the Breakout table keeps one. */
+/** Build a full <tr> for one stock given the header columns. */
 function orbRowHTML(row, headerColumns) {
     const hasAction = headerColumns.includes('Action');
     const values = [];
@@ -464,73 +495,155 @@ function orbRowHTML(row, headerColumns) {
     </tr>`;
 }
 
-let lastOrbColumns = [];
-/** Filter predicates for the Breakout table only.  These evaluated the
- * strategy filters (Near High / 1st Range% / Inside 9:15 / Above 200 EMA)
- * AGAINST THE BREAKOUT table alone — they never reduce the Signal Scan Logs
- * table, which always shows the full TradingView universe.
- * @returns {boolean} true if the stock passes every active filter. */
-function orbBreakoutFilter(r) {
-    // Base signal: LIVE price crossed above the 1st candle high.
+let currentQuickFilter = 'all';
+
+function setQuickFilter(filterName) {
+    currentQuickFilter = filterName;
+    document.querySelectorAll('.quick-tab').forEach(tab => {
+        const isMatch = (filterName === 'all' && tab.id === 'tabAll') ||
+                        (filterName === 'breakout' && tab.id === 'tabBreakout') ||
+                        (filterName === 'near_high' && tab.id === 'tabNearHigh') ||
+                        (filterName === 'above_ema' && tab.id === 'tabAboveEma') ||
+                        (filterName === 'inside915' && tab.id === 'tabInside915');
+        tab.classList.toggle('active', isMatch);
+    });
+
+    const summary = document.getElementById('filterSummaryText');
+    if (summary) {
+        if (filterName === 'breakout') summary.textContent = '🚀 Showing Breakout candidates (Live price crossed/tested at or above 1st candle High)';
+        else if (filterName === 'near_high') summary.textContent = '🎯 Showing Near High watchlist (Open within ±2% of yesterday\'s high)';
+        else if (filterName === 'above_ema') summary.textContent = '📈 Showing stocks whose price is above the 200 EMA';
+        else if (filterName === 'inside915') summary.textContent = '📐 Showing stocks consolidated inside opening 9:15 candle';
+        else summary.textContent = 'Showing all scanned stocks sorted by CHG% (highest to lowest)';
+    }
+
+    if (lastAdvanceOrbData && typeof renderStrategyData === 'function') {
+        renderStrategyData(lastAdvanceOrbData);
+    }
+}
+
+function updateQuickFilterCounts(allRows) {
+    if (!Array.isArray(allRows)) return;
+    let breakoutCount = 0;
+    let nearHighCount = 0;
+    let aboveEmaCount = 0;
+    let inside915Count = 0;
+
+    for (const r of allRows) {
+        const price = parseFloat(r.Price ?? r.price);
+        const high = parseFloat(r.high915 ?? r['1st High'] ?? r.yesterday_high);
+        const ema = parseFloat(r.ema ?? r['200 EMA']);
+
+        // Breakout
+        if ((Number.isFinite(price) && Number.isFinite(high) && high > 0 && price >= (high * 0.99)) || r.Breakout === 'Confirmed') {
+            breakoutCount++;
+        }
+        // Near high
+        if (r.near_high === true) {
+            nearHighCount++;
+        } else {
+            const op = parseFloat(r.open915 ?? r['Open 9:15']);
+            const yh = parseFloat(r.yesterday_high ?? r['Prev High']);
+            if (Number.isFinite(op) && Number.isFinite(yh) && yh > 0 && op >= 0.97 * yh && op <= 1.03 * yh) {
+                nearHighCount++;
+            }
+        }
+        // Above EMA
+        if (r.above_ema === true) {
+            aboveEmaCount++;
+        } else {
+            const c = parseFloat(r.close915 ?? r.Price ?? r.price);
+            if (Number.isFinite(c) && Number.isFinite(ema) && ema > 0 && c >= ema) aboveEmaCount++;
+        }
+        // Inside 9:15
+        if (r.inside_915 === true || r['Inside 9:15'] === 'Yes') {
+            inside915Count++;
+        }
+    }
+
+    const cAll = document.getElementById('countAll');
+    const cBreakout = document.getElementById('countBreakout');
+    const cNearHigh = document.getElementById('countNearHigh');
+    const cAboveEma = document.getElementById('countAboveEma');
+    const cInside915 = document.getElementById('countInside915');
+
+    if (cAll) cAll.textContent = allRows.length;
+    if (cBreakout) cBreakout.textContent = breakoutCount;
+    if (cNearHigh) cNearHigh.textContent = nearHighCount;
+    if (cAboveEma) cAboveEma.textContent = aboveEmaCount;
+    if (cInside915) cInside915.textContent = inside915Count;
+}
+
+/** Unified row filter evaluates quick tabs and active strategy toggles */
+function orbUnifiedFilter(r) {
     const price = parseFloat(r.Price ?? r.price);
-    const high = parseFloat(r.high915);
-    if (!(Number.isFinite(price) && Number.isFinite(high) && high > 0 && price > high)) {
-        return false;
-    }
-    // Near High toggle: today's open within ±2% of yesterday's high.
-    if (nearHighEnabled) {
-        const op = parseFloat(r.open915);
-        const yh = parseFloat(r.yesterday_high);
-        if (Number.isFinite(op) && Number.isFinite(yh) && yh > 0) {
-            if (op < 0.98 * yh || op > 1.02 * yh) return false;
+    const high = parseFloat(r.high915 ?? r['1st High'] ?? r.yesterday_high);
+    const ema = parseFloat(r.ema ?? r['200 EMA']);
+
+    const isBreakout = (Number.isFinite(price) && Number.isFinite(high) && high > 0)
+        ? (price >= (high * 0.99))
+        : (r.Breakout === 'Confirmed' || r.Breakout === 'Forming');
+
+    let isNearHigh = r.near_high === true;
+    if (!isNearHigh) {
+        const op = parseFloat(r.open915 ?? r['Open 9:15']);
+        const yh = parseFloat(r.yesterday_high ?? r['Prev High']);
+        if (Number.isFinite(op) && Number.isFinite(yh) && yh > 0 && op >= 0.97 * yh && op <= 1.03 * yh) {
+            isNearHigh = true;
         }
     }
-    // 1st Range% cap: opening 9:15 candle range must be tight.  Only drops the
-    // stock from the BREAKOUT table — the scan log still lists it.
-    if (r.candle_range_pct !== undefined && r.candle_range_pct !== null) {
-        const range = parseFloat(r.candle_range_pct);
-        if (Number.isFinite(range)) {
-            const cap = (typeof orbTimeframe !== 'undefined' && orbTimeframe === 15) ? 2.0 : 1.5;
-            if (range > cap) return false;
+
+    let isAboveEma = r.above_ema === true;
+    if (!isAboveEma) {
+        const c = parseFloat(r.close915 ?? r.Price ?? r.price);
+        if (Number.isFinite(c) && Number.isFinite(ema) && ema > 0 && c >= ema) {
+            isAboveEma = true;
         }
     }
-    // Inside 9:15 toggle: 2nd candle close inside the opening range.
-    if (_inside915Only && r.inside_915 !== true) {
-        return false;
-    }
-    // Above 200 EMA toggle: opening-candle close above the 200 EMA & within 4%.
-    if (aboveEmaEnabled) {
-        const c = parseFloat(r.close915);
-        const e = parseFloat(r.ema);
-        if (Number.isFinite(c) && Number.isFinite(e) && e > 0) {
-            const gap = (c - e) / e * 100;
-            if (!(c > e && gap <= 4.0)) return false;
-        }
-    }
+
+    const isInside915 = r.inside_915 === true || r['Inside 9:15'] === 'Yes';
+
+    // 1. Check active Quick Tab filter
+    if (currentQuickFilter === 'breakout' && !isBreakout) return false;
+    if (currentQuickFilter === 'near_high' && !isNearHigh) return false;
+    if (currentQuickFilter === 'above_ema' && !isAboveEma) return false;
+    if (currentQuickFilter === 'inside915' && !isInside915) return false;
+
+    // 2. Check active top bar toggles
+    if (nearHighEnabled && !isNearHigh) return false;
+    if (aboveEmaEnabled && !isAboveEma) return false;
+    if (_inside915Only && !isInside915) return false;
+
     return true;
 }
 
-/** Render the top "Breakout" table = stocks passing the active strategy
- * filters AND whose LIVE price has crossed above the 1st candle high. */
-function renderBreakoutTable(data, columns) {
-    const block = document.getElementById('breakoutBlock');
-    if (!block) return;
-    // Breakout table drops the GAP% column (keeps everything else + Action).
-    if (columns) lastOrbColumns = [...columns].filter(c => c !== 'GAP%');
-    else lastOrbColumns = lastOrbColumns.filter(c => c !== 'GAP%');
-    const headerColumns = [...lastOrbColumns, 'Action'];
-    const list = (data || []).filter(orbBreakoutFilter);
-    const head = document.getElementById('breakoutHead');
-    const body = document.getElementById('breakoutBody');
-    if (head) head.innerHTML = headerColumns.map(col => `<th>${col}</th>`).join('');
-    if (body) {
-        body.innerHTML = list.length
-            ? list.map(r => orbRowHTML(r, headerColumns)).join('')
-            : `<tr><td colspan="${headerColumns.length}" style="text-align:center;padding:24px;color:var(--text-muted);">No breakout yet (price above 1st candle high)</td></tr>`;
+function getChgValue(r) {
+    const raw = r['CHG%'] ?? r.change_pct ?? r.change ?? r['chg%'] ?? r.chg;
+    const num = parseFloat(raw);
+    return Number.isFinite(num) ? num : -999999;
+}
+
+function exportScreenerCSV() {
+    const table = document.querySelector('.table-modern');
+    if (!table) return;
+    const rows = Array.from(table.querySelectorAll('tr'));
+    if (!rows.length) {
+        showToast('⚠️ No Data', 'No stocks to export');
+        return;
     }
-    const cnt = document.getElementById('breakoutCount');
-    if (cnt) cnt.textContent = `${list.length} stocks`;
-    block.style.display = '';
+    const csvContent = rows.map(r => {
+        const cells = Array.from(r.querySelectorAll('th, td'));
+        return cells.map(c => `"${c.textContent.trim().replace(/"/g, '""')}"`).join(',');
+    }).join('\n');
+    
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `screener_${currentQuickFilter}_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('📥 Exported', 'Screener data saved as CSV');
 }
 
 // ================================================================
@@ -539,19 +652,37 @@ function renderStrategyData(result) {
     const strategy = STRATEGIES[strategyId];
     if (!strategy) return;
 
-    let data = result.data || [];
-    const columns = result.columns || strategy.columns || [];
+    let rawData = result.data ? [...result.data] : [];
+    updateQuickFilterCounts(rawData);
 
-    // Signal Scan Logs table shows its own reduced column set — Sector,
-    // 1st Range%, Inside 9:15 and MaxQty are dropped (and Action removed) so
-    // each table has distinct columns. The Breakout table keeps GAP% = one
-    // of its core signals; here we only touch the Signal Scan table.
-    // Data rows are untouched — only the rendered columns are filtered.
-    const SIGNAL_SCAN_DROP = ['Sector', '1st Range%', 'Inside 9:15', 'MaxQty'];
-    const signalColumns = columns.filter(c => !SIGNAL_SCAN_DROP.includes(c));
+    // Filter rows according to active quick tab and toggles
+    let data = (strategyId === 'advanceorb') ? rawData.filter(orbUnifiedFilter) : rawData;
 
-    // Market-closed banner: when the backend anchored to the last trading
-    // day (weekend / holiday / after-hours), tell the user the data is stale.
+    // Sort table by CHG% descending (highest to lowest)
+    data.sort((a, b) => getChgValue(b) - getChgValue(a));
+
+    // Standard columns for Advance ORB
+    const UNIFIED_ORB_COLUMNS = [
+        'Symbol',
+        'Price',
+        'CHG%',
+        'Signal',
+        '200 EMA',
+        '1st High',
+        '1st Low',
+        '1st Range%',
+        'Inside 9:15',
+        'GAP%',
+        'Volume',
+        'RELVOL',
+        'Sector',
+        'MaxQty',
+        'Action'
+    ];
+
+    const headerColumns = (strategyId === 'advanceorb') ? UNIFIED_ORB_COLUMNS : [...(result.columns || strategy.columns || []), 'Action'];
+
+    // Market-closed banner
     const _banner = document.getElementById('marketClosedBanner');
     if (_banner) {
         const _closed = result.market_closed === true;
@@ -560,37 +691,25 @@ function renderStrategyData(result) {
         if (_d) _d.textContent = result.reference_date || '';
     }
 
-    // NOTE: the Scan Logs table always shows the FULL TradingView universe.
-    // Filter toggles (Near High / 1st Range% / Inside 9:15 / Above 200 EMA) never
-    // reduce the scan log — they scope only the Breakout table (renderBreakoutTable).
-
-    // Update table headers — Signal Scan Logs (no Action button; each stock
-    // row still lives on so placeOrder / auto-buy work off the data).
-    const thead = document.querySelector('#screenerHead tr');
-    const headerColumns = [...signalColumns];
-    thead.innerHTML = headerColumns.map(col => `<th>${col}</th>`).join('');
+    // Update table headers
+    const thead = document.getElementById('screenerHead');
+    if (thead) thead.innerHTML = `<tr>${headerColumns.map(col => `<th>${col}</th>`).join('')}</tr>`;
 
     // Update table rows
     const tbody = document.getElementById('screenerBody');
-    if (data.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="${headerColumns.length}" style="text-align:center;padding:40px;color:var(--text-muted);">No stocks found for this strategy.</td></tr>`;
-    } else {
-        tbody.innerHTML = data.map(row => orbRowHTML(row, headerColumns)).join('');
-    }
-
-    document.getElementById('screenerCount').textContent = `Showing ${data.length} stocks`;
-    updatePlaceOrderButtons();
-
-    // Top "Breakout" table (Advance ORB only): live price above 1st candle high.
-    const breakoutBlock = document.getElementById('breakoutBlock');
-    if (breakoutBlock) {
-        if (strategyId === 'advanceorb') {
-            renderBreakoutTable(data, columns);
+    if (tbody) {
+        if (data.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="${headerColumns.length}" style="text-align:center;padding:40px;color:var(--text-muted);">No stocks matching the selected filter criteria.</td></tr>`;
         } else {
-            breakoutBlock.style.display = 'none';
+            tbody.innerHTML = data.map(row => orbRowHTML(row, headerColumns)).join('');
         }
     }
 
+    const countText = `Showing ${data.length} of ${rawData.length} stocks`;
+    const sc = document.getElementById('screenerCount');
+    if (sc) sc.textContent = countText;
+
+    updatePlaceOrderButtons();
 }
 
 // ================================================================
@@ -611,12 +730,13 @@ async function onStrategyChange() {
     // ============================================================
     if (strategyId === 'advanceorb') {
         const tbody = document.getElementById('screenerBody');
-        const thead = document.querySelector('#screenerHead tr');
+        const thead = document.getElementById('screenerHead');
         const SIGNAL_SCAN_DROP = ['Sector', '1st Range%', 'Inside 9:15', 'MaxQty'];
         const columns = [...strategy.columns].filter(c => !SIGNAL_SCAN_DROP.includes(c));
-        thead.innerHTML = columns.map(col => `<th>${col}</th>`).join('');
-        tbody.innerHTML = `<tr><td colspan="${columns.length}" style="text-align:center;padding:40px;">🔎 Filtering best-performing stocks…</td></tr>`;
-        document.getElementById('screenerCount').textContent = 'Loading...';
+        if (thead) thead.innerHTML = `<tr>${columns.map(col => `<th>${col}</th>`).join('')}</tr>`;
+        if (tbody) tbody.innerHTML = `<tr><td colspan="${columns.length}" style="text-align:center;padding:40px;">🔎 Filtering best-performing stocks…</td></tr>`;
+        const countEl = document.getElementById('screenerCount');
+        if (countEl) countEl.textContent = 'Loading...';
 
         // Show Advance ORB toggles, hide Big Players-specific toggles
         const autoBuyEl = document.getElementById('autoBuyWrap');
@@ -642,8 +762,8 @@ async function onStrategyChange() {
             // Stop Big Players refresh if running
             if (typeof stopBigPlayersAutoRefresh === 'function') stopBigPlayersAutoRefresh();
         } else {
-            tbody.innerHTML = `<tr><td colspan="${columns.length}" style="text-align:center;padding:40px;color:var(--color-danger);">❌ Failed to load data. Please try again.</td></tr>`;
-            document.getElementById('screenerCount').textContent = '0 stocks';
+            if (tbody) tbody.innerHTML = `<tr><td colspan="${columns.length}" style="text-align:center;padding:40px;color:var(--color-danger);">❌ Failed to load data. Please try again.</td></tr>`;
+            if (countEl) countEl.textContent = '0 stocks';
         }
         return;
     }
@@ -653,12 +773,13 @@ async function onStrategyChange() {
     // ============================================================
     if (strategyId === 'bigplayers') {
         const tbody = document.getElementById('screenerBody');
-        const thead = document.querySelector('#screenerHead tr');
+        const thead = document.getElementById('screenerHead');
         const columns = [...strategy.columns];
         columns.push('Action');
-        thead.innerHTML = columns.map(col => `<th>${col}</th>`).join('');
-        tbody.innerHTML = `<tr><td colspan="${columns.length}" style="text-align:center;padding:40px;">🏢 Fetching Big Players data…</td></tr>`;
-        document.getElementById('screenerCount').textContent = 'Loading...';
+        if (thead) thead.innerHTML = `<tr>${columns.map(col => `<th>${col}</th>`).join('')}</tr>`;
+        if (tbody) tbody.innerHTML = `<tr><td colspan="${columns.length}" style="text-align:center;padding:40px;">🏢 Fetching Big Players data…</td></tr>`;
+        const countEl = document.getElementById('screenerCount');
+        if (countEl) countEl.textContent = 'Loading...';
 
         // Hide Advance ORB toggles, show Big Players-specific toggles
         const orbab = document.getElementById('autoBuyWrap');
@@ -685,8 +806,8 @@ async function onStrategyChange() {
             // Stop Advance ORB refresh if running
             if (typeof stopAdvanceOrbAutoRefresh === 'function') stopAdvanceOrbAutoRefresh();
         } else {
-            tbody.innerHTML = `<tr><td colspan="${columns.length}" style="text-align:center;padding:40px;color:var(--color-danger);">❌ Failed to load Big Players data</td></tr>`;
-            document.getElementById('screenerCount').textContent = '0 stocks';
+            if (tbody) tbody.innerHTML = `<tr><td colspan="${columns.length}" style="text-align:center;padding:40px;color:var(--color-danger);">❌ Failed to load Big Players data</td></tr>`;
+            if (countEl) countEl.textContent = '0 stocks';
         }
         return;
     }
@@ -695,15 +816,15 @@ async function onStrategyChange() {
     // CASE 3: SMARTMONEY (Hardcoded data)
     // ============================================================
     // Update table headers
-    const thead = document.querySelector('#screenerHead tr');
+    const thead = document.getElementById('screenerHead');
     const columns = [...strategy.columns];
     columns.push('Action');
-    thead.innerHTML = columns.map(col => `<th>${col}</th>`).join('');
+    if (thead) thead.innerHTML = `<tr>${columns.map(col => `<th>${col}</th>`).join('')}</tr>`;
 
     // Update table rows
     const tbody = document.getElementById('screenerBody');
     if (strategy.data.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="${columns.length}" style="text-align:center;padding:40px;color:var(--text-muted);">No stocks found for this strategy.</td></tr>`;
+        if (tbody) tbody.innerHTML = `<tr><td colspan="${columns.length}" style="text-align:center;padding:40px;color:var(--text-muted);">No stocks found for this strategy.</td></tr>`;
     } else {
         tbody.innerHTML = strategy.data.map(row => {
             let displayRow = { ...row };
@@ -1319,39 +1440,20 @@ function _applyTicks(ticks) {
                 if (tick.change_pct != null) row['CHG%'] = Number(tick.change_pct);
             }
         }
-
-        // Patch the matching row in the top "Breakout" table's Price cell too.
-        const bRows = document.querySelectorAll('#breakoutBody tr');
-        for (const btr of bRows) {
-            const bCells = btr.querySelectorAll('td');
-            const bSym = bCells[0] ? bCells[0].textContent.trim() : '';
-            if (bSym !== sym) continue;
-            if (tick.ltp != null && priceIdx < bCells.length) {
-                bCells[priceIdx].textContent = `₹${Number(tick.ltp).toFixed(2)}`;
-            }
-            if (tick.change_pct != null && chgIdx >= 0 && chgIdx < bCells.length) {
-                const v = Number(tick.change_pct);
-                const sign = v > 0 ? '+' : '';
-                bCells[chgIdx].textContent = `${sign}${v.toFixed(2)}%`;
-                bCells[chgIdx].style.color = v >= 0 ? 'var(--color-green, #22c55e)' : 'var(--color-red, #ef4444)';
-            }
-        }
     }
 }
 
-// Throttled re-render of the breakout table so a stock that *just* crossed
-// above its 1st candle high gets added (or falls back out) without re-drawing
-// the whole table every tick (~250 ms). At most once per SECOND.
-let _breakoutRerenderAt = 0;
-function maybeRerenderBreakout() {
+// Throttled quick tab count update & re-evaluation
+let _screenerRerenderAt = 0;
+function maybeRerenderScreener() {
     const now = Date.now();
-    if (now < _breakoutRerenderAt) return;
-    _breakoutRerenderAt = now + 1000;
+    if (now < _screenerRerenderAt) return;
+    _screenerRerenderAt = now + 1500;
     const strategyId = document.getElementById('strategySelect')?.value;
     const activePage = document.querySelector('.page.active');
     const onScreener = activePage && activePage.id === 'page-screener';
-    if (strategyId === 'advanceorb' && onScreener && lastAdvanceOrbData) {
-        renderBreakoutTable(lastAdvanceOrbData.data, lastAdvanceOrbData.columns || lastOrbColumns);
+    if (strategyId === 'advanceorb' && onScreener && lastAdvanceOrbData && lastAdvanceOrbData.data) {
+        updateQuickFilterCounts(lastAdvanceOrbData.data);
     }
 }
 
@@ -1373,22 +1475,18 @@ function startLiveTickPoll() {
                 const strategyId = document.getElementById('strategySelect')?.value;
                 if (onScreener && strategyId === 'advanceorb') {
                     _applyTicks(data.ticks);
-                    maybeRerenderBreakout();
+                    maybeRerenderScreener();
                 }
             }
         } catch (_) {}
     };
     _tickEventSource.onerror = function () {
-        // EventSource auto-reconnects natively, but on screen-sleep the
-        // browser may not fire onerror at all.  The watchdog below
-        // catches that case by detecting message silence.
+        // EventSource auto-reconnects natively
     };
 }
 
 function _resetTickWatchdog() {
     if (_tickWatchdog) clearTimeout(_tickWatchdog);
-    // If no message (data or heartbeat) arrives for 10 seconds,
-    // force-close and re-open the EventSource.
     _tickWatchdog = setTimeout(() => {
         console.warn('[tick-watchdog] No message for 10s — reconnecting SSE');
         if (_tickEventSource) {
@@ -1440,23 +1538,17 @@ function refreshScreener() {
 }
 
 // ================================================================
-// ================================================================
 // PLACE ORDER
 // ================================================================
 function _lookupRowQty(symbol) {
     try {
-        // MaxQty column now only exists in the Breakout table (removed from
-        // Signal Scan Logs). Search breakout first, then the main table.
-        const cell = _lookupRowCell(symbol, 'MaxQty', ['#breakoutHead', '#screenerHead'], ['#breakoutBody', '#screenerBody']);
+        const cell = _lookupRowCell(symbol, 'MaxQty', ['#screenerHead'], ['#screenerBody']);
         return Math.max(0, parseInt((cell || '').replace(/[^0-9-]/g, ''), 10) || 0);
     } catch (e) { console.warn('qty lookup failed for', symbol, e); }
     return 0;
 }
 
-/** Find a named column's cell text for a symbol, searching several
- * head/body table pairs in order. Falls back to row data when the column
- * isn't rendered in any table (so placeOrder still gets a real value even
- * though MaxQty/Price aren't shown in Signal Scan Logs). */
+/** Find a named column's cell text for a symbol. */
 function _lookupRowCell(symbol, colName, headSelectors, bodySelectors) {
     for (let t = 0; t < headSelectors.length; t++) {
         const headers = document.querySelectorAll(headSelectors[t] + ' th');
@@ -1470,8 +1562,7 @@ function _lookupRowCell(symbol, colName, headSelectors, bodySelectors) {
             if (headers[i].textContent.trim() === colName) return cells[i].textContent || '';
         }
     }
-    // Column not rendered in any table → read from the backing data so
-    // order logic keeps working even with reduced columns.
+    // Column not rendered in table → read from backing data
     const row = _orderRowForSymbol(symbol);
     if (row) {
         if (colName === 'MaxQty') return row.MaxQty != null ? String(row.MaxQty) : '';
@@ -1503,19 +1594,16 @@ function placeOrder(symbol) {
 }
 
 // Parse "+12.34%" / "-1.20%" / "0.45%" → 12.34 / -1.20 / 0.45.
-// Used by auto-buy's CHG%-desc sort fallback when `change_pct`
-// (numeric) is not present in the row.
 function _parsePctStr(s) {
     if (s == null) return 0;
     const m = String(s).match(/-?\d+(\.\d+)?/);
     return m ? parseFloat(m[0]) : 0;
 }
 
-// Locate the row's Price cell (DOM lookup — works for both live data
-// and the SmartMoney / BigPlayers hardcoded stub rows).
+// Locate the row's Price cell
 function _lookupRowPrice(symbol) {
     try {
-        const cell = _lookupRowCell(symbol, 'Price', ['#breakoutHead', '#screenerHead'], ['#breakoutBody', '#screenerBody']);
+        const cell = _lookupRowCell(symbol, 'Price', ['#screenerHead'], ['#screenerBody']);
         return parseFloat((cell || '').replace(/[^0-9.]/g, '')) || 0;
     } catch (e) { console.warn('price lookup failed for', symbol, e); }
     return 0;

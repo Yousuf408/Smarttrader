@@ -111,11 +111,40 @@ function stopTestingAutoRefresh() {
     }
 }
 
+let currentTestingTab = 'ticks';
+
+function switchTestingTab(tab) {
+    currentTestingTab = tab;
+    const tabTicks = document.getElementById('testingTabTicks');
+    const tabOhlc = document.getElementById('testingTabOhlc');
+    const viewTicks = document.getElementById('testingViewTicks');
+    const viewOhlc = document.getElementById('testingViewOhlc');
+    const ticksMeta = document.getElementById('testingTicksMeta');
+
+    if (tab === 'ohlc') {
+        if (tabTicks) { tabTicks.className = 'btn btn-sm btn-outline'; }
+        if (tabOhlc) { tabOhlc.className = 'btn btn-sm btn-primary'; }
+        if (viewTicks) viewTicks.style.display = 'none';
+        if (viewOhlc) viewOhlc.style.display = 'block';
+        if (ticksMeta) ticksMeta.style.display = 'none';
+        stopTestingAutoRefresh();
+    } else {
+        if (tabTicks) { tabTicks.className = 'btn btn-sm btn-primary'; }
+        if (tabOhlc) { tabOhlc.className = 'btn btn-sm btn-outline'; }
+        if (viewTicks) viewTicks.style.display = 'block';
+        if (viewOhlc) viewOhlc.style.display = 'none';
+        if (ticksMeta) ticksMeta.style.display = 'flex';
+        startTestingAutoRefresh();
+    }
+}
+
 // ================================================================
 // NAVIGATION HOOK — main.js calls this when the testing page opens
 // ================================================================
 function loadTesting() {
-    startTestingAutoRefresh();
+    if (currentTestingTab === 'ticks') {
+        startTestingAutoRefresh();
+    }
 }
 
 // Also stop when leaving

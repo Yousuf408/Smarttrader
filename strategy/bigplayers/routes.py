@@ -16,7 +16,7 @@ def screen():
     budget = float(request.args.get('budget', 100000))
     parts = int(request.args.get('parts', 5))
     try:
-        from bigplayers.strategy import run_big_players_screener
+        from strategy.bigplayers.strategy import run_big_players_screener
         results = run_big_players_screener(budget=budget, parts=parts)
         return jsonify({"success": True, "data": results})
     except Exception as e:
@@ -30,7 +30,7 @@ def calculate_qty():
     parts = int(data.get('parts', 5))
     symbols = data.get('symbols', [])
     try:
-        from bigplayers.strategy import compute_quantities
+        from strategy.bigplayers.strategy import compute_quantities
         res = compute_quantities(symbols, budget, parts)
         return jsonify({"success": True, "data": res})
     except Exception as e:
