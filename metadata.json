@@ -1,0 +1,8 @@
+{
+  "name": "TradeAlgo Pro",
+  "description": "Trading algorithm screener and automated trade management dashboard featuring Advance ORB, SmartMoney, and Big Players strategies with live market data feeds.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

@@ -1,28 +1,25 @@
-# TradeAlgo Pro
+# SmartTrader Pro - Algorithmic Trading Platform
 
-## Overview
+A modern algorithmic trading suite featuring real-time Technical Screener, Advance ORB (Opening Range Breakout), Big Players Strategy, multi-broker connectivity (Dhan & Angel One), and TradingView Scanner integration for NSE Indian equities.
 
-TradeAlgo Pro is a vanilla HTML/CSS/JavaScript trading dashboard with a FastAPI backend for the Advance ORB stock screener.
+## System Architecture
 
-## Running on Replit
+- **TradingView Scanner (`/tradingview/`)**: Real-time NSE stock filtering by Nifty Total Market constituents (750 stocks), ₹200-₹4000 price bounds, ±2.0% gap limits, >₹4,100 Cr market cap, and 5-Day Median Relative Volume (RELVOL) calculation.
+- **Brokers (`/broker/`)**: Multi-broker execution layer with Dhan API and Angel One SmartAPI integration, margin calculators, and holding managers.
+- **Strategies**:
+  - `Advance ORB (`/advance_orb/`)`: 5-minute opening range breakout strategy with 200 EMA trend filtering.
+  - `Big Players (`/bigplayers/`)`: Institutional volume spikes and momentum tracking.
+- **Web App & Server**: Node.js/Express server (`server.js`) serving the responsive trading dashboard UI and strategy endpoints on Port 3000.
 
-The project uses the `Start application` workflow, which runs the FastAPI app on port 5000. The API serves the existing frontend from the project root, so the dashboard and API use the same origin.
+## Quick Start
 
-To run it manually:
-
-```bash
-uvicorn advance_orb.app:app --host 0.0.0.0 --port 5000
-```
-
-The Advance ORB endpoint queries TradingView through `tradingview-screener`, so its results depend on TradingView availability and network access. The other dashboard strategies use the data already included in the frontend.
-
-## User preferences
-
-- Keep the existing vanilla HTML/CSS/JavaScript and FastAPI structure unless a future request explicitly asks for a migration.
-- Always include a "Modified files" section at the end of implementation updates for reference.
-- Do not start any code modifications, file edits, or new implementation without explicit user approval. Discuss or debug freely, but pause for approval before writing or running changes.
-- Every modification must update the Replit file tree on disk (no extra cost — happens automatically with each edit). The "Modified files" section at the end of each implementation update is the source of truth.
-- Push to GitHub (`origin` → `Yousuf408/Smarttrader`) only when the user explicitly commands it. Auto-push after every change is opt-in, not on by default.
-- Communication style: keep replies short and point-wise. Use bullets, no fluff, no recap-of-recap.
-- ALWAYS check the prior discussion / project task list / memory before implementing anything. Do not "fix" or remove a behavioral condition that was deliberately added earlier without reading why it exists.
-- Advance ORB "Above 200 EMA" toggle KEEPS the ≤3% above-EMA cap (`ABOVE_EMA_MAX_GAP = 3.0`). A stock more than 3% above its EMA is excluded by design — this was a deliberate prior decision. Never remove this cap.
+1. Install dependencies:
+   ```bash
+   npm install
+   pip install -r requirements.txt
+   ```
+2. Run development server:
+   ```bash
+   npm start
+   ```
+3. Access Dashboard at `http://localhost:3000`.

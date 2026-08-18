@@ -1163,9 +1163,11 @@ async function fetchAdvanceORBRefresh(silent = true) {
         );
         if (!response.ok) return;
         const result = await response.json();
+        const refreshedList = Array.isArray(result?.refreshed) ? result.refreshed : [];
+        if (refreshedList.length === 0) return;
         const bySymbol = {};
-        for (const r of (result.refreshed || [])) {
-            bySymbol[r.Symbol] = r;
+        for (const r of refreshedList) {
+            if (r && r.Symbol) bySymbol[r.Symbol] = r;
         }
         // The refresh endpoint re-checks the 9:15 candle eligibility and
         // omits symbols that no longer qualify. Remove those from the

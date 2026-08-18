@@ -158,10 +158,13 @@ async function fetchBigPlayersRefresh(silent = true) {
         if (!response.ok) return;
 
         const result = await response.json();
+        const refreshedList = Array.isArray(result?.refreshed) ? result.refreshed : [];
+        if (refreshedList.length === 0) return;
 
         const bySymbol = {};
-        for (const r of (result.refreshed || [])) {
-            bySymbol[r.Symbol || r.symbol] = r;
+        for (const r of refreshedList) {
+            const sym = r?.Symbol || r?.symbol;
+            if (sym) bySymbol[sym] = r;
         }
 
         let touched = 0;
