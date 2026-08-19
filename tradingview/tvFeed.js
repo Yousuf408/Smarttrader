@@ -7,15 +7,16 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const JSON_DIR = path.join(__dirname, '..', 'json');
-const CANDLE_0915_15MIN_JSON_PATH = path.join(JSON_DIR, 'candle_0915_15min.json');
-const CANDLE_0915_5MIN_JSON_PATH = path.join(JSON_DIR, 'candle_0915_5min.json');
+
+const CANDLE_15MIN_JSON_PATH = path.join(JSON_DIR, 'candle_15min.json');
+const CANDLE_5MIN_JSON_PATH = path.join(JSON_DIR, 'candle_5min.json');
 
 /**
  * TV Feed Module: Direct integration with TradingView charts WebSocket
  * Fetches real historical 15m/5m opening candles (9:15 AM) and computes D1, D2, D3 comparison.
  */
 
-export async function fetchTvCandlesForSymbol(symbol, timeframe = '15', range = 100, existingClient = null) {
+export async function fetchTvCandlesForSymbol(symbol, timeframe = '15', range = 350, existingClient = null) {
   return new Promise((resolve) => {
     let client = existingClient || new TradingView.Client();
     let chart = null;
@@ -71,7 +72,39 @@ export async function fetchTvCandlesForSymbol(symbol, timeframe = '15', range = 
 }
 
 /**
- * Extracts 9:15 AM IST candles and calculates D1, D2, D3 volumes
+ * Calculates 200 EMA across candle periods and captures the EMA value at the 9:15 AM candle
+ */
+export function calculate200EmaAt915(periods) {
+  if (!periods || !Array.isArray(periods) || periods.length === 0) return 0;
+  const sorted = [...periods].sort((a, b) => a.time - b.time);
+  const length = Math.min(200, sorted.length);
+  if (length < 1) return 0;
+
+  const k = 2 / (200 + 1);
+  let ema = 0;
+  for (let i = 0; i < length; i++) {
+    ema += (sorted[i].close || sorted[i].open || 0);
+  }
+  ema /= length;
+
+  let emaAt915 = 0;
+  for (let i = length; i < sorted.length; i++) {
+    const p = sorted[i];
+    const close = p.close || p.open || ema;
+    ema = (close - ema) * k + ema;
+    const d = new Date(p.time * 1000);
+    const istHours = (d.getUTCHours() + 5 + Math.floor((d.getUTCMinutes() + 30) / 60)) % 24;
+    const istMins = (d.getUTCMinutes() + 30) % 60;
+    if (istHours === 9 && istMins === 15) {
+      emaAt915 = Math.round(ema * 100) / 100;
+    }
+  }
+
+  return emaAt915 || Math.round(ema * 100) / 100;
+}
+
+/**
+ * Extracts 9:15 AM IST candles and calculates D1, D2, D3 volumes + 200 EMA at 9:15 candle
  */
 export function process915Candles(periods, timeframe = '15m') {
   if (!periods || !Array.isArray(periods) || periods.length === 0) return null;
@@ -114,6 +147,8 @@ export function process915Candles(periods, timeframe = '15m') {
   const is_highest = (today_vol > 0 && prev_3d_max > 0 && today_vol > prev_3d_max);
   const extra_volume = is_highest ? (today_vol - prev_3d_max) : 0;
 
+  const ema200_0915 = calculate200EmaAt915(periods);
+
   return {
     date: latest.date,
     timeframe: timeframe,
@@ -135,15 +170,22 @@ export function process915Candles(periods, timeframe = '15m') {
     prev_3d_max: prev_3d_max,
     is_highest: is_highest,
     extra_volume: extra_volume,
-    vwap: latest.vwap
+    vwap: latest.vwap,
+    ema200_0915: ema200_0915,
+    ema_0915: ema200_0915,
+    ema: ema200_0915,
+    ema200: ema200_0915
   };
 }
 
 /**
- * Batch syncs all symbols using concurrency pooling and shared client session
+ * Batch syncs all symbols using concurrency pooling and shared client session,
+ * and writes to all candle JSON files.
  */
 export async function syncAllSymbolsCandles(symbols, onProgress = null) {
-  const BATCH_SIZE = 4;
+  if (!symbols || !Array.isArray(symbols) || symbols.length === 0) return {};
+
+  const BATCH_SIZE = 8;
   const results15m = {};
   const total = symbols.length;
   let processed = 0;
@@ -180,15 +222,17 @@ export async function syncAllSymbolsCandles(symbols, onProgress = null) {
       }
     }
 
-    await new Promise((r) => setTimeout(r, 250));
+    await new Promise((r) => setTimeout(r, 100));
   }
 
-  // Save to JSON
+  // Save to active JSON target file
   try {
     if (Object.keys(results15m).length > 0) {
+      if (!fs.existsSync(JSON_DIR)) fs.mkdirSync(JSON_DIR, { recursive: true });
+
       let existing = {};
-      if (fs.existsSync(CANDLE_0915_15MIN_JSON_PATH)) {
-        try { existing = JSON.parse(fs.readFileSync(CANDLE_0915_15MIN_JSON_PATH, 'utf8')); } catch (e) {}
+      if (fs.existsSync(CANDLE_15MIN_JSON_PATH)) {
+        try { existing = JSON.parse(fs.readFileSync(CANDLE_15MIN_JSON_PATH, 'utf8')); } catch (e) {}
       }
       const today = new Date().toISOString().split('T')[0];
       const merged = {
@@ -204,10 +248,12 @@ export async function syncAllSymbolsCandles(symbols, onProgress = null) {
       for (const [sym, data] of Object.entries(results15m)) {
         merged[`${today}|${sym}`] = data;
       }
-      fs.writeFileSync(CANDLE_0915_15MIN_JSON_PATH, JSON.stringify(merged, null, 2), 'utf8');
+      const jsonStr = JSON.stringify(merged, null, 2);
+
+      fs.writeFileSync(CANDLE_15MIN_JSON_PATH, jsonStr, 'utf8');
     }
   } catch (err) {
-    console.error('Error saving updated candle_0915_15min.json:', err.message);
+    console.error('Error saving updated candle JSON files:', err.message);
   }
 
   return results15m;

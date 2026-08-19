@@ -60,11 +60,27 @@ import {
   first15mVolMap,
   persistCandleSnapshot
 } from './tradingview/scanner.js';
+import { syncAllSymbolsCandles } from './tradingview/tvFeed.js';
 import { arrowStreamService } from './broker/arrow_stream_service.js';
-
 
 // Auto-connect Arrow WebSocket stream for real-time market ticks
 arrowStreamService.connect();
+
+// Trigger background TV candle sync for key watchlist symbols on startup
+setTimeout(async () => {
+  try {
+    const topSymbols = watchlistSymbols.slice(0, 50);
+    console.log(`[TV-Feed] Background sync starting for ${topSymbols.length} symbols...`);
+    const synced = await syncAllSymbolsCandles(topSymbols);
+    for (const [sym, data] of Object.entries(synced)) {
+      first15mVolMap.set(sym, data);
+    }
+    persistCandleSnapshot();
+    console.log(`[TV-Feed] Background sync completed for ${Object.keys(synced).length} symbols.`);
+  } catch (e) {
+    console.warn('[TV-Feed] Background sync warning:', e.message);
+  }
+}, 2000);
 
 
 
@@ -236,6 +252,37 @@ app.get('/api/tradingview/scan', async (req, res) => {
   }
 });
 
+app.get(['/api/tradingview/ingestion/status', '/api/ingestion/status'], (req, res) => {
+  res.json({
+    success: true,
+    active_date: new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }),
+    candle_15min_stocks: first15mVolMap.size,
+    candle_5min_stocks: first5mCandleMap.size,
+    timestamp: new Date().toISOString()
+  });
+});
+
+app.get(['/api/tradingview/ingestion/logs', '/api/ingestion/logs'], (req, res) => {
+  const limit = parseInt(req.query.limit) || 50;
+  res.json({
+    success: true,
+    logs: getIngestionLogs(limit)
+  });
+});
+
+app.post(['/api/tradingview/ingestion/trigger', '/api/ingestion/trigger'], async (req, res) => {
+  try {
+    const result = await runManualIngestion();
+    res.json({
+      success: true,
+      message: 'Ingestion pipeline executed successfully',
+      result
+    });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
 // -------------------------------------------------------------
 // MARKET & TICKS ROUTES
 // -------------------------------------------------------------
@@ -359,6 +406,11 @@ app.get('/api/strategies/advanceorb', async (req, res) => {
       RELVOL: s.relvol || 1.45,
       Sector: s.sector || 'General',
       '200 EMA': s.ema,
+      ema: s.ema,
+      ema_15m: s.ema_15m,
+      ema_5m: s.ema_5m,
+      ema_daily: s.ema_daily,
+      ema200: s.ema,
       '1st High': s.high915,
       '1st Low': s.low915,
       '1st Range%': rangePct,
@@ -370,8 +422,14 @@ app.get('/api/strategies/advanceorb', async (req, res) => {
       first_15m_vol: s.first_15m_vol || 0,
       first_15m_prev_max: s.first_15m_prev_max || 0,
       is_15m_highest: s.is_15m_highest || false,
+      d1_vol: s.d1_vol || 0,
+      d2_vol: s.d2_vol || 0,
+      d3_vol: s.d3_vol || 0,
+      d1: s.d1_vol || 0,
+      d2: s.d2_vol || 0,
+      d3: s.d3_vol || 0,
+      prev_3d_vols: [s.d1_vol || 0, s.d2_vol || 0, s.d3_vol || 0],
       MaxQty: maxQty,
-      ema: s.ema,
       open915: s.open915,
       yesterday_high: s.yesterday_high,
       yesterday_low: s.yesterday_low,
@@ -477,10 +535,14 @@ app.all('/api/strategies/advanceorb/refresh', async (req, res) => {
 app.get('/api/strategies/bigplayers', async (req, res) => {
   const budget = parseFloat(req.query.budget) || 100000;
   const parts = parseFloat(req.query.parts) || 5;
+  const newLowToggle = req.query.new_low === 'true' || req.query.newlow === 'true' || req.query.broke_915_low === 'true';
 
   const stocks = await fetchTradingViewScanner(200, 4000, 1500);
 
-  const data = stocks.map(s => {
+  // Subscribe all symbols to the unified WebSocket
+  arrowStreamService.subscribeSymbols(stocks.map(s => s.symbol));
+
+  let data = stocks.map(s => {
     const liveTick = arrowStreamService.getTick(s.symbol);
     const livePrice = (liveTick && liveTick.ltp > 0) ? liveTick.ltp : s.price;
     const liveChg = (liveTick && liveTick.change_pct != null) ? liveTick.change_pct : s.change_pct;
@@ -489,22 +551,52 @@ app.get('/api/strategies/bigplayers', async (req, res) => {
     const maxQty = computeMaxQty(budget, parts, livePrice);
     const riskRs = Math.round((entryPrice - sl) * maxQty);
 
+    const candle15m = first15mVolMap.get(s.symbol);
+    const candle5m = first5mCandleMap.get(s.symbol);
+
+    const low915 = s.low915 || candle15m?.low915 || candle15m?.price_0915_L || (livePrice * 0.99);
+    const high915 = s.high915 || candle15m?.high915 || candle15m?.price_0915_H || (livePrice * 1.01);
+    const lowestLowTill1015 = candle15m?.lowest_low_till_1015 || low915;
+    const highestHighTill1015 = candle15m?.highest_high_till_1015 || high915;
+
+    // TodayLow considers 9:15 low, subsequent candles till 10:15, and live tick price
+    const todayLow = Math.round(Math.min(low915, lowestLowTill1015, livePrice) * 100) / 100;
+    const todayHigh = Math.round(Math.max(high915, highestHighTill1015, livePrice) * 100) / 100;
+
+    const broke915Low = todayLow < low915 || livePrice < low915 || candle15m?.broke_915_low === true || candle15m?.new_low_formed === true;
+    const broke915High = todayHigh > high915 || livePrice > high915 || candle15m?.broke_915_high === true || candle15m?.new_high_formed === true;
+
     return {
       Symbol: s.symbol,
       Price: livePrice,
       'CHG%': liveChg,
-      Breakout: livePrice >= (s.high915 * 0.995) ? 'Confirmed' : 'Forming',
-      SupportPrice: s.low915,
+      Breakout: livePrice >= (high915 * 0.995) ? 'Confirmed' : 'Forming',
+      SupportPrice: low915,
       EntryPrice: entryPrice,
       SL: sl,
       MaxQty: maxQty,
       RiskRs: riskRs,
-      TodayLow: s.low915,
-      low915: s.low915,
-      high915: s.high915
+      TodayLow: todayLow,
+      TodayHigh: todayHigh,
+      low915: low915,
+      high915: high915,
+      open915: s.open915 || candle15m?.open915 || livePrice,
+      close915: s.close915 || candle15m?.close915 || livePrice,
+      lowest_low_till_1015: lowestLowTill1015,
+      highest_high_till_1015: highestHighTill1015,
+      new_low_formed: broke915Low,
+      broke_915_low: broke915Low,
+      new_high_formed: broke915High,
+      broke_915_high: broke915High,
+      candles_15m_till_1015: candle15m?.candles_till_1015 || null,
+      candles_5m_till_1015: candle5m?.candles_till_1015 || null
     };
   });
 
+  // Apply new low toggle filter if active
+  if (newLowToggle) {
+    data = data.filter(item => item.new_low_formed || item.broke_915_low || item.TodayLow < item.low915);
+  }
 
   // Sort descending by CHG% (highest to lowest)
   data.sort((a, b) => (parseFloat(b['CHG%']) || 0) - (parseFloat(a['CHG%']) || 0));
@@ -515,10 +607,12 @@ app.get('/api/strategies/bigplayers', async (req, res) => {
     count: data.length,
     data: data,
     columns: BIG_PLAYERS_COLUMNS,
-    source: 'TradingView Scanner API',
+    source: 'TradingView Candle Feed API',
+    filter_new_low: newLowToggle,
     conditions: {
       support_bounce: true,
-      volume_breakout: true
+      volume_breakout: true,
+      new_low_tracking: true
     }
   });
 });
@@ -569,6 +663,86 @@ app.get('/api/strategies/bigplayers/refresh', async (req, res) => {
   });
 
   res.json({ refreshed });
+});
+
+// Direct TradingView candle sync endpoints
+app.post(['/api/tradingview/sync-candles', '/api/screener/sync-candles'], async (req, res) => {
+  try {
+    const symbols = req.body.symbols || watchlistSymbols.slice(0, 60);
+    const synced = await syncAllSymbolsCandles(symbols);
+    for (const [sym, data] of Object.entries(synced)) {
+      first15mVolMap.set(sym, data);
+    }
+    persistCandleSnapshot();
+    res.json({ success: true, count: Object.keys(synced).length, synced });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+app.get(['/api/tradingview/candle-0915', '/api/screener/candle-0915'], (req, res) => {
+  try {
+    const jsonPath = path.join(__dirname, 'json', 'candle_15min.json');
+    if (fs.existsSync(jsonPath)) {
+      const data = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
+      return res.json(data);
+    }
+    res.json({});
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Dedicated Candle Timeline API (Track all 5m & 15m candles from 09:15 to 10:15)
+app.get(['/api/candles/timeline', '/api/tradingview/candles/timeline'], (req, res) => {
+  const sym = (req.query.symbol || '').toUpperCase().trim();
+  const tf = req.query.timeframe === '5m' ? '5m' : '15m';
+
+  if (sym) {
+    const candle15m = first15mVolMap.get(sym);
+    const candle5m = first5mCandleMap.get(sym);
+    return res.json({
+      success: true,
+      symbol: sym,
+      timeframe: tf,
+      open915: candle15m?.open915,
+      high915: candle15m?.high915,
+      low915: candle15m?.low915,
+      close915: candle15m?.close915,
+      lowest_low_till_1015: candle15m?.lowest_low_till_1015,
+      highest_high_till_1015: candle15m?.highest_high_till_1015,
+      broke_915_low: candle15m?.broke_915_low,
+      new_low_formed: candle15m?.new_low_formed,
+      candles_15m_till_1015: candle15m?.candles_till_1015 || null,
+      candles_5m_till_1015: candle5m?.candles_till_1015 || null
+    });
+  }
+
+  // Entire universe summary
+  const summary = [];
+  first15mVolMap.forEach((v, s) => {
+    summary.push({
+      symbol: s,
+      open915: v.open915,
+      high915: v.high915,
+      low915: v.low915,
+      close915: v.close915,
+      lowest_low_till_1015: v.lowest_low_till_1015,
+      highest_high_till_1015: v.highest_high_till_1015,
+      broke_915_low: v.broke_915_low,
+      new_low_formed: v.new_low_formed,
+      candles_count_15m: v.candles_till_1015 ? Object.keys(v.candles_till_1015).length : 0
+    });
+  });
+
+  res.json({
+    success: true,
+    total_stocks: summary.length,
+    tracking_window: '09:15 to 10:15 IST',
+    candles_15m_intervals: ['09:15', '09:30', '09:45', '10:00'],
+    candles_5m_intervals: ['09:15', '09:20', '09:25', '09:30', '09:35', '09:40', '09:45', '09:50', '09:55', '10:00', '10:05', '10:10'],
+    data: summary
+  });
 });
 
 // -------------------------------------------------------------
@@ -786,15 +960,9 @@ app.get('/api/nifty/ohlc', async (req, res) => {
 
 app.get(['/api/candles/0915', '/api/candles/snapshot', '/api/candles/15min', '/api/candles/0915_15min'], (req, res) => {
   const p1 = path.join(__dirname, 'json', 'candle_15min.json');
-  const p2 = path.join(__dirname, 'json', 'candle_0915.json');
-  const p3 = path.join(__dirname, 'stocks', '_meetatet.json');
   let data = null;
   if (fs.existsSync(p1)) {
     try { data = JSON.parse(fs.readFileSync(p1, 'utf8')); } catch (e) {}
-  } else if (fs.existsSync(p2)) {
-    try { data = JSON.parse(fs.readFileSync(p2, 'utf8')); } catch (e) {}
-  } else if (fs.existsSync(p3)) {
-    try { data = JSON.parse(fs.readFileSync(p3, 'utf8')); } catch (e) {}
   }
   res.json({
     ok: true,
@@ -807,15 +975,9 @@ app.get(['/api/candles/0915', '/api/candles/snapshot', '/api/candles/15min', '/a
 
 app.get(['/api/candles/5min', '/api/candles/0915_5min'], (req, res) => {
   const p1 = path.join(__dirname, 'json', 'candle_5min.json');
-  const p2 = path.join(__dirname, 'json', 'candle_0915_5min.json');
-  const p3 = path.join(__dirname, 'stocks', 'candle_5min.json');
   let data = null;
   if (fs.existsSync(p1)) {
     try { data = JSON.parse(fs.readFileSync(p1, 'utf8')); } catch (e) {}
-  } else if (fs.existsSync(p2)) {
-    try { data = JSON.parse(fs.readFileSync(p2, 'utf8')); } catch (e) {}
-  } else if (fs.existsSync(p3)) {
-    try { data = JSON.parse(fs.readFileSync(p3, 'utf8')); } catch (e) {}
   }
   res.json({
     ok: true,
@@ -829,7 +991,6 @@ app.get(['/api/candles/5min', '/api/candles/0915_5min'], (req, res) => {
 app.get('/api/candles/status', (req, res) => {
   const p15 = path.join(__dirname, 'json', 'candle_15min.json');
   const p5 = path.join(__dirname, 'json', 'candle_5min.json');
-  const p0915 = path.join(__dirname, 'json', 'candle_0915.json');
   
   let count15 = first15mVolMap.size;
   let count5 = first5mCandleMap.size;
@@ -850,8 +1011,7 @@ app.get('/api/candles/status', (req, res) => {
     count_5m: count5,
     files: {
       candle_15min_exists: fs.existsSync(p15),
-      candle_5min_exists: fs.existsSync(p5),
-      candle_0915_exists: fs.existsSync(p0915)
+      candle_5min_exists: fs.existsSync(p5)
     },
     last_recorded: lastModified
   });

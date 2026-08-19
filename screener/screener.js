@@ -406,7 +406,10 @@ function copySymbol(text, el) {
 /** Format one cell value for a column (mirrors the legacy inline logic). */
 function orbCellValue(row, col) {
     let value;
-    if (col === 'Signal' || col === 'Status' || col === 'Breakout') {
+    if (col === 'Symbol') {
+        const sym = row.Symbol || row.symbol || 'Unknown';
+        return `<span style="font-weight:600;">${sym}</span>`;
+    } else if (col === 'Signal' || col === 'Status' || col === 'Breakout') {
         const price = parseFloat(row.Price ?? row.price);
         const high = parseFloat(row.high915 ?? row['1st High'] ?? row.yesterday_high);
         const isBreakout = (Number.isFinite(price) && Number.isFinite(high) && high > 0 && price >= (high * 0.99)) || row.Breakout === 'Confirmed';
@@ -422,11 +425,20 @@ function orbCellValue(row, col) {
             return `<span class="badge-signal badge-normal">⚪ In Range</span>`;
         }
     } else if (col === '200 EMA') {
-        const ema = parseFloat(row.ema ?? row['200 EMA']);
+        const tf = typeof selectedTimeframe !== 'undefined' ? Number(selectedTimeframe) : 15;
+        let emaRaw = null;
+        if (tf === 15 && Number.isFinite(parseFloat(row.ema_15m))) {
+            emaRaw = parseFloat(row.ema_15m);
+        } else if (tf === 5 && Number.isFinite(parseFloat(row.ema_5m))) {
+            emaRaw = parseFloat(row.ema_5m);
+        } else {
+            emaRaw = parseFloat(row.ema ?? row['200 EMA'] ?? row.ema200);
+        }
+
         const price = parseFloat(row.Price ?? row.price);
-        if (Number.isFinite(ema)) {
-            const isAbove = Number.isFinite(price) && price >= ema;
-            value = `<span style="color:${isAbove ? 'var(--color-success)' : 'inherit'};font-weight:${isAbove ? '600' : 'normal'}">${ema.toFixed(2)}</span>`;
+        if (Number.isFinite(emaRaw) && emaRaw > 0) {
+            const isAbove = Number.isFinite(price) && price >= emaRaw;
+            value = `<span style="color:${isAbove ? 'var(--color-success)' : 'inherit'};font-weight:${isAbove ? '600' : 'normal'}">${emaRaw.toFixed(2)}</span>`;
         } else {
             value = '';
         }
@@ -454,12 +466,11 @@ function orbCellValue(row, col) {
         const op = parseFloat(row.open915);
         value = Number.isFinite(op) ? `₹${op.toFixed(2)}` : '';
     } else if (col === 'Extra 15m Vol' || col === 'Extra 15m' || col === '15m Extra Vol' || col === '15m Vol' || col === '15M Vol') {
-        const total15m = parseFloat(row.first_15m_vol ?? row['15m Vol']);
-        const extraVol = parseFloat(row.extra_15m_vol ?? row['Extra 15m Vol']);
-        const isHighest = row.is_15m_highest === true;
+        const total15m = parseFloat(row.first_15m_vol ?? row['15m Vol'] ?? row.today_15m_vol ?? row.volume_0915);
+        const isHighest = row.is_15m_highest === true || row.is_highest === true || (Number(row.first_15m_vol) > 0 && Number(row.first_15m_prev_max) > 0 && Number(row.first_15m_vol) > Number(row.first_15m_prev_max));
         
         const formatVol = (v) => {
-            if (!Number.isFinite(v) || v <= 0) return '—';
+            if (!Number.isFinite(v) || v <= 0) return '';
             if (v >= 10000000) return `${(v / 10000000).toFixed(2)}Cr`;
             if (v >= 1000000) return `${(v / 1000000).toFixed(2)}M`;
             if (v >= 100000) return `${(v / 100000).toFixed(2)}L`;
@@ -467,18 +478,13 @@ function orbCellValue(row, col) {
             return `${Math.round(v)}`;
         };
 
-        if (Number.isFinite(total15m) && total15m > 0) {
+        if (isHighest && Number.isFinite(total15m) && total15m > 0) {
             const totalStr = formatVol(total15m);
-            if (isHighest && Number.isFinite(extraVol) && extraVol > 0) {
-                const extraStr = formatVol(extraVol);
-                value = `<div style="display:flex;align-items:center;gap:6px;"><span style="font-weight:600;">${totalStr}</span><span class="badge-signal" style="background:rgba(34,197,94,0.15);color:var(--color-success);border:1px solid rgba(34,197,94,0.3);font-size:11px;padding:2px 6px;border-radius:4px;font-weight:700;" title="3-day highest! Extra volume: +${extraStr}">🔥 +${extraStr}</span></div>`;
-            } else {
-                value = `<span>${totalStr}</span>`;
-            }
-        } else if (isHighest && Number.isFinite(extraVol) && extraVol > 0) {
-            value = `<span class="badge-signal" style="background:rgba(34,197,94,0.15);color:var(--color-success);border:1px solid rgba(34,197,94,0.3);font-weight:700;">🔥 +${formatVol(extraVol)}</span>`;
+            // Mention complete volume in green box only for highest volume stocks
+            value = `<div style="display:flex;align-items:center;gap:6px;"><span class="badge-signal" style="background:rgba(34,197,94,0.18);color:var(--color-success);border:1px solid rgba(34,197,94,0.4);font-size:12px;padding:3px 8px;border-radius:4px;font-weight:700;" title="🔥 Highest 15m Volume in past 3 days! Complete volume: ${totalStr}">🔥 ${totalStr}</span></div>`;
         } else {
-            value = `<span style="color:var(--text-muted);">—</span>`;
+            // Keep rows empty if volume is not higher than past 3 days
+            value = '';
         }
 
     } else if (col === 'Prev High' || col === 'PREV HIGH') {
@@ -592,9 +598,9 @@ function updateQuickFilterCounts(allRows) {
         if (r.inside_915 === true || r['Inside 9:15'] === 'Yes') {
             inside915Count++;
         }
-        // Extra 15m Vol: Only count if first 15m candle volume exceeded the 3-day max
-        const extra = parseFloat(r.extra_15m_vol ?? r['Extra 15m Vol']);
-        if (r.is_15m_highest === true && Number.isFinite(extra) && extra > 0) {
+        // Extra 15m Vol: Count all stocks with highest 15m volume compared to past 3 days
+        const isExtraVolRow = r.is_15m_highest === true || r.is_highest === true || (Number(r.first_15m_vol) > 0 && Number(r.first_15m_prev_max) > 0 && Number(r.first_15m_vol) > Number(r.first_15m_prev_max));
+        if (isExtraVolRow) {
             extraVolCount++;
         }
 
@@ -643,8 +649,7 @@ function orbUnifiedFilter(r) {
     }
 
     const isInside915 = r.inside_915 === true || r['Inside 9:15'] === 'Yes';
-    const extra = parseFloat(r.extra_15m_vol ?? r['Extra 15m Vol']);
-    const isExtraVol = r.is_15m_highest === true && Number.isFinite(extra) && extra > 0;
+    const isExtraVol = r.is_15m_highest === true || r.is_highest === true || (Number(r.first_15m_vol) > 0 && Number(r.first_15m_prev_max) > 0 && Number(r.first_15m_vol) > Number(r.first_15m_prev_max));
 
 
     // 1. Check active Quick Tab filter
@@ -762,12 +767,28 @@ async function fetchBigPlayers() {
     try {
         const budget = _readBudget();
         const parts = _readParts();
-        const res = await fetch(`/api/strategies/bigplayers?budget=${budget}&parts=${parts}`);
+        const newLowToggle = document.getElementById('newLowToggle')?.checked ? 'true' : 'false';
+        const res = await fetch(`/api/strategies/bigplayers?budget=${budget}&parts=${parts}&new_low=${newLowToggle}`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return await res.json();
     } catch (e) {
         console.warn('BigPlayers fetch error:', e);
         return null;
+    }
+}
+
+async function onNewLowToggle() {
+    const isChecked = document.getElementById('newLowToggle')?.checked || false;
+    const statusEl = document.getElementById('newLowStatus');
+    if (statusEl) {
+        statusEl.textContent = isChecked ? 'ON' : 'OFF';
+        statusEl.className = isChecked ? 'toggle-item-status active' : 'toggle-item-status';
+    }
+
+    const data = await fetchBigPlayers();
+    if (data) {
+        window.lastBigPlayersData = data;
+        renderBigPlayersData(data);
     }
 }
 
