@@ -52,11 +52,21 @@ let mockUser = {
 // -------------------------------------------------------------
 import {
   getNiftyTotalMarketSymbols,
-  fetch5DayMedianVolume,
-  prefetch5DayMedians,
   fetchTradingViewScanner,
-  getTicksMap
+  getTicksMap,
+  getIngestionLogs,
+  runManualIngestion,
+  first5mCandleMap,
+  first15mVolMap,
+  persistCandleSnapshot
 } from './tradingview/scanner.js';
+import { arrowStreamService } from './broker/arrow_stream_service.js';
+
+
+// Auto-connect Arrow WebSocket stream for real-time market ticks
+arrowStreamService.connect();
+
+
 
 // -------------------------------------------------------------
 // AUTH ROUTES (Supabase Auth for User Credentials)
@@ -260,7 +270,7 @@ app.get('/api/market/live-ticks', async (req, res) => {
   });
 });
 
-// SSE streams
+// SSE streams with high-frequency real-time push
 app.get(['/api/market/live-ticks/stream', '/api/market/bigplayers-ticks/stream'], (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
@@ -271,7 +281,8 @@ app.get(['/api/market/live-ticks/stream', '/api/market/bigplayers-ticks/stream']
     try {
       const ticks = await getTicksMap();
       const data = JSON.stringify({
-        connected: brokerConnected,
+        connected: brokerConnected || arrowStreamService.isConnected,
+        broker: arrowStreamService.isConnected ? 'arrow' : 'angel',
         ticks: ticks
       });
       res.write(`data: ${data}\n\n`);
@@ -281,7 +292,8 @@ app.get(['/api/market/live-ticks/stream', '/api/market/bigplayers-ticks/stream']
   };
 
   sendTick();
-  const interval = setInterval(sendTick, 3000);
+  // 300ms push cadence for sub-second millisecond responsiveness
+  const interval = setInterval(sendTick, 300);
 
   req.on('close', () => {
     clearInterval(interval);
@@ -320,20 +332,30 @@ app.get('/api/strategies/advanceorb', async (req, res) => {
 
   const rawStocks = await fetchTradingViewScanner(200, 4000, 1500);
 
+  // Subscribe all scanned stocks to Arrow Trade WebSocket for live tick updates
+  arrowStreamService.subscribeSymbols(rawStocks.map(s => s.symbol));
+
   let mapped = rawStocks.map(s => {
+    const liveTick = arrowStreamService.getTick(s.symbol);
+    const livePrice = (liveTick && liveTick.ltp > 0) ? liveTick.ltp : s.price;
+    const liveChg = (liveTick && liveTick.change_pct != null) ? liveTick.change_pct : s.change_pct;
+    const liveVol = (liveTick && liveTick.volume > 0) ? liveTick.volume : s.volume;
+
     const gap = s.gap || (s.open915 && s.yesterday_close ? Math.round(((s.open915 - s.yesterday_close) / s.yesterday_close) * 10000) / 100 : 0);
     const rangePct = s.high915 && s.low915 && s.low915 > 0 ? Math.round(((s.high915 - s.low915) / s.low915) * 10000) / 100 : 1.5;
     const isInside915 = rangePct <= 2.8;
-    const isAboveEma = s.price >= (s.ema || 0);
-    const isNearHigh = (s.yesterday_high - s.price) / (s.yesterday_high || s.price) <= 0.015;
-    const maxQty = computeMaxQty(budget, parts, s.price);
+    const isAboveEma = livePrice >= (s.ema || 0);
+    const prevHigh = s.yesterday_high || s.high915;
+    const isNearHigh = livePrice >= prevHigh ? true : ((prevHigh - livePrice) / prevHigh <= 0.02);
+    const maxQty = computeMaxQty(budget, parts, livePrice);
+
 
     return {
       Symbol: s.symbol,
-      Price: s.price,
-      'CHG%': s.change_pct,
+      Price: livePrice,
+      'CHG%': liveChg,
       'GAP%': gap,
-      Volume: s.volume,
+      Volume: liveVol,
       RELVOL: s.relvol || 1.45,
       Sector: s.sector || 'General',
       '200 EMA': s.ema,
@@ -342,6 +364,7 @@ app.get('/api/strategies/advanceorb', async (req, res) => {
       '1st Range%': rangePct,
       'Inside 9:15': isInside915 ? 'Yes' : 'No',
       'Share Low': s.low915,
+
       'Extra 15m Vol': s.extra_15m_vol || 0,
       extra_15m_vol: s.extra_15m_vol || 0,
       first_15m_vol: s.first_15m_vol || 0,
@@ -411,9 +434,13 @@ app.post('/api/strategies/advanceorb/qty', async (req, res) => {
   res.json({ data });
 });
 
-app.get('/api/strategies/advanceorb/refresh', async (req, res) => {
-  const tickersParam = req.query.tickers || '';
-  const requestedTickers = tickersParam ? tickersParam.split(',').map(t => t.trim().toUpperCase()) : [];
+app.all('/api/strategies/advanceorb/refresh', async (req, res) => {
+  let requestedTickers = [];
+  if (Array.isArray(req.body?.tickers)) {
+    requestedTickers = req.body.tickers.map(t => String(t).trim().toUpperCase());
+  } else if (typeof req.query?.tickers === 'string' && req.query.tickers) {
+    requestedTickers = req.query.tickers.split(',').map(t => t.trim().toUpperCase());
+  }
   
   const stocks = await fetchTradingViewScanner(200, 4000, 1500);
 
@@ -422,12 +449,15 @@ app.get('/api/strategies/advanceorb/refresh', async (req, res) => {
     : stocks;
 
   const refreshed = filtered.map(s => {
+    const liveTick = arrowStreamService.getTick(s.symbol);
+    const livePrice = (liveTick && liveTick.ltp > 0) ? liveTick.ltp : s.price;
+    const liveChg = (liveTick && liveTick.change_pct != null) ? liveTick.change_pct : s.change_pct;
     const rangePct = s.high915 && s.low915 && s.low915 > 0 ? Math.round(((s.high915 - s.low915) / s.low915) * 10000) / 100 : 1.5;
     const isInside915 = rangePct <= 2.8;
     return {
       Symbol: s.symbol,
-      Price: s.price,
-      'CHG%': s.change_pct,
+      Price: livePrice,
+      'CHG%': liveChg,
       Volume: typeof s.volume === 'number' ? s.volume.toLocaleString('en-IN') : s.volume,
       RELVOL: `${s.relvol || 1.25}x`,
       Sector: s.sector || 'General',
@@ -436,12 +466,13 @@ app.get('/api/strategies/advanceorb/refresh', async (req, res) => {
       '1st Low': s.low915,
       '1st Range%': rangePct,
       inside_915: isInside915,
-      close920: s.close920 || s.price
+      close920: s.close920 || livePrice
     };
   });
 
   res.json({ refreshed });
 });
+
 
 app.get('/api/strategies/bigplayers', async (req, res) => {
   const budget = parseFloat(req.query.budget) || 100000;
@@ -450,16 +481,19 @@ app.get('/api/strategies/bigplayers', async (req, res) => {
   const stocks = await fetchTradingViewScanner(200, 4000, 1500);
 
   const data = stocks.map(s => {
-    const entryPrice = s.price;
+    const liveTick = arrowStreamService.getTick(s.symbol);
+    const livePrice = (liveTick && liveTick.ltp > 0) ? liveTick.ltp : s.price;
+    const liveChg = (liveTick && liveTick.change_pct != null) ? liveTick.change_pct : s.change_pct;
+    const entryPrice = livePrice;
     const sl = Math.round((entryPrice * 0.99) * 100) / 100;
-    const maxQty = computeMaxQty(budget, parts, s.price);
+    const maxQty = computeMaxQty(budget, parts, livePrice);
     const riskRs = Math.round((entryPrice - sl) * maxQty);
 
     return {
       Symbol: s.symbol,
-      Price: s.price,
-      'CHG%': s.change_pct,
-      Breakout: s.price >= (s.high915 * 0.995) ? 'Confirmed' : 'Forming',
+      Price: livePrice,
+      'CHG%': liveChg,
+      Breakout: livePrice >= (s.high915 * 0.995) ? 'Confirmed' : 'Forming',
       SupportPrice: s.low915,
       EntryPrice: entryPrice,
       SL: sl,
@@ -470,6 +504,7 @@ app.get('/api/strategies/bigplayers', async (req, res) => {
       high915: s.high915
     };
   });
+
 
   // Sort descending by CHG% (highest to lowest)
   data.sort((a, b) => (parseFloat(b['CHG%']) || 0) - (parseFloat(a['CHG%']) || 0));
@@ -749,41 +784,114 @@ app.get('/api/nifty/ohlc', async (req, res) => {
   });
 });
 
-app.get(['/api/candles/0915', '/api/candles/snapshot'], (req, res) => {
-  const p1 = path.join(__dirname, 'json', 'candle_0915.json');
-  const p2 = path.join(__dirname, 'stocks', '_meetatet.json');
+app.get(['/api/candles/0915', '/api/candles/snapshot', '/api/candles/15min', '/api/candles/0915_15min'], (req, res) => {
+  const p1 = path.join(__dirname, 'json', 'candle_15min.json');
+  const p2 = path.join(__dirname, 'json', 'candle_0915.json');
+  const p3 = path.join(__dirname, 'stocks', '_meetatet.json');
   let data = null;
   if (fs.existsSync(p1)) {
     try { data = JSON.parse(fs.readFileSync(p1, 'utf8')); } catch (e) {}
   } else if (fs.existsSync(p2)) {
     try { data = JSON.parse(fs.readFileSync(p2, 'utf8')); } catch (e) {}
+  } else if (fs.existsSync(p3)) {
+    try { data = JSON.parse(fs.readFileSync(p3, 'utf8')); } catch (e) {}
   }
   res.json({
     ok: true,
+    timeframe: '15m',
+    candle_time: '09:15',
+    data: data || {},
+    timestamp: new Date().toISOString()
+  });
+});
+
+app.get(['/api/candles/5min', '/api/candles/0915_5min'], (req, res) => {
+  const p1 = path.join(__dirname, 'json', 'candle_5min.json');
+  const p2 = path.join(__dirname, 'json', 'candle_0915_5min.json');
+  const p3 = path.join(__dirname, 'stocks', 'candle_5min.json');
+  let data = null;
+  if (fs.existsSync(p1)) {
+    try { data = JSON.parse(fs.readFileSync(p1, 'utf8')); } catch (e) {}
+  } else if (fs.existsSync(p2)) {
+    try { data = JSON.parse(fs.readFileSync(p2, 'utf8')); } catch (e) {}
+  } else if (fs.existsSync(p3)) {
+    try { data = JSON.parse(fs.readFileSync(p3, 'utf8')); } catch (e) {}
+  }
+  res.json({
+    ok: true,
+    timeframe: '5m',
+    candle_time: '09:15',
     data: data || {},
     timestamp: new Date().toISOString()
   });
 });
 
 app.get('/api/candles/status', (req, res) => {
-  const p1 = path.join(__dirname, 'json', 'candle_0915.json');
-  let count = watchlistSymbols.length;
+  const p15 = path.join(__dirname, 'json', 'candle_15min.json');
+  const p5 = path.join(__dirname, 'json', 'candle_5min.json');
+  const p0915 = path.join(__dirname, 'json', 'candle_0915.json');
+  
+  let count15 = first15mVolMap.size;
+  let count5 = first5mCandleMap.size;
   let lastModified = new Date().toISOString();
-  if (fs.existsSync(p1)) {
+
+  if (fs.existsSync(p15)) {
     try {
-      const stat = fs.statSync(p1);
+      const stat = fs.statSync(p15);
       lastModified = stat.mtime.toISOString();
-      const content = JSON.parse(fs.readFileSync(p1, 'utf8'));
-      if (content.__meta__?.stock_count) count = content.__meta__.stock_count;
+      const content = JSON.parse(fs.readFileSync(p15, 'utf8'));
+      if (content.__meta__?.stock_count) count15 = content.__meta__.stock_count;
     } catch (e) {}
   }
+
   res.json({
     status: 'active',
-    count: count,
-    file_exists: fs.existsSync(p1),
+    count_15m: count15,
+    count_5m: count5,
+    files: {
+      candle_15min_exists: fs.existsSync(p15),
+      candle_5min_exists: fs.existsSync(p5),
+      candle_0915_exists: fs.existsSync(p0915)
+    },
     last_recorded: lastModified
   });
 });
+
+app.get('/api/candles/logs', (req, res) => {
+  const limit = parseInt(req.query.limit || '100', 10);
+  res.json({
+    ok: true,
+    total_logs: getIngestionLogs(limit).length,
+    logs: getIngestionLogs(limit)
+  });
+});
+
+app.post('/api/candles/refresh', async (req, res) => {
+  try {
+    const result = await runManualIngestion();
+    res.json({
+      ok: true,
+      message: 'Ingestion pipeline executed successfully',
+      result: result
+    });
+  } catch (err) {
+    res.status(500).json({
+      ok: false,
+      error: err.message
+    });
+  }
+});
+
+app.get('/api/broker/angel/ws-status', (req, res) => {
+  res.json({
+    broker: 'angelone',
+    websocket_endpoint: 'wss://smartapisocket.angelone.in/smart-stream',
+    protocol: 'SmartStream V2 (Binary)',
+    supported_modes: ['LTP (Mode 1)', 'Quote (Mode 2)', 'SnapQuote (Mode 3)'],
+    status: brokerConnected && activeBroker === 'angel' ? 'CONNECTED' : 'STANDBY'
+  });
+});
+
 
 app.get('/api/cache/status', (req, res) => {
   res.json({

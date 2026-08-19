@@ -11,10 +11,59 @@ const DOM = {
 let autoBuyEnabled = false;
 
 // ================================================================
+// CENTRAL WEBSOCKET / SSE LIVE FEED MANAGER
+// ================================================================
+window.LiveFeedManager = {
+    _eventSource: null,
+    _listeners: new Set(),
+    _lastTicks: {},
+
+    subscribe(fn) {
+        if (typeof fn === 'function') {
+            this._listeners.add(fn);
+            if (Object.keys(this._lastTicks).length > 0) {
+                try { fn(this._lastTicks); } catch (_) {}
+            }
+        }
+        return () => this._listeners.delete(fn);
+    },
+
+    start() {
+        if (this._eventSource) return;
+        this._eventSource = new EventSource('/api/market/live-ticks/stream');
+        this._eventSource.onmessage = (ev) => {
+            try {
+                const payload = JSON.parse(ev.data);
+                if (payload && payload.ticks) {
+                    this._lastTicks = payload.ticks;
+                    for (const fn of this._listeners) {
+                        try { fn(payload.ticks); } catch (_) {}
+                    }
+                }
+            } catch (_) {}
+        };
+        this._eventSource.onerror = () => {
+            // EventSource auto-reconnects natively
+        };
+    },
+
+    stop() {
+        if (this._eventSource) {
+            this._eventSource.close();
+            this._eventSource = null;
+        }
+    }
+};
+
+// ================================================================
 // SIDEBAR TOGGLE
 // ================================================================
 document.addEventListener('DOMContentLoaded', async () => {
+    // ── Start Central Live Ticker Feed ──────────────────────────
+    window.LiveFeedManager.start();
+
     // ── Auth check ────────────────────────────────────────────
+
     const user = await checkAuth();
     if (user) {
         const name = user.email?.split('@')[0] || 'User';

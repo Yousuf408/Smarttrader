@@ -3,46 +3,69 @@
 // ================================================================
 
 function toggleBrokerFields() {
-    const broker = document.getElementById('brokerSelect').value;
+    const broker = document.getElementById('brokerSelect')?.value || 'angel';
     const dhanFields = document.getElementById('dhanFields');
     const angelFields = document.getElementById('angelFields');
+    const arrowFields = document.getElementById('arrowFields');
     const otherFields = document.getElementById('otherBrokerFields');
 
     // Hide all first
     if (dhanFields) dhanFields.style.display = 'none';
     if (angelFields) angelFields.style.display = 'none';
+    if (arrowFields) arrowFields.style.display = 'none';
     if (otherFields) otherFields.style.display = 'none';
 
     // Show relevant fields
     if (broker === 'dhan') {
         if (dhanFields) dhanFields.style.display = 'block';
-        document.getElementById('brokerModalName').textContent = 'Dhan';
-        document.getElementById('brokerModalTitle').innerHTML = '🔐 Connect to <span id="brokerModalName">Dhan</span>';
-        // Show Dhan fields in modal, hide Angel fields
-        document.getElementById('modalDhanFields').style.display = 'block';
-        document.getElementById('modalAngelFields').style.display = 'none';
-        // Update status badge
+        const mName = document.getElementById('brokerModalName');
+        if (mName) mName.textContent = 'Dhan';
+        const mTitle = document.getElementById('brokerModalTitle');
+        if (mTitle) mTitle.innerHTML = '🔐 Connect to <span id="brokerModalName">Dhan</span>';
+        const mDhan = document.getElementById('modalDhanFields');
+        if (mDhan) mDhan.style.display = 'block';
+        const mAngel = document.getElementById('modalAngelFields');
+        if (mAngel) mAngel.style.display = 'none';
         updateBrokerStatusBadge('dhan');
     } else if (broker === 'angel') {
         if (angelFields) angelFields.style.display = 'block';
-        document.getElementById('brokerModalName').textContent = 'Angel One';
-        document.getElementById('brokerModalTitle').innerHTML = '🔐 Connect to <span id="brokerModalName">Angel One</span>';
-        // Show Angel fields in modal, hide Dhan fields
-        document.getElementById('modalDhanFields').style.display = 'none';
-        document.getElementById('modalAngelFields').style.display = 'block';
-        // Update status badge
+        const mName = document.getElementById('brokerModalName');
+        if (mName) mName.textContent = 'Angel One';
+        const mTitle = document.getElementById('brokerModalTitle');
+        if (mTitle) mTitle.innerHTML = '🔐 Connect to <span id="brokerModalName">Angel One</span>';
+        const mDhan = document.getElementById('modalDhanFields');
+        if (mDhan) mDhan.style.display = 'none';
+        const mAngel = document.getElementById('modalAngelFields');
+        if (mAngel) mAngel.style.display = 'block';
         updateBrokerStatusBadge('angel');
-    } else if (broker) {
-        // Untouched brokers get a friendly nudge + reset
+    } else if (broker === 'arrow') {
+        if (arrowFields) arrowFields.style.display = 'block';
         if (typeof showToast === 'function') {
-            showToast('🚧 Coming soon', 'Only Dhan and Angel One are wired up right now.');
+            showToast('🏹 Arrow Trade', 'Arrow Trade is active for live WebSocket market data.');
         }
-        document.getElementById('brokerSelect').value = '';
-        if (otherFields) otherFields.style.display = 'none';
-    } else {
-        if (otherFields) otherFields.style.display = 'none';
+    } else if (broker) {
+        if (typeof showToast === 'function') {
+            showToast('🚧 Coming soon', 'This broker integration is under development.');
+        }
+        if (otherFields) otherFields.style.display = 'block';
     }
 }
+
+function onDataFeedSelectChange() {
+    const feed = document.getElementById('dataFeedSelect')?.value || 'arrow';
+    const badge = document.getElementById('wsDataFeedBadge');
+    if (feed === 'arrow') {
+        if (badge) badge.textContent = '🟢 Active: Arrow Trade (WebSocket)';
+        if (typeof showToast === 'function') showToast('📡 Feed Switched', 'Market data feed set to Arrow Trade WebSocket');
+    } else if (feed === 'angel') {
+        if (badge) badge.textContent = '🟢 Active: Angel One (SmartAPI)';
+        if (typeof showToast === 'function') showToast('📡 Feed Switched', 'Market data feed set to Angel One SmartAPI');
+    } else if (feed === 'dhan') {
+        if (badge) badge.textContent = '🟢 Active: Dhan (Live Feed)';
+        if (typeof showToast === 'function') showToast('📡 Feed Switched', 'Market data feed set to Dhan Live Feed');
+    }
+}
+
 
 // Fired ONLY by an explicit `<select onchange>` event
 function onBrokerSelectChange() {

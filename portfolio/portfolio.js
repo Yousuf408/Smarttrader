@@ -495,24 +495,42 @@ function refreshPortfolio() {
 // ================================================================
 // LIVE PRICE SIMULATION (fallback when no broker data)
 // ================================================================
-function simulatePriceChange() {
-    // Not needed with real broker data — prices come live from broker
-}
+function _applyPortfolioTicks(ticks) {
+    if (!ticks || typeof ticks !== 'object') return;
+    const rows = document.querySelectorAll('#portfolioTableBody tr');
+    if (!rows.length) return;
 
-function startSimulation() {
-    if (_portfolioSimInterval) return;
-    // Refresh portfolio every 15 seconds for live data
-    _portfolioSimInterval = setInterval(() => {
-        // Only reload if we have real data
-        if (portfolioData.funds?.success || portfolioData.positions?.length > 0) {
-            loadPortfolio();
+    for (const tr of rows) {
+        const symbolEl = tr.querySelector('td:first-child strong') || tr.querySelector('td:first-child');
+        if (!symbolEl) continue;
+        const sym = symbolEl.textContent.trim().toUpperCase();
+        const tick = ticks[sym] || ticks[`${sym}-EQ`];
+        if (!tick || tick.ltp == null) continue;
+
+        // Find LTP cell (4th column in standard table)
+        const cells = tr.querySelectorAll('td');
+        if (cells.length >= 5) {
+            const ltpCell = cells[3];
+            if (ltpCell) {
+                ltpCell.textContent = `₹${numberFmt(tick.ltp)}`;
+                ltpCell.style.transition = 'background 0.15s';
+                ltpCell.style.background = 'rgba(34,197,94,0.15)';
+                setTimeout(() => { ltpCell.style.background = ''; }, 300);
+            }
         }
-    }, 15000);
-}
-
-function stopSimulation() {
-    if (_portfolioSimInterval) {
-        clearInterval(_portfolioSimInterval);
-        _portfolioSimInterval = null;
     }
 }
+
+// Hook into LiveFeedManager if available
+if (typeof window !== 'undefined') {
+    if (window.LiveFeedManager) {
+        window.LiveFeedManager.subscribe(_applyPortfolioTicks);
+    } else {
+        document.addEventListener('DOMContentLoaded', () => {
+            if (window.LiveFeedManager) {
+                window.LiveFeedManager.subscribe(_applyPortfolioTicks);
+            }
+        });
+    }
+}
+

@@ -454,23 +454,33 @@ function orbCellValue(row, col) {
         const op = parseFloat(row.open915);
         value = Number.isFinite(op) ? `₹${op.toFixed(2)}` : '';
     } else if (col === 'Extra 15m Vol' || col === 'Extra 15m' || col === '15m Extra Vol' || col === '15m Vol' || col === '15M Vol') {
-        const vol = parseFloat(row.extra_15m_vol ?? row.first_15m_vol ?? row['Extra 15m Vol']);
+        const total15m = parseFloat(row.first_15m_vol ?? row['15m Vol']);
+        const extraVol = parseFloat(row.extra_15m_vol ?? row['Extra 15m Vol']);
         const isHighest = row.is_15m_highest === true;
-        if (isHighest && Number.isFinite(vol) && vol > 0) {
-            let formattedStr = '';
-            if (vol >= 10000000) {
-                formattedStr = `${(vol / 10000000).toFixed(2)}Cr`;
-            } else if (vol >= 100000) {
-                formattedStr = `${(vol / 100000).toFixed(2)}L`;
-            } else if (vol >= 1000) {
-                formattedStr = `${(vol / 1000).toFixed(1)}k`;
+        
+        const formatVol = (v) => {
+            if (!Number.isFinite(v) || v <= 0) return '—';
+            if (v >= 10000000) return `${(v / 10000000).toFixed(2)}Cr`;
+            if (v >= 1000000) return `${(v / 1000000).toFixed(2)}M`;
+            if (v >= 100000) return `${(v / 100000).toFixed(2)}L`;
+            if (v >= 1000) return `${(v / 1000).toFixed(1)}k`;
+            return `${Math.round(v)}`;
+        };
+
+        if (Number.isFinite(total15m) && total15m > 0) {
+            const totalStr = formatVol(total15m);
+            if (isHighest && Number.isFinite(extraVol) && extraVol > 0) {
+                const extraStr = formatVol(extraVol);
+                value = `<div style="display:flex;align-items:center;gap:6px;"><span style="font-weight:600;">${totalStr}</span><span class="badge-signal" style="background:rgba(34,197,94,0.15);color:var(--color-success);border:1px solid rgba(34,197,94,0.3);font-size:11px;padding:2px 6px;border-radius:4px;font-weight:700;" title="3-day highest! Extra volume: +${extraStr}">🔥 +${extraStr}</span></div>`;
             } else {
-                formattedStr = `${Math.round(vol)}`;
+                value = `<span>${totalStr}</span>`;
             }
-            value = `<span class="badge-signal" style="background:rgba(34,197,94,0.15);color:var(--color-success);border:1px solid rgba(34,197,94,0.3);font-weight:700;">🔥 ${formattedStr}</span>`;
+        } else if (isHighest && Number.isFinite(extraVol) && extraVol > 0) {
+            value = `<span class="badge-signal" style="background:rgba(34,197,94,0.15);color:var(--color-success);border:1px solid rgba(34,197,94,0.3);font-weight:700;">🔥 +${formatVol(extraVol)}</span>`;
         } else {
             value = `<span style="color:var(--text-muted);">—</span>`;
         }
+
     } else if (col === 'Prev High' || col === 'PREV HIGH') {
         const ph = parseFloat(row.yesterday_high);
         value = Number.isFinite(ph) ? `₹${ph.toFixed(2)}` : '';
@@ -559,16 +569,18 @@ function updateQuickFilterCounts(allRows) {
         if ((Number.isFinite(price) && Number.isFinite(high) && high > 0 && price >= (high * 0.99)) || r.Breakout === 'Confirmed') {
             breakoutCount++;
         }
-        // Near high
-        if (r.near_high === true) {
-            nearHighCount++;
-        } else {
-            const op = parseFloat(r.open915 ?? r['Open 9:15']);
-            const yh = parseFloat(r.yesterday_high ?? r['Prev High']);
-            if (Number.isFinite(op) && Number.isFinite(yh) && yh > 0 && op >= 0.97 * yh && op <= 1.03 * yh) {
-                nearHighCount++;
+        // Near high: If price is above prev day high -> pass. If below -> check distance within 2%.
+        let isNearHighRow = r.near_high === true;
+        if (!isNearHighRow) {
+            const yh = parseFloat(r.yesterday_high ?? r['Prev High'] ?? r.high);
+            if (Number.isFinite(price) && Number.isFinite(yh) && yh > 0) {
+                isNearHighRow = price >= yh ? true : ((yh - price) / yh <= 0.02);
             }
         }
+        if (isNearHighRow) {
+            nearHighCount++;
+        }
+
         // Above EMA
         if (r.above_ema === true) {
             aboveEmaCount++;
@@ -580,11 +592,12 @@ function updateQuickFilterCounts(allRows) {
         if (r.inside_915 === true || r['Inside 9:15'] === 'Yes') {
             inside915Count++;
         }
-        // Extra 15m Vol
+        // Extra 15m Vol: Only count if first 15m candle volume exceeded the 3-day max
         const extra = parseFloat(r.extra_15m_vol ?? r['Extra 15m Vol']);
-        if (r.is_15m_highest === true || (Number.isFinite(extra) && extra > 0)) {
+        if (r.is_15m_highest === true && Number.isFinite(extra) && extra > 0) {
             extraVolCount++;
         }
+
     }
 
     const cAll = document.getElementById('countAll');
@@ -614,12 +627,12 @@ function orbUnifiedFilter(r) {
 
     let isNearHigh = r.near_high === true;
     if (!isNearHigh) {
-        const op = parseFloat(r.open915 ?? r['Open 9:15']);
-        const yh = parseFloat(r.yesterday_high ?? r['Prev High']);
-        if (Number.isFinite(op) && Number.isFinite(yh) && yh > 0 && op >= 0.97 * yh && op <= 1.03 * yh) {
-            isNearHigh = true;
+        const yh = parseFloat(r.yesterday_high ?? r['Prev High'] ?? r.high);
+        if (Number.isFinite(price) && Number.isFinite(yh) && yh > 0) {
+            isNearHigh = price >= yh ? true : ((yh - price) / yh <= 0.02);
         }
     }
+
 
     let isAboveEma = r.above_ema === true;
     if (!isAboveEma) {
@@ -631,7 +644,8 @@ function orbUnifiedFilter(r) {
 
     const isInside915 = r.inside_915 === true || r['Inside 9:15'] === 'Yes';
     const extra = parseFloat(r.extra_15m_vol ?? r['Extra 15m Vol']);
-    const isExtraVol = r.is_15m_highest === true || (Number.isFinite(extra) && extra > 0);
+    const isExtraVol = r.is_15m_highest === true && Number.isFinite(extra) && extra > 0;
+
 
     // 1. Check active Quick Tab filter
     if (currentQuickFilter === 'breakout' && !isBreakout) return false;
@@ -744,10 +758,51 @@ function renderStrategyData(result) {
     updatePlaceOrderButtons();
 }
 
+async function fetchBigPlayers() {
+    try {
+        const budget = _readBudget();
+        const parts = _readParts();
+        const res = await fetch(`/api/strategies/bigplayers?budget=${budget}&parts=${parts}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return await res.json();
+    } catch (e) {
+        console.warn('BigPlayers fetch error:', e);
+        return null;
+    }
+}
+
+function renderBigPlayersData(data) {
+    if (!data) return;
+    renderStrategyData(data);
+}
+
+let _bpAutoTimer = null;
+function startBigPlayersAutoRefresh() {
+    stopBigPlayersAutoRefresh();
+    _bpAutoTimer = setInterval(async () => {
+        const strategyId = document.getElementById('strategySelect')?.value;
+        if (strategyId === 'bigplayers') {
+            const data = await fetchBigPlayers();
+            if (data) {
+                window.lastBigPlayersData = data;
+                renderBigPlayersData(data);
+            }
+        }
+    }, 5000);
+}
+
+function stopBigPlayersAutoRefresh() {
+    if (_bpAutoTimer) {
+        clearInterval(_bpAutoTimer);
+        _bpAutoTimer = null;
+    }
+}
+
 // ================================================================
 // STRATEGY DROPDOWN - Change strategy and update table
 // ================================================================
 async function onStrategyChange() {
+
     const strategyId = document.getElementById('strategySelect').value;
     const strategy = STRATEGIES[strategyId];
     if (!strategy) return;
@@ -830,11 +885,11 @@ async function onStrategyChange() {
         if (bpab) bpab.style.display = '';
 
         // Call Big Players API
-        const result = await window.fetchBigPlayers();
+        const result = await fetchBigPlayers();
         if (result) {
             window.lastBigPlayersData = result;
-            window.renderBigPlayersData(result);
-            window.startBigPlayersAutoRefresh();
+            renderBigPlayersData(result);
+            startBigPlayersAutoRefresh();
             // Stop Advance ORB refresh if running
             if (typeof stopAdvanceOrbAutoRefresh === 'function') stopAdvanceOrbAutoRefresh();
         } else {
@@ -843,6 +898,7 @@ async function onStrategyChange() {
         }
         return;
     }
+
 
     // ============================================================
     // CASE 3: SMARTMONEY (Hardcoded data)
@@ -1272,7 +1328,7 @@ async function autoBuyAllStocks() {
 // ================================================================
 let lastAdvanceOrbData = null;
 let advanceOrbAutoTimer = null;
-const AUTO_REFRESH_MS = 30000;
+const AUTO_REFRESH_MS = 2500;
 
 async function fetchAdvanceORBRefresh(silent = true) {
     if (!lastAdvanceOrbData || !lastAdvanceOrbData.data || lastAdvanceOrbData.data.length === 0) {
@@ -1310,12 +1366,15 @@ async function fetchAdvanceORBRefresh(silent = true) {
     const symbols = lastAdvanceOrbData.data.map(r => r.Symbol).filter(Boolean);
     if (symbols.length === 0) return;
     try {
-        const response = await fetch(
-            `/api/strategies/advanceorb/refresh?tickers=${encodeURIComponent(symbols.join(','))}&timeframe=${orbTimeframe}`,
-            { cache: 'no-store' }
-        );
+        const response = await fetch('/api/strategies/advanceorb/refresh', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tickers: symbols, timeframe: orbTimeframe }),
+            cache: 'no-store'
+        });
         if (!response.ok) return;
         const result = await response.json();
+
         const refreshedList = Array.isArray(result?.refreshed) ? result.refreshed : [];
         if (refreshedList.length === 0) return;
         const bySymbol = {};
@@ -1500,17 +1559,18 @@ function startLiveTickPoll() {
         _resetTickWatchdog();
         try {
             const data = JSON.parse(ev.data);
-            if (data.connected && data.ticks) {
+            if (data && data.ticks) {
                 _lastTickPayload = data.ticks;
                 const activePage = document.querySelector('.page.active');
                 const onScreener = activePage && activePage.id === 'page-screener';
                 const strategyId = document.getElementById('strategySelect')?.value;
-                if (onScreener && strategyId === 'advanceorb') {
+                if (onScreener && (strategyId === 'advanceorb' || !strategyId)) {
                     _applyTicks(data.ticks);
                     maybeRerenderScreener();
                 }
             }
         } catch (_) {}
+
     };
     _tickEventSource.onerror = function () {
         // EventSource auto-reconnects natively

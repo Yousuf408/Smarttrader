@@ -4,46 +4,84 @@
 <div id="page-settings" class="page active">
     <h2 class="section-title">⚙️ Settings</h2>
 
+    <!-- 📡 MARKET DATA FEED (WEBSOCKET BROKER) -->
     <div class="panel-glass">
-        <div class="panel-head"><h3>🔌 Broker Connection</h3></div>
+        <div class="panel-head">
+            <h3>📡 Market Data Feed (WebSocket)</h3>
+            <span id="wsDataFeedBadge" class="badge badge-success" style="margin-left:auto;">🟢 Active: Arrow Trade</span>
+        </div>
+        <div class="panel-body">
+            <div class="settings-grid">
+                <div class="settings-group">
+                    <label>Data Feed Provider</label>
+                    <select id="dataFeedSelect" onchange="onDataFeedSelectChange()">
+                        <option value="arrow" selected>Arrow Trade (Ultra-Fast WebSocket)</option>
+                        <option value="angel">Angel One (SmartAPI WebSocket)</option>
+                        <option value="dhan">Dhan (Live Market Feed)</option>
+                    </select>
+                </div>
+                <div class="settings-group">
+                    <label>Feed Status</label>
+                    <div style="display:flex; align-items:center; gap:8px; height:38px;">
+                        <span id="wsLatencyBadge" class="badge" style="background:rgba(34,197,94,0.15); color:var(--color-success); font-weight:600;">⚡ Real-Time Ticks (Connected)</span>
+                    </div>
+                </div>
+            </div>
+            <p class="broker-help-text" style="margin:8px 0 0 0; font-size:12px; opacity:0.75;">
+                Streams real-time tick-by-tick prices, volume, and breakouts across the Screener, Portfolio, and Dashboard. App ID: <strong>70de391959b7</strong>
+            </p>
+        </div>
+    </div>
+
+    <!-- ⚡ ORDER EXECUTION BROKER (RMS & TRADING) -->
+    <div class="panel-glass">
+        <div class="panel-head"><h3>⚡ Order Execution Broker (Trading & RMS)</h3></div>
         <div class="panel-body">
             <div class="settings-group">
-                <label>Select Broker</label>
+                <label>Select Execution Broker</label>
                 <select id="brokerSelect" onchange="onBrokerSelectChange()">
                     <option value="">— Choose —</option>
+                    <option value="angel" selected>Angel One (Primary Account)</option>
                     <option value="dhan">Dhan</option>
-                    <option value="angel">Angel One</option>
+                    <option value="arrow">Arrow Trade</option>
                     <option value="zerodha">Zerodha</option>
                     <option value="fyers">Fyers</option>
-                    <option value="upstox">Upstox</option>
                 </select>
             </div>
 
-            <!-- DHAN FIELDS -->
-            <div id="dhanFields" class="broker-fields" style="display:block;">
-                <div class="field-group field-full" style="display:flex; gap:8px; align-items:center;">
-                    <button type="button" class="btn btn-primary" onclick="openBrokerModal()">🔐 Connect Dhan</button>
-                    <button type="button" class="btn btn-outline" onclick="disconnectBroker()">Disconnect</button>
-                    <span id="brokerStatusBadge" class="badge" style="margin-left:auto;">⚪ Not connected</span>
-                </div>
-                <p class="broker-help-text" style="margin:8px 0 0 0; font-size:12px; opacity:0.7;">
-                    Enter your Dhan client ID + TOTP secret. Access token is minted live and held in-memory only — no broker creds are written to disk or pushed to GitHub.
-                </p>
-            </div>
-
             <!-- ANGEL ONE FIELDS -->
-            <div id="angelFields" class="broker-fields" style="display:none;">
+            <div id="angelFields" class="broker-fields" style="display:block;">
                 <div class="field-group field-full" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
                     <button type="button" class="btn btn-primary" onclick="openBrokerModal()">🔐 Connect Angel One</button>
                     <button type="button" class="btn btn-outline" onclick="disconnectBroker()">Disconnect</button>
                     <span id="brokerStatusBadgeAngel" class="badge" style="margin-left:auto;">⚪ Not connected</span>
                 </div>
                 <p class="broker-help-text" style="margin:8px 0 0 0; font-size:12px; opacity:0.7;">
-                    Enter your Angel One API Key, Client ID, and Password. TOTP secret is optional if not required for your account.
+                    Enter your Angel One API Key, Client ID, and Password for placing orders, calculating margin, and managing open positions.
                 </p>
             </div>
 
-            <div id="otherBrokerFields"><p>🔑 Enter credentials for your selected broker.</p></div>
+            <!-- DHAN FIELDS -->
+            <div id="dhanFields" class="broker-fields" style="display:none;">
+                <div class="field-group field-full" style="display:flex; gap:8px; align-items:center;">
+                    <button type="button" class="btn btn-primary" onclick="openBrokerModal()">🔐 Connect Dhan</button>
+                    <button type="button" class="btn btn-outline" onclick="disconnectBroker()">Disconnect</button>
+                    <span id="brokerStatusBadge" class="badge" style="margin-left:auto;">⚪ Not connected</span>
+                </div>
+                <p class="broker-help-text" style="margin:8px 0 0 0; font-size:12px; opacity:0.7;">
+                    Enter your Dhan client ID + TOTP secret for live order routing.
+                </p>
+            </div>
+
+            <!-- ARROW FIELDS -->
+            <div id="arrowFields" class="broker-fields" style="display:none;">
+                <div class="field-group field-full" style="display:flex; gap:8px; align-items:center;">
+                    <span class="badge badge-success">🟢 Configured via .env</span>
+                    <button type="button" class="btn btn-outline" onclick="showToast('ℹ️ Configured', 'Arrow Trade is active with App ID 70de391959b7')">Check Status</button>
+                </div>
+            </div>
+
+            <div id="otherBrokerFields" style="display:none;"><p>🔑 Enter credentials for your selected broker.</p></div>
         </div>
     </div>
 

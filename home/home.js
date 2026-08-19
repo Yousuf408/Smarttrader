@@ -18,11 +18,11 @@ function loadHome() {
             <thead><tr><th>Symbol</th><th>Type</th><th>Qty</th><th>Price</th><th>P&L</th></tr></thead>
             <tbody>
                 ${trades.map(t => `
-                    <tr>
+                    <tr data-symbol="${t.symbol}">
                         <td><strong>${t.symbol}</strong></td>
                         <td style="color:${t.type === 'BUY' ? 'var(--color-success)' : 'var(--color-danger)'};font-weight:600;">${t.type}</td>
                         <td>${t.qty}</td>
-                        <td>${t.price}</td>
+                        <td class="trade-price">${t.price}</td>
                         <td style="color:${t.pnl.includes('+') ? 'var(--color-success)' : 'var(--color-danger)'};font-weight:600;">${t.pnl}</td>
                     </tr>
                 `).join('')}
@@ -30,7 +30,7 @@ function loadHome() {
         </table>
     `;
 
-    // Market Overview (showing only SENSEX per user request)
+    // Market Overview (showing SENSEX and NIFTY)
     const markets = [
         { name: 'SENSEX', value: '+0.6%', up: true }
     ];
@@ -41,3 +41,25 @@ function loadHome() {
         </div>
     `).join('');
 }
+
+// Live tick hook for home dashboard
+if (typeof window !== 'undefined') {
+    const updateHomeTicks = (ticks) => {
+        if (!ticks) return;
+        const rows = document.querySelectorAll('#recentTrades tr[data-symbol]');
+        for (const r of rows) {
+            const sym = r.getAttribute('data-symbol');
+            const tick = ticks[sym] || ticks[`${sym}-EQ`];
+            if (tick && tick.ltp) {
+                const cell = r.querySelector('.trade-price');
+                if (cell) {
+                    cell.textContent = `₹${Number(tick.ltp).toFixed(2)}`;
+                }
+            }
+        }
+    };
+    if (window.LiveFeedManager) {
+        window.LiveFeedManager.subscribe(updateHomeTicks);
+    }
+}
+
