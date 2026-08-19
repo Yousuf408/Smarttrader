@@ -749,11 +749,39 @@ app.get('/api/nifty/ohlc', async (req, res) => {
   });
 });
 
+app.get(['/api/candles/0915', '/api/candles/snapshot'], (req, res) => {
+  const p1 = path.join(__dirname, 'json', 'candle_0915.json');
+  const p2 = path.join(__dirname, 'stocks', '_meetatet.json');
+  let data = null;
+  if (fs.existsSync(p1)) {
+    try { data = JSON.parse(fs.readFileSync(p1, 'utf8')); } catch (e) {}
+  } else if (fs.existsSync(p2)) {
+    try { data = JSON.parse(fs.readFileSync(p2, 'utf8')); } catch (e) {}
+  }
+  res.json({
+    ok: true,
+    data: data || {},
+    timestamp: new Date().toISOString()
+  });
+});
+
 app.get('/api/candles/status', (req, res) => {
+  const p1 = path.join(__dirname, 'json', 'candle_0915.json');
+  let count = watchlistSymbols.length;
+  let lastModified = new Date().toISOString();
+  if (fs.existsSync(p1)) {
+    try {
+      const stat = fs.statSync(p1);
+      lastModified = stat.mtime.toISOString();
+      const content = JSON.parse(fs.readFileSync(p1, 'utf8'));
+      if (content.__meta__?.stock_count) count = content.__meta__.stock_count;
+    } catch (e) {}
+  }
   res.json({
     status: 'active',
-    count: watchlistSymbols.length,
-    last_recorded: new Date().toISOString()
+    count: count,
+    file_exists: fs.existsSync(p1),
+    last_recorded: lastModified
   });
 });
 

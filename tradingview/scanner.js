@@ -66,9 +66,51 @@ let medianPrefetchInProgress = false;
 // -------------------------------------------------------------
 // 3-DAY FIRST 15-MIN CANDLE VOLUME ENGINE (Pine Script Logic)
 // -------------------------------------------------------------
-// Maps SYMBOL -> { today_15m_vol, prev_3d_max, prev_3d_vols, is_highest, extra_volume, formatted_extra }
+// Maps SYMBOL -> { today_15m_vol, prev_3d_max, prev_3d_vols, is_highest, extra_volume, formatted_extra, o, h, l, c }
 const first15mVolMap = new Map();
 let first15mPrefetchInProgress = false;
+
+// Path to persistent candle JSON files
+const CANDLE_0915_JSON_PATH = path.join(__dirname, '..', 'json', 'candle_0915.json');
+const STOCKS_MEETATET_JSON_PATH = path.join(__dirname, '..', 'stocks', '_meetatet.json');
+
+// Helper to save recorded 9:15 candle OHLC to JSON files
+function persistCandleSnapshot() {
+  try {
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const jsonDir = path.dirname(CANDLE_0915_JSON_PATH);
+    if (!fs.existsSync(jsonDir)) {
+      fs.mkdirSync(jsonDir, { recursive: true });
+    }
+
+    const candleObj = {
+      __meta__: {
+        date: todayStr,
+        updated_at: new Date().toISOString(),
+        stock_count: first15mVolMap.size
+      }
+    };
+
+    first15mVolMap.forEach((v, sym) => {
+      candleObj[`${todayStr}|${sym}`] = {
+        date: todayStr,
+        symbol: sym,
+        price_0915_O: v.open915 || 0,
+        price_0915_H: v.high915 || 0,
+        price_0915_L: v.low915 || 0,
+        price_0915_C: v.close915 || 0,
+        volume_0915: v.today_15m_vol || 0,
+        is_highest: v.is_highest || false,
+        prev_3d_max: v.prev_3d_max || 0
+      };
+    });
+
+    fs.writeFileSync(CANDLE_0915_JSON_PATH, JSON.stringify(candleObj, null, 2), 'utf8');
+    fs.writeFileSync(STOCKS_MEETATET_JSON_PATH, JSON.stringify(candleObj, null, 2), 'utf8');
+  } catch (e) {
+    console.warn('Error saving 9:15 candle JSON:', e.message);
+  }
+}
 
 export async function fetchFirst15mVolumeComparison(sym) {
   const cleanSym = String(sym || '').replace(/[^A-Za-z0-9_-]/g, '').toUpperCase();
@@ -84,9 +126,15 @@ export async function fetchFirst15mVolumeComparison(sym) {
       const json = await res.json();
       const result = json.chart?.result?.[0];
       const timestamps = result?.timestamp || [];
-      const vols = result?.indicators?.quote?.[0]?.volume || [];
+      const quote = result?.indicators?.quote?.[0] || {};
+      const vols = quote.volume || [];
+      const opens = quote.open || [];
+      const highs = quote.high || [];
+      const lows = quote.low || [];
+      const closes = quote.close || [];
       
       const dayMap = {};
+      const dayOhlcMap = {};
       for (let i = 0; i < timestamps.length; i++) {
         const ts = timestamps[i];
         const v = vols[i] || 0;
@@ -97,6 +145,13 @@ export async function fetchFirst15mVolumeComparison(sym) {
         const dateStr = dt.toISOString().slice(0, 10);
         if (hours === 9 && mins === 15) {
           dayMap[dateStr] = v;
+          dayOhlcMap[dateStr] = {
+            o: opens[i] || 0,
+            h: highs[i] || 0,
+            l: lows[i] || 0,
+            c: closes[i] || 0,
+            v: v
+          };
         }
       }
 
@@ -104,6 +159,9 @@ export async function fetchFirst15mVolumeComparison(sym) {
       if (sortedDates.length >= 2) {
         const candleVols = sortedDates.map(d => dayMap[d]);
         const todayVol = candleVols[candleVols.length - 1] || 0;
+        const todayDate = sortedDates[sortedDates.length - 1];
+        const todayOhlc = dayOhlcMap[todayDate] || {};
+
         // Previous up to 3 trading days
         const prevVols = candleVols.slice(Math.max(0, candleVols.length - 4), candleVols.length - 1);
         
@@ -113,10 +171,10 @@ export async function fetchFirst15mVolumeComparison(sym) {
 
         if (prevVols.length > 0 && todayVol > 0) {
           maxPrev = Math.max(...prevVols);
-          // Check if today's volume is strictly greater than or equal to ALL previous 3 days
-          isHighest = prevVols.every(pv => todayVol >= pv);
-          if (isHighest && maxPrev > 0) {
-            extraVol = todayVol - maxPrev;
+          // Check if today's 9:15 volume is strictly greater than ALL previous 3 days
+          isHighest = prevVols.every(pv => todayVol > pv);
+          if (isHighest) {
+            extraVol = todayVol; // Store full today's volume count
           }
         }
 
@@ -125,7 +183,11 @@ export async function fetchFirst15mVolumeComparison(sym) {
           prev_3d_max: maxPrev,
           prev_3d_vols: prevVols,
           is_highest: isHighest,
-          extra_volume: extraVol
+          extra_volume: isHighest ? todayVol : 0,
+          open915: todayOhlc.o ? Math.round(todayOhlc.o * 100) / 100 : 0,
+          high915: todayOhlc.h ? Math.round(todayOhlc.h * 100) / 100 : 0,
+          low915: todayOhlc.l ? Math.round(todayOhlc.l * 100) / 100 : 0,
+          close915: todayOhlc.c ? Math.round(todayOhlc.c * 100) / 100 : 0
         };
 
         first15mVolMap.set(cleanSym, record);
@@ -149,6 +211,8 @@ export async function prefetch15mVolumes(symbols) {
       const batch = toFetch.slice(i, i + BATCH_SIZE);
       await Promise.all(batch.map(fetchFirst15mVolumeComparison));
     }
+    // Save updated OHLC JSON file
+    persistCandleSnapshot();
   } catch (err) {
     console.warn('Prefetch 15m volumes error:', err.message);
   } finally {
@@ -298,11 +362,20 @@ export async function fetchTradingViewScanner(minPrice = 200, maxPrice = 4000, l
       let first15mToday = 0;
       let first15mPrevMax = 0;
 
+      let open915Val = open;
+      let high915Val = high;
+      let low915Val = low;
+      let close915Val = close;
+
       if (first15m) {
         first15mToday = first15m.today_15m_vol || 0;
         first15mPrevMax = first15m.prev_3d_max || 0;
         is15mHighest = first15m.is_highest || false;
         extra15mVol = first15m.extra_volume || 0;
+        if (first15m.open915 > 0) open915Val = first15m.open915;
+        if (first15m.high915 > 0) high915Val = first15m.high915;
+        if (first15m.low915 > 0) low915Val = first15m.low915;
+        if (first15m.close915 > 0) close915Val = first15m.close915;
       }
 
       mapped.push({
@@ -322,10 +395,10 @@ export async function fetchTradingViewScanner(minPrice = 200, maxPrice = 4000, l
         yesterday_low: low,
         yesterday_close: open,
         ema: ema,
-        open915: open,
-        high915: high,
-        low915: low,
-        close915: close,
+        open915: open915Val,
+        high915: high915Val,
+        low915: low915Val,
+        close915: close915Val,
         high920: high,
         low920: low,
         close920: close,

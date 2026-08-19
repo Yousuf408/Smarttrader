@@ -453,6 +453,24 @@ function orbCellValue(row, col) {
     } else if (col === 'Open 9:15') {
         const op = parseFloat(row.open915);
         value = Number.isFinite(op) ? `₹${op.toFixed(2)}` : '';
+    } else if (col === 'Extra 15m Vol' || col === 'Extra 15m' || col === '15m Extra Vol' || col === '15m Vol' || col === '15M Vol') {
+        const vol = parseFloat(row.extra_15m_vol ?? row.first_15m_vol ?? row['Extra 15m Vol']);
+        const isHighest = row.is_15m_highest === true;
+        if (isHighest && Number.isFinite(vol) && vol > 0) {
+            let formattedStr = '';
+            if (vol >= 10000000) {
+                formattedStr = `${(vol / 10000000).toFixed(2)}Cr`;
+            } else if (vol >= 100000) {
+                formattedStr = `${(vol / 100000).toFixed(2)}L`;
+            } else if (vol >= 1000) {
+                formattedStr = `${(vol / 1000).toFixed(1)}k`;
+            } else {
+                formattedStr = `${Math.round(vol)}`;
+            }
+            value = `<span class="badge-signal" style="background:rgba(34,197,94,0.15);color:var(--color-success);border:1px solid rgba(34,197,94,0.3);font-weight:700;">🔥 ${formattedStr}</span>`;
+        } else {
+            value = `<span style="color:var(--text-muted);">—</span>`;
+        }
     } else if (col === 'Prev High' || col === 'PREV HIGH') {
         const ph = parseFloat(row.yesterday_high);
         value = Number.isFinite(ph) ? `₹${ph.toFixed(2)}` : '';
@@ -504,7 +522,8 @@ function setQuickFilter(filterName) {
                         (filterName === 'breakout' && tab.id === 'tabBreakout') ||
                         (filterName === 'near_high' && tab.id === 'tabNearHigh') ||
                         (filterName === 'above_ema' && tab.id === 'tabAboveEma') ||
-                        (filterName === 'inside915' && tab.id === 'tabInside915');
+                        (filterName === 'inside915' && tab.id === 'tabInside915') ||
+                        (filterName === 'extra_vol' && tab.id === 'tabExtraVol');
         tab.classList.toggle('active', isMatch);
     });
 
@@ -514,6 +533,7 @@ function setQuickFilter(filterName) {
         else if (filterName === 'near_high') summary.textContent = '🎯 Showing Near High watchlist (Open within ±2% of yesterday\'s high)';
         else if (filterName === 'above_ema') summary.textContent = '📈 Showing stocks whose price is above the 200 EMA';
         else if (filterName === 'inside915') summary.textContent = '📐 Showing stocks consolidated inside opening 9:15 candle';
+        else if (filterName === 'extra_vol') summary.textContent = '🔥 Showing stocks with 1st 15m candle volume HIGHEST across the last 3 days';
         else summary.textContent = 'Showing all scanned stocks sorted by CHG% (highest to lowest)';
     }
 
@@ -528,6 +548,7 @@ function updateQuickFilterCounts(allRows) {
     let nearHighCount = 0;
     let aboveEmaCount = 0;
     let inside915Count = 0;
+    let extraVolCount = 0;
 
     for (const r of allRows) {
         const price = parseFloat(r.Price ?? r.price);
@@ -559,6 +580,11 @@ function updateQuickFilterCounts(allRows) {
         if (r.inside_915 === true || r['Inside 9:15'] === 'Yes') {
             inside915Count++;
         }
+        // Extra 15m Vol
+        const extra = parseFloat(r.extra_15m_vol ?? r['Extra 15m Vol']);
+        if (r.is_15m_highest === true || (Number.isFinite(extra) && extra > 0)) {
+            extraVolCount++;
+        }
     }
 
     const cAll = document.getElementById('countAll');
@@ -566,12 +592,14 @@ function updateQuickFilterCounts(allRows) {
     const cNearHigh = document.getElementById('countNearHigh');
     const cAboveEma = document.getElementById('countAboveEma');
     const cInside915 = document.getElementById('countInside915');
+    const cExtraVol = document.getElementById('countExtraVol');
 
     if (cAll) cAll.textContent = allRows.length;
     if (cBreakout) cBreakout.textContent = breakoutCount;
     if (cNearHigh) cNearHigh.textContent = nearHighCount;
     if (cAboveEma) cAboveEma.textContent = aboveEmaCount;
     if (cInside915) cInside915.textContent = inside915Count;
+    if (cExtraVol) cExtraVol.textContent = extraVolCount;
 }
 
 /** Unified row filter evaluates quick tabs and active strategy toggles */
@@ -602,12 +630,15 @@ function orbUnifiedFilter(r) {
     }
 
     const isInside915 = r.inside_915 === true || r['Inside 9:15'] === 'Yes';
+    const extra = parseFloat(r.extra_15m_vol ?? r['Extra 15m Vol']);
+    const isExtraVol = r.is_15m_highest === true || (Number.isFinite(extra) && extra > 0);
 
     // 1. Check active Quick Tab filter
     if (currentQuickFilter === 'breakout' && !isBreakout) return false;
     if (currentQuickFilter === 'near_high' && !isNearHigh) return false;
     if (currentQuickFilter === 'above_ema' && !isAboveEma) return false;
     if (currentQuickFilter === 'inside915' && !isInside915) return false;
+    if (currentQuickFilter === 'extra_vol' && !isExtraVol) return false;
 
     // 2. Check active top bar toggles
     if (nearHighEnabled && !isNearHigh) return false;
@@ -667,6 +698,7 @@ function renderStrategyData(result) {
         'Price',
         'CHG%',
         'Signal',
+        'Extra 15m Vol',
         '200 EMA',
         '1st High',
         '1st Low',
