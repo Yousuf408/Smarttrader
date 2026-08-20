@@ -111,20 +111,21 @@ export function getIstDateString() {
 let activeSessionDate = getIstDateString();
 
 // Check if a new day has arrived (e.g. tomorrow, 20th August) and automatically roll over historical volume baselines
-export function checkAndPerformDailyRollover() {
+export function checkAndPerformDailyRollover(force = false) {
   const currentIstDate = getIstDateString();
-  if (currentIstDate !== activeSessionDate) {
-    logIngestion('info', 'INGESTION-DAY-ROLLOVER', `Rolling over session from ${activeSessionDate} to ${currentIstDate}...`);
+  if (currentIstDate !== activeSessionDate || force) {
+    logIngestion('info', 'INGESTION-DAY-ROLLOVER', `Rolling over session from ${activeSessionDate} to ${currentIstDate} (force=${force})...`);
     
     // Rollover 15m candle map
     first15mVolMap.forEach((v, sym) => {
       const yesterdayVol = Number(v.today_15m_vol || v.volume_0915 || 0);
-      const prevD1 = Number(v.d1_vol || 0);
-      const prevD2 = Number(v.d2_vol || 0);
+      const prevD1 = Number(v.d1_vol || (v.prev_3d_vols && v.prev_3d_vols[0]) || 0);
+      const prevD2 = Number(v.d2_vol || (v.prev_3d_vols && v.prev_3d_vols[1]) || 0);
+      const prevD3 = Number(v.d3_vol || (v.prev_3d_vols && v.prev_3d_vols[2]) || 0);
       
       const newD1 = yesterdayVol > 0 ? yesterdayVol : (prevD1 > 0 ? prevD1 : Number(v.prev_3d_max || 0));
       const newD2 = prevD1 > 0 ? prevD1 : (prevD2 > 0 ? prevD2 : newD1);
-      const newD3 = prevD2 > 0 ? prevD2 : Number(v.d3_vol || newD2);
+      const newD3 = prevD2 > 0 ? prevD2 : (prevD3 > 0 ? prevD3 : newD2);
       
       const newMax = Math.max(newD1, newD2, newD3);
       
@@ -136,6 +137,15 @@ export function checkAndPerformDailyRollover() {
       v.prev_3d_max = newMax;
       v.today_15m_vol = 0;
       v.volume_0915 = 0;
+      v.open915 = 0;
+      v.high915 = 0;
+      v.low915 = 0;
+      v.close915 = 0;
+      v.price_0915_O = 0;
+      v.price_0915_H = 0;
+      v.price_0915_L = 0;
+      v.price_0915_C = 0;
+      v.candles_till_1015 = null;
       v.is_highest = false;
       v.extra_volume = 0;
     });
@@ -143,12 +153,13 @@ export function checkAndPerformDailyRollover() {
     // Rollover 5m candle map
     first5mCandleMap.forEach((v, sym) => {
       const yesterdayVol = Number(v.today_5m_vol || v.volume_0915 || 0);
-      const prevD1 = Number(v.d1_vol || 0);
-      const prevD2 = Number(v.d2_vol || 0);
+      const prevD1 = Number(v.d1_vol || (v.prev_3d_vols && v.prev_3d_vols[0]) || 0);
+      const prevD2 = Number(v.d2_vol || (v.prev_3d_vols && v.prev_3d_vols[1]) || 0);
+      const prevD3 = Number(v.d3_vol || (v.prev_3d_vols && v.prev_3d_vols[2]) || 0);
       
       const newD1 = yesterdayVol > 0 ? yesterdayVol : (prevD1 > 0 ? prevD1 : Number(v.prev_3d_max || 0));
       const newD2 = prevD1 > 0 ? prevD1 : (prevD2 > 0 ? prevD2 : newD1);
-      const newD3 = prevD2 > 0 ? prevD2 : Number(v.d3_vol || newD2);
+      const newD3 = prevD2 > 0 ? prevD2 : (prevD3 > 0 ? prevD3 : newD2);
       
       const newMax = Math.max(newD1, newD2, newD3);
       
@@ -160,6 +171,15 @@ export function checkAndPerformDailyRollover() {
       v.prev_3d_max = newMax;
       v.today_5m_vol = 0;
       v.volume_0915 = 0;
+      v.open915 = 0;
+      v.high915 = 0;
+      v.low915 = 0;
+      v.close915 = 0;
+      v.price_0915_O = 0;
+      v.price_0915_H = 0;
+      v.price_0915_L = 0;
+      v.price_0915_C = 0;
+      v.candles_till_1015 = null;
       v.is_highest = false;
       v.extra_volume = 0;
     });
@@ -304,35 +324,55 @@ function build5mCandleTimeline(sym, o, h, l, c, vol) {
 // Load stored snapshots from disk on bootstrap
 function loadInitialCandleSnapshots() {
   try {
+    const currentIstDate = getIstDateString();
+    
     if (fs.existsSync(CANDLE_5MIN_JSON_PATH)) {
       const data = JSON.parse(fs.readFileSync(CANDLE_5MIN_JSON_PATH, 'utf8'));
+      const savedDate = data.__meta__?.date;
+      const isPastDay = savedDate && savedDate !== currentIstDate;
+
       for (const [k, v] of Object.entries(data)) {
         if (k.startsWith('__')) continue;
         const sym = v.symbol || (k.includes('|') ? k.split('|')[1] : k);
         if (sym) {
-          const openVal = Number(v.price_0915_O || v.open915 || 100);
-          const highVal = Number(v.price_0915_H || v.high915 || (openVal * 1.008));
-          const lowVal = Number(v.price_0915_L || v.low915 || (openVal * 0.992));
-          const closeVal = Number(v.price_0915_C || v.close915 || openVal);
-          const vol0915 = Number(v.volume_0915 || v.today_5m_vol || 25000);
+          const prevVols = Array.isArray(v.prev_3d_vols) ? v.prev_3d_vols : [];
+          let d1Val = Number(v.d1_vol || prevVols[0] || 0);
+          let d2Val = Number(v.d2_vol || prevVols[1] || 0);
+          let d3Val = Number(v.d3_vol || prevVols[2] || 0);
+          let prev3dMax = Number(v.prev_3d_max || Math.max(d1Val, d2Val, d3Val) || 0);
 
-          let timeline = v.candles_till_1015;
+          let openVal = Number(v.price_0915_O || v.open915 || 0);
+          let highVal = Number(v.price_0915_H || v.high915 || 0);
+          let lowVal = Number(v.price_0915_L || v.low915 || 0);
+          let closeVal = Number(v.price_0915_C || v.close915 || 0);
+          let vol0915 = Number(v.volume_0915 || v.today_5m_vol || 0);
+
+          // If the cached file is from a previous day, roll over volume baselines and reset today's candle
+          if (isPastDay || v.date !== currentIstDate) {
+            const yesterdayVol = vol0915 > 0 ? vol0915 : d1Val;
+            const newD1 = yesterdayVol > 0 ? yesterdayVol : prev3dMax;
+            const newD2 = d1Val > 0 ? d1Val : (d2Val > 0 ? d2Val : newD1);
+            const newD3 = d2Val > 0 ? d2Val : (d3Val > 0 ? d3Val : newD2);
+            d1Val = newD1;
+            d2Val = newD2;
+            d3Val = newD3;
+            prev3dMax = Math.max(d1Val, d2Val, d3Val);
+            openVal = 0;
+            highVal = 0;
+            lowVal = 0;
+            closeVal = 0;
+            vol0915 = 0;
+          }
+
+          let timeline = (isPastDay || v.date !== currentIstDate) ? null : v.candles_till_1015;
           let minLow = Number(v.lowest_low_till_1015 || lowVal);
           let maxHigh = Number(v.highest_high_till_1015 || highVal);
-          let brokeLow = v.broke_915_low ?? (minLow < lowVal);
-          let brokeHigh = v.broke_915_high ?? (maxHigh > highVal);
-
-          if (!timeline || Object.keys(timeline).length < 12) {
-            const built = build5mCandleTimeline(sym.toUpperCase(), openVal, highVal, lowVal, closeVal, vol0915);
-            timeline = built.candles;
-            minLow = built.minLow;
-            maxHigh = built.maxHigh;
-            brokeLow = built.brokeLow;
-            brokeHigh = built.brokeHigh;
-          }
+          let brokeLow = v.broke_915_low ?? (minLow > 0 && lowVal > 0 && minLow < lowVal);
+          let brokeHigh = v.broke_915_high ?? (maxHigh > 0 && highVal > 0 && maxHigh > highVal);
 
           first5mCandleMap.set(sym.toUpperCase(), {
             ...v,
+            date: currentIstDate,
             open915: openVal,
             high915: highVal,
             low915: lowVal,
@@ -343,6 +383,11 @@ function loadInitialCandleSnapshots() {
             price_0915_C: closeVal,
             today_5m_vol: vol0915,
             volume_0915: vol0915,
+            d1_vol: d1Val,
+            d2_vol: d2Val,
+            d3_vol: d3Val,
+            prev_3d_vols: [d1Val, d2Val, d3Val],
+            prev_3d_max: prev3dMax,
             candles_till_1015: timeline,
             lowest_low_till_1015: minLow,
             highest_high_till_1015: maxHigh,
@@ -354,8 +399,12 @@ function loadInitialCandleSnapshots() {
         }
       }
     }
+
     if (fs.existsSync(CANDLE_15MIN_JSON_PATH)) {
       const data = JSON.parse(fs.readFileSync(CANDLE_15MIN_JSON_PATH, 'utf8'));
+      const savedDate = data.__meta__?.date;
+      const isPastDay = savedDate && savedDate !== currentIstDate;
+
       for (const [k, v] of Object.entries(data)) {
         if (k.startsWith('__')) continue;
         const sym = v.symbol || (k.includes('|') ? k.split('|')[1] : k);
@@ -365,37 +414,42 @@ function loadInitialCandleSnapshots() {
           let d2Val = Number(v.d2_vol || prevVols[1] || 0);
           let d3Val = Number(v.d3_vol || prevVols[2] || 0);
           let prev3dMax = Number(v.prev_3d_max || Math.max(d1Val, d2Val, d3Val) || 0);
-          if (d1Val === 0 && prev3dMax > 0) d1Val = Math.round(prev3dMax * 0.95);
-          if (d2Val === 0 && prev3dMax > 0) d2Val = prev3dMax;
-          if (d3Val === 0 && prev3dMax > 0) d3Val = Math.round(prev3dMax * 0.88);
-          if (prev3dMax === 0) prev3dMax = Math.max(d1Val, d2Val, d3Val);
 
-          const openVal = Number(v.price_0915_O || v.open915 || 100);
-          const highVal = Number(v.price_0915_H || v.high915 || (openVal * 1.012));
-          const lowVal = Number(v.price_0915_L || v.low915 || (openVal * 0.988));
-          const closeVal = Number(v.price_0915_C || v.close915 || openVal);
-          const vol0915 = Number(v.volume_0915 || v.today_15m_vol || 60000);
+          let openVal = Number(v.price_0915_O || v.open915 || 0);
+          let highVal = Number(v.price_0915_H || v.high915 || 0);
+          let lowVal = Number(v.price_0915_L || v.low915 || 0);
+          let closeVal = Number(v.price_0915_C || v.close915 || 0);
+          let vol0915 = Number(v.volume_0915 || v.today_15m_vol || 0);
 
-          const isHighest = v.is_highest === true || (vol0915 > 0 && prev3dMax > 0 && vol0915 > prev3dMax);
-          const extraVol = Number(v.extra_volume || (isHighest ? Math.max(0, vol0915 - prev3dMax) : 0));
+          // If the cached file is from a previous day, roll over volume baselines and reset today's candle
+          if (isPastDay || v.date !== currentIstDate) {
+            const yesterdayVol = vol0915 > 0 ? vol0915 : d1Val;
+            const newD1 = yesterdayVol > 0 ? yesterdayVol : prev3dMax;
+            const newD2 = d1Val > 0 ? d1Val : (d2Val > 0 ? d2Val : newD1);
+            const newD3 = d2Val > 0 ? d2Val : (d3Val > 0 ? d3Val : newD2);
+            d1Val = newD1;
+            d2Val = newD2;
+            d3Val = newD3;
+            prev3dMax = Math.max(d1Val, d2Val, d3Val);
+            openVal = 0;
+            highVal = 0;
+            lowVal = 0;
+            closeVal = 0;
+            vol0915 = 0;
+          }
 
-          let timeline = v.candles_till_1015;
+          const isHighest = (vol0915 > 0 && prev3dMax > 0 && vol0915 > prev3dMax);
+          const extraVol = isHighest ? Math.max(0, vol0915 - prev3dMax) : 0;
+
+          let timeline = (isPastDay || v.date !== currentIstDate) ? null : v.candles_till_1015;
           let minLow = Number(v.lowest_low_till_1015 || lowVal);
           let maxHigh = Number(v.highest_high_till_1015 || highVal);
-          let brokeLow = v.broke_915_low ?? (minLow < lowVal);
-          let brokeHigh = v.broke_915_high ?? (maxHigh > highVal);
-
-          if (!timeline || Object.keys(timeline).length < 4) {
-            const built = build15mCandleTimeline(sym.toUpperCase(), openVal, highVal, lowVal, closeVal, vol0915);
-            timeline = built.candles;
-            minLow = built.minLow;
-            maxHigh = built.maxHigh;
-            brokeLow = built.brokeLow;
-            brokeHigh = built.brokeHigh;
-          }
+          let brokeLow = v.broke_915_low ?? (minLow > 0 && lowVal > 0 && minLow < lowVal);
+          let brokeHigh = v.broke_915_high ?? (maxHigh > 0 && highVal > 0 && maxHigh > highVal);
 
           first15mVolMap.set(sym.toUpperCase(), {
             ...v,
+            date: currentIstDate,
             open915: openVal,
             high915: highVal,
             low915: lowVal,
@@ -428,7 +482,11 @@ function loadInitialCandleSnapshots() {
         }
       }
     }
-    logIngestion('info', 'INGESTION-INIT', `Loaded initial 9:15 candle cache: 5m (${first5mCandleMap.size}), 15m (${first15mVolMap.size})`);
+
+    logIngestion('info', 'INGESTION-INIT', `Loaded 9:15 candle cache for ${currentIstDate}: 5m (${first5mCandleMap.size}), 15m (${first15mVolMap.size})`);
+    
+    // If today is a new day compared to file date, persist clean rollover immediately
+    persistCandleSnapshot();
   } catch (e) {
     console.warn('Could not load initial candle JSONs:', e.message);
   }
@@ -753,17 +811,19 @@ export async function fetchTradingViewScanner(minPrice = 200, maxPrice = 4000, l
         const finalChg = (liveTick && liveTick.change_pct != null) ? liveTick.change_pct : chg;
         const finalVol = (liveTick && liveTick.volume > 0) ? liveTick.volume : vol;
 
-        let open915Val = (first15m && first15m.open915 > 0) ? first15m.open915 : open;
-        let high915Val = (first15m && first15m.high915 > 0) ? first15m.high915 : high;
-        let low915Val = (first15m && first15m.low915 > 0) ? first15m.low915 : low;
-        let close915Val = (first15m && first15m.close915 > 0) ? first15m.close915 : finalPrice;
+        const currentIstDate = getIstDateString();
+
+        let open915Val = (first15m && first15m.date === currentIstDate && first15m.open915 > 0) ? first15m.open915 : (open || finalPrice);
+        let high915Val = (first15m && first15m.date === currentIstDate && first15m.high915 > 0) ? first15m.high915 : (high || finalPrice);
+        let low915Val = (first15m && first15m.date === currentIstDate && first15m.low915 > 0) ? first15m.low915 : (low || finalPrice);
+        let close915Val = (first15m && first15m.date === currentIstDate && first15m.close915 > 0) ? first15m.close915 : finalPrice;
 
         let first15mToday = 0;
         let first15mPrevMax = 0;
         let is15mHighest = false;
         let extra15mVol = 0;
 
-        if (first15m && (Number(first15m.today_15m_vol) > 0 || Number(first15m.volume_0915) > 0)) {
+        if (first15m && first15m.date === currentIstDate && (Number(first15m.today_15m_vol) > 0 || Number(first15m.volume_0915) > 0)) {
           first15mToday = Number(first15m.today_15m_vol || first15m.volume_0915 || 0);
           first15mPrevMax = Number(first15m.prev_3d_max || 0);
           is15mHighest = first15m.is_highest === true || (first15mToday > 0 && first15mPrevMax > 0 && first15mToday > first15mPrevMax);
@@ -771,15 +831,20 @@ export async function fetchTradingViewScanner(minPrice = 200, maxPrice = 4000, l
         } else {
           // If 15m candle not explicitly recorded from chart yet, compute from relative volume & final volume
           first15mToday = Math.round(finalVol * 0.25);
-          first15mPrevMax = relvol > 0 ? Math.round(first15mToday / relvol) : Math.round(first15mToday * 0.8);
+          first15mPrevMax = Number(first15m?.prev_3d_max || 0);
+          if (first15mPrevMax === 0) {
+            first15mPrevMax = relvol > 0 ? Math.round(first15mToday / relvol) : Math.round(first15mToday * 0.8);
+          }
           is15mHighest = (relvol >= 1.20 && first15mToday > first15mPrevMax && finalVol > 100000);
           extra15mVol = is15mHighest ? Math.max(0, first15mToday - first15mPrevMax) : 0;
 
-          const d1_15m = Math.round(first15mPrevMax * 0.95);
-          const d2_15m = Math.round(first15mPrevMax * 1.0);
-          const d3_15m = Math.round(first15mPrevMax * 0.88);
+          const d1_15m = Number(first15m?.d1_vol || Math.round(first15mPrevMax * 0.95));
+          const d2_15m = Number(first15m?.d2_vol || first15mPrevMax);
+          const d3_15m = Number(first15m?.d3_vol || Math.round(first15mPrevMax * 0.88));
+
           first15mVolMap.set(symbol, {
             symbol: symbol,
+            date: currentIstDate,
             timeframe: '15m',
             today_15m_vol: first15mToday,
             volume_0915: first15mToday,
@@ -805,14 +870,19 @@ export async function fetchTradingViewScanner(minPrice = 200, maxPrice = 4000, l
           });
         }
 
-        if (!first5m) {
+        if (!first5m || first5m.date !== currentIstDate || !first5m.open915 || first5m.open915 === 0) {
           const today5m = Math.round(finalVol * 0.12);
-          const prev5mMax = relvol > 0 ? Math.round(today5m / relvol) : Math.round(today5m * 0.8);
-          const d1_5m = Math.round(prev5mMax * 0.95);
-          const d2_5m = Math.round(prev5mMax * 1.0);
-          const d3_5m = Math.round(prev5mMax * 0.88);
+          let prev5mMax = Number(first5m?.prev_3d_max || 0);
+          if (prev5mMax === 0) {
+            prev5mMax = relvol > 0 ? Math.round(today5m / relvol) : Math.round(today5m * 0.8);
+          }
+          const d1_5m = Number(first5m?.d1_vol || Math.round(prev5mMax * 0.95));
+          const d2_5m = Number(first5m?.d2_vol || prev5mMax);
+          const d3_5m = Number(first5m?.d3_vol || Math.round(prev5mMax * 0.88));
+
           first5mCandleMap.set(symbol, {
             symbol: symbol,
+            date: currentIstDate,
             timeframe: '5m',
             today_5m_vol: today5m,
             volume_0915: today5m,
@@ -928,25 +998,35 @@ export async function getTicksMap() {
 
   // 1. First populate all real-time ticks directly received from Arrow Trade WebSocket
   const brokerTicks = arrowStreamService.getAllTicks();
-  Object.assign(ticks, brokerTicks);
+  for (const [sym, tick] of Object.entries(brokerTicks)) {
+    ticks[sym] = {
+      ...tick,
+      ws_ltp: tick.ltp > 0 ? tick.ltp : null
+    };
+  }
 
   // 2. Populate base universe
   try {
     const stocks = await fetchTradingViewScanner(200, 4000, 1500);
     stocks.forEach(s => {
+      const bTick = brokerTicks[s.symbol] || brokerTicks[`${s.symbol}-EQ`];
+      const wsPrice = bTick && bTick.ltp > 0 ? bTick.ltp : null;
       if (!ticks[s.symbol]) {
         ticks[s.symbol] = {
           symbol: s.symbol,
-          ltp: s.price,
-          change_pct: s.change_pct,
+          ltp: wsPrice || s.price,
+          ws_ltp: wsPrice,
+          change_pct: bTick?.change_pct ?? s.change_pct,
           open: s.open915,
           high: s.high915,
           low: s.low915,
           close: s.price,
-          volume: s.volume,
+          volume: bTick?.volume || s.volume,
           timestamp: nowStr
         };
         ticks[`${s.symbol}-EQ`] = ticks[s.symbol];
+      } else {
+        ticks[s.symbol].ws_ltp = wsPrice || ticks[s.symbol].ws_ltp;
       }
     });
   } catch (_) {}

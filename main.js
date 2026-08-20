@@ -311,7 +311,7 @@ const STRATEGIES = {
         icon: '📈',
         entryRule: 'Opening Range Breakout',
         risk: '2%',
-        columns: ['Symbol', 'Price', 'CHG%', 'GAP%', 'Volume', 'RELVOL', 'Inside', 'Breakout', '200 EMA', '9:15 HIGH', 'PREV HIGH', 'MaxQty', 'Sector']
+        columns: ['Symbol', 'Price', 'WS LTP', 'CHG%', 'GAP%', 'Volume', 'RELVOL', 'Inside', 'Breakout', '200 EMA', '9:15 HIGH', 'PREV HIGH', 'MaxQty', 'Sector']
         // ✅ data array removed - will come from backend API
     },
     smartmoney: {
@@ -320,7 +320,7 @@ const STRATEGIES = {
         icon: '💰',
         entryRule: 'Breakout + Volume Confirmation',
         risk: '2.5%',
-        columns: ['Symbol', 'Max Qty', 'Price / Chg%', 'Volume / Rel Vol', 'Signal Time', 'POC / Gap', 'Signal Price / % Chg', 'Prev High', 'Candle Status'],
+        columns: ['Symbol', 'Max Qty', 'Price / Chg%', 'WS LTP', 'Volume / Rel Vol', 'Signal Time', 'POC / Gap', 'Signal Price / % Chg', 'Prev High', 'Candle Status'],
         data: [
             { symbol: 'CYIENTDLM', maxQty: '179', price: '698.15', change: '+12.06%', volume: '12.9M', relvol: 'N/A', signalTime: 'N/A', poc: 'N/A', gap: 'N/A', signalPrice: 'N/A', prevHigh: '9:45', candleStatus: '9:40 9:45 9:50' },
             { symbol: 'LOTUSDEV', maxQty: '768', price: '162.70', change: '+9.81%', volume: '18.4M', relvol: 'N/A', signalTime: 'N/A', poc: 'N/A', gap: 'N/A', signalPrice: 'N/A', prevHigh: '9:45', candleStatus: '9:40 9:45 9:50' },
@@ -335,7 +335,7 @@ const STRATEGIES = {
         icon: '🏢',
         entryRule: 'Support & Resistance',
         risk: '1.8%',
-        columns: ['Symbol', 'Price', 'CHG%', 'Breakout', 'Support Price', '9:15 High', '9:15 Low', 'MaxQty'],
+        columns: ['Symbol', 'Price', 'WS LTP', 'CHG%', 'Breakout', 'Support Price', '9:15 High', '9:15 Low', 'MaxQty'],
         
     }
 };

@@ -58,7 +58,8 @@ import {
   runManualIngestion,
   first5mCandleMap,
   first15mVolMap,
-  persistCandleSnapshot
+  persistCandleSnapshot,
+  checkAndPerformDailyRollover
 } from './tradingview/scanner.js';
 import { syncAllSymbolsCandles } from './tradingview/tvFeed.js';
 import { arrowStreamService } from './broker/arrow_stream_service.js';
@@ -351,12 +352,12 @@ app.get(['/api/market/live-ticks/stream', '/api/market/bigplayers-ticks/stream']
 // STRATEGIES ROUTES (Advance ORB, Big Players)
 // -------------------------------------------------------------
 const ADVANCE_ORB_COLUMNS = [
-  'Symbol', 'Price', 'CHG%', 'Signal', 'Extra 15m Vol', '200 EMA', '1st High', '1st Low',
+  'Symbol', 'Price', 'WS LTP', 'CHG%', 'Signal', 'Extra 15m Vol', '200 EMA', '1st High', '1st Low',
   '1st Range%', 'Inside 9:15', 'GAP%', 'Volume', 'RELVOL', 'Sector', 'MaxQty', 'Action'
 ];
 
 const BIG_PLAYERS_COLUMNS = [
-  'Symbol', 'Price', 'CHG%', 'Breakout', 'SupportPrice', 'EntryPrice',
+  'Symbol', 'Price', 'WS LTP', 'CHG%', 'Breakout', 'SupportPrice', 'EntryPrice',
   'SL', 'MaxQty', 'RiskRs', 'TodayLow'
 ];
 
@@ -395,11 +396,15 @@ app.get('/api/strategies/advanceorb', async (req, res) => {
     const prevHigh = s.yesterday_high || s.high915;
     const isNearHigh = livePrice >= prevHigh ? true : ((prevHigh - livePrice) / prevHigh <= 0.02);
     const maxQty = computeMaxQty(budget, parts, livePrice);
-
+    const wsTick = arrowStreamService.getTick(s.symbol);
+    const wsLtp = (wsTick && wsTick.ltp > 0) ? wsTick.ltp : null;
 
     return {
       Symbol: s.symbol,
       Price: livePrice,
+      'WS LTP': wsLtp ? wsLtp : '—',
+      ws_ltp: wsLtp,
+      wsLtp: wsLtp,
       'CHG%': liveChg,
       'GAP%': gap,
       Volume: liveVol,
@@ -565,10 +570,15 @@ app.get('/api/strategies/bigplayers', async (req, res) => {
 
     const broke915Low = todayLow < low915 || livePrice < low915 || candle15m?.broke_915_low === true || candle15m?.new_low_formed === true;
     const broke915High = todayHigh > high915 || livePrice > high915 || candle15m?.broke_915_high === true || candle15m?.new_high_formed === true;
+    const wsTick = arrowStreamService.getTick(s.symbol);
+    const wsLtp = (wsTick && wsTick.ltp > 0) ? wsTick.ltp : null;
 
     return {
       Symbol: s.symbol,
       Price: livePrice,
+      'WS LTP': wsLtp ? wsLtp : '—',
+      ws_ltp: wsLtp,
+      wsLtp: wsLtp,
       'CHG%': liveChg,
       Breakout: livePrice >= (high915 * 0.995) ? 'Confirmed' : 'Forming',
       SupportPrice: low915,
@@ -1061,8 +1071,70 @@ app.get('/api/cache/status', (req, res) => {
   });
 });
 
-app.post('/api/data/purge-old-day', (req, res) => {
-  res.json({ success: true, message: 'Purged old day data successfully' });
+app.post(['/api/data/purge-old-day', '/api/candles/purge-old-day'], async (req, res) => {
+  try {
+    checkAndPerformDailyRollover(true);
+    const result = await runManualIngestion();
+    res.json({
+      success: true,
+      message: 'Purged old day data and initiated new day session ingestion successfully',
+      result: result
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// -------------------------------------------------------------
+// TOKEN MASTER & WATCHLIST API
+// -------------------------------------------------------------
+app.get('/api/tokens/master', (req, res) => {
+  const q = (req.query.q || req.query.symbol || '').toUpperCase().trim();
+  const limit = parseInt(req.query.limit) || 100;
+  try {
+    const tokenMasterPath = path.join(__dirname, 'data', 'nse_token_master.json');
+    if (fs.existsSync(tokenMasterPath)) {
+      const data = JSON.parse(fs.readFileSync(tokenMasterPath, 'utf-8'));
+      if (q) {
+        const matches = [];
+        for (const [key, item] of Object.entries(data)) {
+          if (item && (item.symbol.includes(q) || item.name.includes(q) || String(item.token) === q)) {
+            matches.push(item);
+            if (matches.length >= limit) break;
+          }
+        }
+        return res.json({ success: true, count: matches.length, data: matches });
+      }
+      return res.json({ success: true, total: Object.keys(data).length, sample: Object.values(data).slice(0, limit) });
+    }
+    res.json({ success: false, message: 'Token master not generated yet' });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+app.get('/api/tokens/watchlist', (req, res) => {
+  try {
+    const wlPath = path.join(__dirname, 'stocks', 'watchlist.json');
+    if (fs.existsSync(wlPath)) {
+      const wl = JSON.parse(fs.readFileSync(wlPath, 'utf-8'));
+      const list = Object.entries(wl.symbols || {}).map(([sym, meta]) => {
+        const liveTick = arrowStreamService.getTick(sym);
+        return {
+          symbol: sym,
+          token: meta.token || arrowStreamService.getTokenForSymbol(sym),
+          name: meta.name || sym,
+          ltp: liveTick?.ltp || null,
+          change_pct: liveTick?.change_pct || null,
+          ws_ltp: liveTick?.ltp || null
+        };
+      });
+      return res.json({ success: true, total: list.length, data: list });
+    }
+    res.json({ success: false, message: 'Watchlist not found' });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
 });
 
 app.get('/api/health', (req, res) => {

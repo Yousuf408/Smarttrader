@@ -22,7 +22,6 @@ STOCKS_DIR = os.path.join(BASE_DIR, "stocks")
 
 CANDLE_15M_FILE = os.path.join(JSON_DIR, "candle_15min.json")
 CANDLE_5M_FILE = os.path.join(JSON_DIR, "candle_5min.json")
-CANDLE_0915_FILE = os.path.join(JSON_DIR, "candle_0915.json")
 
 class CandleRecorder:
     def __init__(self):
@@ -77,8 +76,6 @@ class CandleRecorder:
         }
         payload_15m.update(self.candles_15m)
         with open(CANDLE_15M_FILE, "w", encoding="utf-8") as f:
-            json.dump(payload_15m, f, indent=2)
-        with open(CANDLE_0915_FILE, "w", encoding="utf-8") as f:
             json.dump(payload_15m, f, indent=2)
 
         # 5m file

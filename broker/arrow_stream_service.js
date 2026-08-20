@@ -5,6 +5,12 @@
  */
 import WebSocket from 'ws';
 import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 class ArrowStreamService {
   constructor() {
@@ -14,10 +20,44 @@ class ArrowStreamService {
     this.ws = null;
     this.isConnected = false;
     this.subscriptions = new Set();
+    this.tokenSubscriptions = new Set();
     this.latestTicks = new Map();
+    this.tokenToSymbol = new Map();
+    this.symbolToToken = new Map();
     this.reconnectTimer = null;
     this.heartbeatTimer = null;
     this.onTickCallbacks = new Set();
+
+    this.loadTokenMaster();
+  }
+
+  loadTokenMaster() {
+    try {
+      const tokenMasterPath = path.join(__dirname, '..', 'data', 'nse_token_master.json');
+      if (fs.existsSync(tokenMasterPath)) {
+        const raw = fs.readFileSync(tokenMasterPath, 'utf-8');
+        const map = JSON.parse(raw);
+        for (const [key, item] of Object.entries(map)) {
+          if (item && item.token && item.symbol) {
+            this.tokenToSymbol.set(String(item.token), item.symbol.toUpperCase());
+            this.symbolToToken.set(item.symbol.toUpperCase(), String(item.token));
+            this.symbolToToken.set(`${item.symbol.toUpperCase()}-EQ`, String(item.token));
+          }
+        }
+        console.log(`[ArrowWS] Loaded ${this.tokenToSymbol.size} tokens into Master Instrument Index.`);
+      }
+    } catch (e) {
+      console.warn('[ArrowWS] Could not load token master:', e.message);
+    }
+  }
+
+  getTokenForSymbol(symbol) {
+    const clean = String(symbol || '').replace(/^(NSE|BSE):/i, '').replace(/-EQ$/i, '').toUpperCase();
+    return this.symbolToToken.get(clean) || null;
+  }
+
+  getSymbolForToken(token) {
+    return this.tokenToSymbol.get(String(token)) || null;
   }
 
   generateSignature(timestamp) {
@@ -128,22 +168,35 @@ class ArrowStreamService {
 
   subscribeSymbols(symbols) {
     if (!symbols || symbols.length === 0) return;
-    symbols.forEach(s => this.subscriptions.add(s.toUpperCase()));
+    const tokens = [];
+    symbols.forEach(s => {
+      const clean = s.toUpperCase().trim();
+      this.subscriptions.add(clean);
+      const tok = this.getTokenForSymbol(clean);
+      if (tok) {
+        this.tokenSubscriptions.add(tok);
+        tokens.push(tok);
+      }
+    });
+
     if (this.isConnected) {
+      // Send both symbol and token subscriptions for universal broker compatibility
       this.send({
         action: 'subscribe',
         mode: 'quote',
-        symbols: Array.from(this.subscriptions).map(s => s.startsWith('NSE:') ? s : `NSE:${s}`)
+        symbols: Array.from(this.subscriptions).map(s => s.startsWith('NSE:') ? s : `NSE:${s}`),
+        tokens: Array.from(this.tokenSubscriptions)
       });
     }
   }
 
   resubscribe() {
-    if (this.subscriptions.size > 0) {
+    if (this.subscriptions.size > 0 || this.tokenSubscriptions.size > 0) {
       this.send({
         action: 'subscribe',
         mode: 'quote',
-        symbols: Array.from(this.subscriptions).map(s => s.startsWith('NSE:') ? s : `NSE:${s}`)
+        symbols: Array.from(this.subscriptions).map(s => s.startsWith('NSE:') ? s : `NSE:${s}`),
+        tokens: Array.from(this.tokenSubscriptions)
       });
     }
   }
@@ -156,13 +209,24 @@ class ArrowStreamService {
     }
 
     // Handle tick packets
-    if (msg.type === 'tick' || msg.type === 'quote' || msg.ltp != null || msg.price != null) {
+    if (msg.type === 'tick' || msg.type === 'quote' || msg.ltp != null || msg.price != null || msg.token != null) {
       let rawSym = msg.symbol || msg.tradingsymbol || msg.name || '';
+      let token = msg.token ? String(msg.token) : null;
+      
+      // If symbol is missing but token is present, resolve from Token Master Index
+      if (!rawSym && token) {
+        rawSym = this.getSymbolForToken(token) || '';
+      }
+      
       let cleanSym = rawSym.replace(/^(NSE|BSE):/i, '').replace(/-EQ$/i, '').toUpperCase();
+      if (!cleanSym && token) {
+        cleanSym = this.getSymbolForToken(token);
+      }
       if (!cleanSym) return;
 
       const tick = {
         symbol: cleanSym,
+        token: token || this.getTokenForSymbol(cleanSym),
         ltp: Number(msg.ltp ?? msg.price ?? msg.last_price ?? 0),
         change_pct: Number(msg.change_pct ?? msg.change_percent ?? msg.chg_pct ?? 0),
         change: Number(msg.change ?? msg.chg ?? 0),
@@ -177,6 +241,9 @@ class ArrowStreamService {
       if (tick.ltp > 0) {
         this.latestTicks.set(cleanSym, tick);
         this.latestTicks.set(`${cleanSym}-EQ`, tick);
+        if (tick.token) {
+          this.latestTicks.set(String(tick.token), tick);
+        }
 
         // Notify subscribers
         for (const cb of this.onTickCallbacks) {

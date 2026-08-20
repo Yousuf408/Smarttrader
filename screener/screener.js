@@ -490,6 +490,18 @@ function orbCellValue(row, col) {
     } else if (col === 'Prev High' || col === 'PREV HIGH') {
         const ph = parseFloat(row.yesterday_high);
         value = Number.isFinite(ph) ? `₹${ph.toFixed(2)}` : '';
+    } else if (col === 'WS LTP' || col === 'ws_ltp' || col === 'we ltp' || col === 'WS Price' || col === 'WebSocket Price') {
+        const wsVal = row.ws_ltp ?? row.wsLtp ?? row['WS LTP'] ?? row.ws_price ?? row.Price;
+        if (wsVal != null && wsVal !== '' && wsVal !== '—') {
+            const num = parseFloat(wsVal);
+            if (Number.isFinite(num) && num > 0) {
+                value = `<span class="ws-ltp-val font-mono" style="font-weight:600;color:var(--color-primary, #38bdf8);">₹${num.toFixed(2)}</span>`;
+            } else {
+                value = `<span class="ws-ltp-val text-muted" style="opacity:0.6;">—</span>`;
+            }
+        } else {
+            value = `<span class="ws-ltp-val text-muted" style="opacity:0.6;">—</span>`;
+        }
     } else {
         const colKey = col.replace(/ /g, '').replace(/\//g, '');
         value = row[col] || row[colKey] || row[col.toLowerCase()] || '';
@@ -715,6 +727,7 @@ function renderStrategyData(result) {
     const UNIFIED_ORB_COLUMNS = [
         'Symbol',
         'Price',
+        'WS LTP',
         'CHG%',
         'Signal',
         'Extra 15m Vol',
@@ -1511,9 +1524,13 @@ function _applyTicks(ticks) {
     if (!rows.length) return;
     const headers = Array.from(document.querySelectorAll('#screenerHead th'));
     const priceIdx = headers.findIndex(h => h.textContent.trim() === 'Price');
+    const wsLtpIdx = headers.findIndex(h => {
+        const t = h.textContent.trim().toLowerCase();
+        return t === 'ws ltp' || t === 'we ltp' || t === 'ws price' || t === 'websocket price';
+    });
     const chgIdx   = headers.findIndex(h => h.textContent.trim() === 'CHG%');
     const volIdx   = headers.findIndex(h => h.textContent.trim() === 'Volume');
-    if (priceIdx < 0) return;
+    if (priceIdx < 0 && wsLtpIdx < 0) return;
 
     for (const tr of rows) {
         const cells = tr.querySelectorAll('td');
@@ -1523,12 +1540,45 @@ function _applyTicks(ticks) {
         const tick = ticks[sym];
         if (!tick) continue;
 
-        if (tick.ltp != null && priceIdx < cells.length) {
-            cells[priceIdx].textContent = `₹${Number(tick.ltp).toFixed(2)}`;
-            // Flash cell briefly to show update
-            cells[priceIdx].style.transition = 'background 0.15s';
-            cells[priceIdx].style.background = 'rgba(34,197,94,0.15)';
-            setTimeout(() => { cells[priceIdx].style.background = ''; }, 300);
+        // Update standard Price column
+        if (tick.ltp != null && priceIdx >= 0 && priceIdx < cells.length) {
+            const newPrice = Number(tick.ltp);
+            const currentText = cells[priceIdx].textContent.replace(/[₹,\s]/g, '');
+            const oldPrice = parseFloat(currentText);
+
+            if (!isNaN(newPrice)) {
+                cells[priceIdx].textContent = `₹${newPrice.toFixed(2)}`;
+                
+                // Only flash when price actually changes
+                if (!isNaN(oldPrice) && Math.abs(newPrice - oldPrice) >= 0.01) {
+                    const isUptick = newPrice > oldPrice;
+                    cells[priceIdx].style.transition = 'background 0.15s ease-out';
+                    cells[priceIdx].style.background = isUptick ? 'rgba(34, 197, 94, 0.25)' : 'rgba(239, 68, 68, 0.25)';
+                    setTimeout(() => {
+                        cells[priceIdx].style.background = '';
+                    }, 400);
+                }
+            }
+        }
+
+        // Update WebSocket WS LTP column
+        if (wsLtpIdx >= 0 && wsLtpIdx < cells.length) {
+            const wsPrice = Number(tick.ws_ltp ?? tick.ltp);
+            if (!isNaN(wsPrice) && wsPrice > 0) {
+                const currentText = cells[wsLtpIdx].textContent.replace(/[₹,\s]/g, '');
+                const oldWsPrice = parseFloat(currentText);
+
+                cells[wsLtpIdx].innerHTML = `<span class="ws-ltp-val font-mono" style="font-weight:600;color:var(--color-primary, #38bdf8);">₹${wsPrice.toFixed(2)}</span>`;
+
+                if (!isNaN(oldWsPrice) && Math.abs(wsPrice - oldWsPrice) >= 0.01) {
+                    const isUptick = wsPrice > oldWsPrice;
+                    cells[wsLtpIdx].style.transition = 'background 0.15s ease-out';
+                    cells[wsLtpIdx].style.background = isUptick ? 'rgba(56, 189, 248, 0.3)' : 'rgba(239, 68, 68, 0.3)';
+                    setTimeout(() => {
+                        cells[wsLtpIdx].style.background = '';
+                    }, 400);
+                }
+            }
         }
         if (tick.change_pct != null && chgIdx >= 0 && chgIdx < cells.length) {
             const v = Number(tick.change_pct);

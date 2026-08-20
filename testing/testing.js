@@ -55,6 +55,8 @@ function loadTestingData() {
             uniqueSymbols.forEach((sym, idx) => {
                 const t = ticks[sym];
                 const ltp = t?.ltp || 0;
+                const wsLtp = t?.ws_ltp || (data.connected ? ltp : null);
+                const wsLtpDisplay = wsLtp ? `<span style="color:var(--color-primary, #38bdf8);font-weight:600;">₹${Number(wsLtp).toFixed(2)}</span>` : '<span style="opacity:0.5;">—</span>';
                 const chg = t?.change_pct || 0;
                 const open = t?.open || 0;
                 const high = t?.high || 0;
@@ -80,6 +82,7 @@ function loadTestingData() {
                     <td data-label="#" style="opacity:0.4;font-size:12px;">${idx + 1}</td>
                     <td data-label="Symbol"><strong>${displaySym}</strong></td>
                     <td data-label="LTP" style="font-weight:600;">${ltp.toFixed(2)}</td>
+                    <td data-label="WS LTP">${wsLtpDisplay}</td>
                     <td data-label="Change" style="color:${chgColor};font-weight:600;">${chgIcon} ${chg.toFixed(2)}%</td>
                     <td data-label="Open">${open.toFixed(2)}</td>
                     <td data-label="High" style="color:var(--color-success);">${high.toFixed(2)}</td>
