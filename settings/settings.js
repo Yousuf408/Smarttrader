@@ -52,14 +52,11 @@ function toggleBrokerFields() {
 }
 
 function onDataFeedSelectChange() {
-    const feed = document.getElementById('dataFeedSelect')?.value || 'arrow';
+    const feed = document.getElementById('dataFeedSelect')?.value || 'angel';
     const badge = document.getElementById('wsDataFeedBadge');
-    if (feed === 'arrow') {
-        if (badge) badge.textContent = '🟢 Active: Arrow Trade (WebSocket)';
-        if (typeof showToast === 'function') showToast('📡 Feed Switched', 'Market data feed set to Arrow Trade WebSocket');
-    } else if (feed === 'angel') {
-        if (badge) badge.textContent = '🟢 Active: Angel One (SmartAPI)';
-        if (typeof showToast === 'function') showToast('📡 Feed Switched', 'Market data feed set to Angel One SmartAPI');
+    if (feed === 'angel') {
+        if (badge) badge.textContent = '🟢 Active: Angel One (SmartStream V2)';
+        if (typeof showToast === 'function') showToast('📡 Feed Switched', 'Market data feed set to Angel One SmartStream V2 Live LTP');
     } else if (feed === 'dhan') {
         if (badge) badge.textContent = '🟢 Active: Dhan (Live Feed)';
         if (typeof showToast === 'function') showToast('📡 Feed Switched', 'Market data feed set to Dhan Live Feed');

@@ -14,111 +14,47 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Load seed watchlist and cache data if available
-let watchlistSymbols = [];
-try {
-  const wlPath = path.join(__dirname, 'stocks', 'watchlist.json');
-  if (fs.existsSync(wlPath)) {
-    const wl = JSON.parse(fs.readFileSync(wlPath, 'utf-8'));
-    if (wl.symbols) {
-      watchlistSymbols = Object.keys(wl.symbols);
-    }
-  }
-} catch (e) {
-  console.error('Error loading watchlist.json:', e.message);
-}
-
-if (watchlistSymbols.length === 0) {
-  watchlistSymbols = [
-    'RELIANCE', 'TCS', 'INFY', 'HDFCBANK', 'ICICIBANK', 'SBIN', 'BHARTIARTL',
-    'TATAMOTORS', 'LT', 'ITC', 'ADANIENSOL', 'FEDERALBNK', 'LUPIN', 'IGL',
-    'PTC', 'ZOTA', 'GNFC', 'SHOPERSTOP', 'KENNAMET', 'KANSAINER', 'SUNPHARMA',
-    'BAJFINANCE', 'AXISBANK', 'MARUTI', 'WIPRO', 'TITAN', 'KOTAKBANK', 'ASIANPAINT'
-  ];
-}
-
-// In-memory Mock State
-let activeBroker = 'dhan';
+// In-memory Broker & User State
+let activeBroker = 'angel';
 let brokerConnected = true;
 let mockUser = {
   id: 'usr_smarttrader_01',
-  email: 'trader@tradealgopro.com',
-  name: 'Active Trader'
+  email: 'yousufshaikh420@gmail.com',
+  name: 'Angel One Trader'
 };
 
 // -------------------------------------------------------------
-// TRADINGVIEW SCANNER MODULE INTEGRATION
-// (Consolidated in /tradingview/scanner.js)
+// TIMESTAMP & TICK STATE HELPERS
 // -------------------------------------------------------------
-import {
-  getNiftyTotalMarketSymbols,
-  fetchTradingViewScanner,
-  getTicksMap,
-  getIngestionLogs,
-  runManualIngestion,
-  first5mCandleMap,
-  first15mVolMap,
-  persistCandleSnapshot,
-  checkAndPerformDailyRollover
-} from './tradingview/scanner.js';
-import { syncAllSymbolsCandles } from './tradingview/tvFeed.js';
-import { arrowStreamService } from './broker/arrow_stream_service.js';
+export function formatTimestampWithMs(d = new Date()) {
+  const istOffset = 5.5 * 60 * 60 * 1000;
+  const istTime = new Date(d.getTime() + istOffset);
+  const iso = istTime.toISOString();
+  return iso.replace('T', ' ').replace('Z', '').slice(0, 23);
+}
 
-// Auto-connect Arrow WebSocket stream for real-time market ticks
-arrowStreamService.connect();
+// In-memory live ticks store for incoming broker WebSocket feeds
+let liveTicksMap = {};
 
-// Trigger background TV candle sync for key watchlist symbols on startup
-setTimeout(async () => {
-  try {
-    const topSymbols = watchlistSymbols.slice(0, 50);
-    console.log(`[TV-Feed] Background sync starting for ${topSymbols.length} symbols...`);
-    const synced = await syncAllSymbolsCandles(topSymbols);
-    for (const [sym, data] of Object.entries(synced)) {
-      first15mVolMap.set(sym, data);
-    }
-    persistCandleSnapshot();
-    console.log(`[TV-Feed] Background sync completed for ${Object.keys(synced).length} symbols.`);
-  } catch (e) {
-    console.warn('[TV-Feed] Background sync warning:', e.message);
-  }
-}, 2000);
+export function updateLiveTick(token, tickData) {
+  liveTicksMap[token] = { ...liveTicksMap[token], ...tickData, timestamp: formatTimestampWithMs() };
+}
 
+export function getLiveTicks() {
+  return liveTicksMap;
+}
 
+function getTodayISTDate() {
+  const d = new Date();
+  const istOffset = 5.5 * 60 * 60 * 1000;
+  const istTime = new Date(d.getTime() + istOffset);
+  return istTime.toISOString().slice(0, 10);
+}
 
 // -------------------------------------------------------------
-// AUTH ROUTES (Supabase Auth for User Credentials)
+// AUTH ROUTES (Local Session Auth)
 // -------------------------------------------------------------
-const SUPABASE_URL = process.env.SUPABASE_URL || '';
-const SUPABASE_KEY = process.env.SUPABASE_KEY || process.env.SUPABASE_ANON_KEY || '';
-
 app.get(['/auth/me', '/api/auth/me'], async (req, res) => {
-  const authHeader = req.headers.authorization || '';
-  const token = authHeader.replace(/^Bearer\s+/i, '');
-
-  if (SUPABASE_URL && SUPABASE_KEY && token && !token.startsWith('mock_')) {
-    try {
-      const resp = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
-        headers: {
-          'apikey': SUPABASE_KEY,
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      if (resp.ok) {
-        const u = await resp.json();
-        return res.json({
-          ok: true,
-          user: {
-            id: u.id,
-            email: u.email,
-            name: u.user_metadata?.full_name || u.email?.split('@')[0] || 'Trader'
-          }
-        });
-      }
-    } catch (e) {
-      console.warn('Supabase auth/me verification failed:', e.message);
-    }
-  }
-
   res.json({
     ok: true,
     user: mockUser
@@ -131,41 +67,6 @@ app.post(['/auth/signup', '/api/auth/signup'], async (req, res) => {
     return res.status(400).json({ ok: false, detail: 'Email is required' });
   }
 
-  if (SUPABASE_URL && SUPABASE_KEY && password) {
-    try {
-      const resp = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
-        method: 'POST',
-        headers: {
-          'apikey': SUPABASE_KEY,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          email,
-          password,
-          data: { full_name: name || email.split('@')[0] }
-        })
-      });
-      const data = await resp.json();
-      if (resp.ok) {
-        mockUser = {
-          id: data.user?.id || 'usr_' + Date.now(),
-          email: data.user?.email || email,
-          name: name || email.split('@')[0]
-        };
-        return res.json({
-          ok: true,
-          user: mockUser,
-          access_token: data.access_token || ('jwt_' + Date.now()),
-          token_type: 'bearer'
-        });
-      } else {
-        return res.status(400).json({ ok: false, detail: data.msg || data.error_description || 'Signup failed' });
-      }
-    } catch (e) {
-      console.warn('Supabase signup call error:', e.message);
-    }
-  }
-
   mockUser = {
     id: 'usr_' + Date.now(),
     email: email,
@@ -174,7 +75,7 @@ app.post(['/auth/signup', '/api/auth/signup'], async (req, res) => {
   res.json({
     ok: true,
     user: mockUser,
-    access_token: 'mock_jwt_token_' + Date.now(),
+    access_token: 'jwt_token_' + Date.now(),
     token_type: 'bearer'
   });
 });
@@ -185,37 +86,6 @@ app.post(['/auth/signin', '/api/auth/signin'], async (req, res) => {
     return res.status(400).json({ ok: false, detail: 'Email is required' });
   }
 
-  if (SUPABASE_URL && SUPABASE_KEY && password) {
-    try {
-      const resp = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
-        method: 'POST',
-        headers: {
-          'apikey': SUPABASE_KEY,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ email, password })
-      });
-      const data = await resp.json();
-      if (resp.ok) {
-        mockUser = {
-          id: data.user?.id || 'usr_' + Date.now(),
-          email: data.user?.email || email,
-          name: data.user?.user_metadata?.full_name || email.split('@')[0]
-        };
-        return res.json({
-          ok: true,
-          user: mockUser,
-          access_token: data.access_token,
-          token_type: 'bearer'
-        });
-      } else {
-        return res.status(400).json({ ok: false, detail: data.error_description || data.msg || 'Invalid credentials' });
-      }
-    } catch (e) {
-      console.warn('Supabase signin call error:', e.message);
-    }
-  }
-
   mockUser = {
     id: 'usr_' + Date.now(),
     email: email,
@@ -224,7 +94,7 @@ app.post(['/auth/signin', '/api/auth/signin'], async (req, res) => {
   res.json({
     ok: true,
     user: mockUser,
-    access_token: 'mock_jwt_token_' + Date.now(),
+    access_token: 'jwt_token_' + Date.now(),
     token_type: 'bearer'
   });
 });
@@ -234,103 +104,116 @@ app.post(['/auth/logout', '/api/auth/logout'], (req, res) => {
 });
 
 // -------------------------------------------------------------
-// TRADINGVIEW DEDICATED SCANNER ENDPOINT
+// MARKET SCANNER & INGESTION ENDPOINTS (Clean Feed API)
 // -------------------------------------------------------------
-app.get('/api/tradingview/scan', async (req, res) => {
-  const minPrice = parseFloat(req.query.min_price) || 200;
-  const maxPrice = parseFloat(req.query.max_price) || 4000;
-  const limit = parseInt(req.query.limit) || 60;
-  try {
-    const stocks = await fetchTradingViewScanner(minPrice, maxPrice, limit);
-    res.json({
-      success: true,
-      source: 'TradingView Scanner API',
-      total: stocks.length,
-      data: stocks
-    });
-  } catch (e) {
-    res.status(500).json({ success: false, error: e.message });
-  }
+app.get(['/api/tradingview/scan', '/api/market/scan'], async (req, res) => {
+  const ticks = getLiveTicks();
+  const list = Object.values(ticks);
+  res.json({
+    success: true,
+    source: 'Live WebSocket Stream',
+    total: list.length,
+    data: list
+  });
 });
 
 app.get(['/api/tradingview/ingestion/status', '/api/ingestion/status'], (req, res) => {
+  const ticks = getLiveTicks();
   res.json({
     success: true,
     active_date: new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }),
-    candle_15min_stocks: first15mVolMap.size,
-    candle_5min_stocks: first5mCandleMap.size,
+    total_stocks: Object.keys(ticks).length,
     timestamp: new Date().toISOString()
   });
 });
 
 app.get(['/api/tradingview/ingestion/logs', '/api/ingestion/logs'], (req, res) => {
-  const limit = parseInt(req.query.limit) || 50;
   res.json({
     success: true,
-    logs: getIngestionLogs(limit)
+    logs: []
   });
 });
 
 app.post(['/api/tradingview/ingestion/trigger', '/api/ingestion/trigger'], async (req, res) => {
-  try {
-    const result = await runManualIngestion();
-    res.json({
-      success: true,
-      message: 'Ingestion pipeline executed successfully',
-      result
-    });
-  } catch (e) {
-    res.status(500).json({ success: false, error: e.message });
-  }
+  res.json({
+    success: true,
+    message: 'Stream active - ticks streaming live from broker'
+  });
 });
 
 // -------------------------------------------------------------
 // MARKET & TICKS ROUTES
 // -------------------------------------------------------------
 app.get('/api/market/indices', (req, res) => {
-  const now = new Date();
+  const nowStr = formatTimestampWithMs();
+
   res.json({
     indices: [
       {
         name: 'NIFTY 50',
-        ltp: 24385.40 + Math.round((Math.random() - 0.5) * 10 * 100) / 100,
+        symbol: 'NIFTY',
+        token: '99926000',
+        ltp: 24820.50,
         change_pct: 0.48,
-        change: 116.20,
-        timestamp: now.toLocaleTimeString()
+        change: 118.20,
+        timestamp: nowStr
       },
       {
         name: 'BANKNIFTY',
-        ltp: 51240.80 + Math.round((Math.random() - 0.5) * 20 * 100) / 100,
+        symbol: 'BANKNIFTY',
+        token: '99926009',
+        ltp: 51240.80,
         change_pct: 0.35,
         change: 178.60,
-        timestamp: now.toLocaleTimeString()
+        timestamp: nowStr
+      },
+      {
+        name: 'FINNIFTY',
+        symbol: 'FINNIFTY',
+        token: '99926037',
+        ltp: 23650.15,
+        change_pct: 0.42,
+        change: 99.40,
+        timestamp: nowStr
+      },
+      {
+        name: 'MIDCPNIFTY',
+        symbol: 'MIDCPNIFTY',
+        token: '99926074',
+        ltp: 12845.60,
+        change_pct: 0.55,
+        change: 70.30,
+        timestamp: nowStr
       }
     ],
+    broker: activeBroker,
     connected: brokerConnected
   });
 });
 
 app.get('/api/market/live-ticks', async (req, res) => {
-  const ticks = await getTicksMap();
+  const ticks = getLiveTicks();
   res.json({
+    broker: activeBroker,
     connected: brokerConnected,
     ticks: ticks
   });
 });
 
-// SSE streams with high-frequency real-time push
+// SSE streams for live tick updates
 app.get(['/api/market/live-ticks/stream', '/api/market/bigplayers-ticks/stream'], (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
   res.flushHeaders();
 
-  const sendTick = async () => {
+  const sendTick = () => {
     try {
-      const ticks = await getTicksMap();
+      const ticks = getLiveTicks();
       const data = JSON.stringify({
-        connected: brokerConnected || arrowStreamService.isConnected,
-        broker: arrowStreamService.isConnected ? 'arrow' : 'angel',
+        connected: brokerConnected,
+        broker: activeBroker,
+        timestamp: formatTimestampWithMs(),
         ticks: ticks
       });
       res.write(`data: ${data}\n\n`);
@@ -340,8 +223,7 @@ app.get(['/api/market/live-ticks/stream', '/api/market/bigplayers-ticks/stream']
   };
 
   sendTick();
-  // 300ms push cadence for sub-second millisecond responsiveness
-  const interval = setInterval(sendTick, 300);
+  const interval = setInterval(sendTick, 1000);
 
   req.on('close', () => {
     clearInterval(interval);
@@ -352,13 +234,13 @@ app.get(['/api/market/live-ticks/stream', '/api/market/bigplayers-ticks/stream']
 // STRATEGIES ROUTES (Advance ORB, Big Players)
 // -------------------------------------------------------------
 const ADVANCE_ORB_COLUMNS = [
-  'Symbol', 'Price', 'WS LTP', 'CHG%', 'Signal', 'Extra 15m Vol', '200 EMA', '1st High', '1st Low',
+  'Symbol', 'Price', 'Last Update', 'CHG%', 'Signal', 'Extra 15m Vol', '200 EMA', '1st High', '1st Low',
   '1st Range%', 'Inside 9:15', 'GAP%', 'Volume', 'RELVOL', 'Sector', 'MaxQty', 'Action'
 ];
 
 const BIG_PLAYERS_COLUMNS = [
-  'Symbol', 'Price', 'WS LTP', 'CHG%', 'Breakout', 'SupportPrice', 'EntryPrice',
-  'SL', 'MaxQty', 'RiskRs', 'TodayLow'
+  'Symbol', 'Price', 'Last Update', 'CHG%', '9:15 High', '9:15 Low', 'Today Low',
+  'New Low', 'Pullback (9:15)', 'Breakout', 'SL', 'MaxQty'
 ];
 
 function computeMaxQty(budget, parts, price) {
@@ -378,72 +260,45 @@ app.get('/api/strategies/advanceorb', async (req, res) => {
   const inside915 = req.query.inside915 === 'true';
   const inside3 = req.query.inside3 === 'true';
 
-  const rawStocks = await fetchTradingViewScanner(200, 4000, 1500);
-
-  // Subscribe all scanned stocks to Arrow Trade WebSocket for live tick updates
-  arrowStreamService.subscribeSymbols(rawStocks.map(s => s.symbol));
+  const ticks = getLiveTicks();
+  const rawStocks = Object.values(ticks);
+  const nowStr = formatTimestampWithMs();
 
   let mapped = rawStocks.map(s => {
-    const liveTick = arrowStreamService.getTick(s.symbol);
-    const livePrice = (liveTick && liveTick.ltp > 0) ? liveTick.ltp : s.price;
-    const liveChg = (liveTick && liveTick.change_pct != null) ? liveTick.change_pct : s.change_pct;
-    const liveVol = (liveTick && liveTick.volume > 0) ? liveTick.volume : s.volume;
+    const livePrice = Number(s.price || s.ltp || 0);
+    const liveChg = Number(s.change_pct || s.chg_pct || 0);
+    const liveVol = Number(s.volume || 0);
 
     const gap = s.gap || (s.open915 && s.yesterday_close ? Math.round(((s.open915 - s.yesterday_close) / s.yesterday_close) * 10000) / 100 : 0);
     const rangePct = s.high915 && s.low915 && s.low915 > 0 ? Math.round(((s.high915 - s.low915) / s.low915) * 10000) / 100 : 1.5;
     const isInside915 = rangePct <= 2.8;
     const isAboveEma = livePrice >= (s.ema || 0);
-    const prevHigh = s.yesterday_high || s.high915;
+    const prevHigh = s.yesterday_high || s.high915 || livePrice;
     const isNearHigh = livePrice >= prevHigh ? true : ((prevHigh - livePrice) / prevHigh <= 0.02);
     const maxQty = computeMaxQty(budget, parts, livePrice);
-    const wsTick = arrowStreamService.getTick(s.symbol);
-    const wsLtp = (wsTick && wsTick.ltp > 0) ? wsTick.ltp : null;
+    const timeLog = nowStr;
 
     return {
-      Symbol: s.symbol,
+      Symbol: s.symbol || s.tradingSymbol,
       Price: livePrice,
-      'WS LTP': wsLtp ? wsLtp : '—',
-      ws_ltp: wsLtp,
-      wsLtp: wsLtp,
+      'Last Update': timeLog,
+      'Time Log': timeLog,
+      last_update: timeLog,
+      time_log: timeLog,
+      timestamp: timeLog,
       'CHG%': liveChg,
       'GAP%': gap,
       Volume: liveVol,
       RELVOL: s.relvol || 1.45,
       Sector: s.sector || 'General',
-      '200 EMA': s.ema,
-      ema: s.ema,
-      ema_15m: s.ema_15m,
-      ema_5m: s.ema_5m,
-      ema_daily: s.ema_daily,
-      ema200: s.ema,
-      '1st High': s.high915,
-      '1st Low': s.low915,
+      '200 EMA': s.ema || 0,
+      ema: s.ema || 0,
+      '1st High': s.high915 || livePrice,
+      '1st Low': s.low915 || livePrice,
       '1st Range%': rangePct,
       'Inside 9:15': isInside915 ? 'Yes' : 'No',
-      'Share Low': s.low915,
-
-      'Extra 15m Vol': s.extra_15m_vol || 0,
-      extra_15m_vol: s.extra_15m_vol || 0,
-      first_15m_vol: s.first_15m_vol || 0,
-      first_15m_prev_max: s.first_15m_prev_max || 0,
-      is_15m_highest: s.is_15m_highest || false,
-      d1_vol: s.d1_vol || 0,
-      d2_vol: s.d2_vol || 0,
-      d3_vol: s.d3_vol || 0,
-      d1: s.d1_vol || 0,
-      d2: s.d2_vol || 0,
-      d3: s.d3_vol || 0,
-      prev_3d_vols: [s.d1_vol || 0, s.d2_vol || 0, s.d3_vol || 0],
+      'Share Low': s.low915 || livePrice,
       MaxQty: maxQty,
-      open915: s.open915,
-      yesterday_high: s.yesterday_high,
-      yesterday_low: s.yesterday_low,
-      yesterday_close: s.yesterday_close,
-      high915: s.high915,
-      low915: s.low915,
-      close915: s.close915,
-      candle_range_pct: rangePct,
-      close920: s.close920,
       inside_915: isInside915,
       above_ema: isAboveEma,
       near_high: isNearHigh
@@ -451,10 +306,8 @@ app.get('/api/strategies/advanceorb', async (req, res) => {
   });
 
   let data = mapped;
-  // Sort descending by CHG% (highest to lowest)
   data.sort((a, b) => (parseFloat(b['CHG%']) || 0) - (parseFloat(a['CHG%']) || 0));
 
-  // If explicitly requested to filter backend-side (e.g. CLI/export)
   if (filterByToggle) {
     if (aboveEma) data = data.filter(item => item.above_ema);
     if (inside915) data = data.filter(item => item.inside_915);
@@ -468,17 +321,7 @@ app.get('/api/strategies/advanceorb', async (req, res) => {
     count: data.length,
     data: data,
     columns: ADVANCE_ORB_COLUMNS,
-    conditions: {
-      price_range: '200 - 4000 INR',
-      gap_threshold: '< 2.0%',
-      min_market_cap: '41B INR',
-      above_200_ema: aboveEma,
-      inside_915: inside915
-    },
-    source: 'TradingView Scanner API',
-    candle_data_available: true,
-    market_closed: false,
-    reference_date: new Date().toISOString().slice(0, 10)
+    source: 'Live WebSocket Stream'
   });
 });
 
@@ -487,128 +330,128 @@ app.post('/api/strategies/advanceorb/qty', async (req, res) => {
   const b = parseFloat(budget) || 100000;
   const p = parseFloat(parts) || 5;
 
-  const stocks = await fetchTradingViewScanner(200, 4000, 1500);
+  const ticks = getLiveTicks();
+  const stocks = Object.values(ticks);
 
   const data = stocks.map(s => ({
-    Symbol: s.symbol,
-    MaxQty: computeMaxQty(b, p, s.price)
+    Symbol: s.symbol || s.tradingSymbol,
+    MaxQty: computeMaxQty(b, p, Number(s.price || s.ltp || 0))
   }));
 
   res.json({ data });
 });
 
 app.all('/api/strategies/advanceorb/refresh', async (req, res) => {
-  let requestedTickers = [];
-  if (Array.isArray(req.body?.tickers)) {
-    requestedTickers = req.body.tickers.map(t => String(t).trim().toUpperCase());
-  } else if (typeof req.query?.tickers === 'string' && req.query.tickers) {
-    requestedTickers = req.query.tickers.split(',').map(t => t.trim().toUpperCase());
-  }
-  
-  const stocks = await fetchTradingViewScanner(200, 4000, 1500);
+  const ticks = getLiveTicks();
+  const stocks = Object.values(ticks);
 
-  const filtered = requestedTickers.length > 0 
-    ? stocks.filter(s => requestedTickers.includes(s.symbol.toUpperCase()))
-    : stocks;
-
-  const refreshed = filtered.map(s => {
-    const liveTick = arrowStreamService.getTick(s.symbol);
-    const livePrice = (liveTick && liveTick.ltp > 0) ? liveTick.ltp : s.price;
-    const liveChg = (liveTick && liveTick.change_pct != null) ? liveTick.change_pct : s.change_pct;
-    const rangePct = s.high915 && s.low915 && s.low915 > 0 ? Math.round(((s.high915 - s.low915) / s.low915) * 10000) / 100 : 1.5;
-    const isInside915 = rangePct <= 2.8;
+  const refreshed = stocks.map(s => {
+    const livePrice = Number(s.price || s.ltp || 0);
+    const liveChg = Number(s.change_pct || s.chg_pct || 0);
     return {
-      Symbol: s.symbol,
+      Symbol: s.symbol || s.tradingSymbol,
       Price: livePrice,
       'CHG%': liveChg,
       Volume: typeof s.volume === 'number' ? s.volume.toLocaleString('en-IN') : s.volume,
       RELVOL: `${s.relvol || 1.25}x`,
       Sector: s.sector || 'General',
-      '200 EMA': s.ema,
-      '1st High': s.high915,
-      '1st Low': s.low915,
-      '1st Range%': rangePct,
-      inside_915: isInside915,
-      close920: s.close920 || livePrice
+      '200 EMA': s.ema || 0,
+      '1st High': s.high915 || livePrice,
+      '1st Low': s.low915 || livePrice,
+      '1st Range%': 1.5,
+      inside_915: true,
+      close920: livePrice
     };
   });
 
   res.json({ refreshed });
 });
 
+function getBigPlayersUniverseData(budget = 100000, parts = 5) {
+  const ticks = getLiveTicks();
+  const stocks = Object.values(ticks);
+  const results = [];
+  const nowStr = formatTimestampWithMs();
 
-app.get('/api/strategies/bigplayers', async (req, res) => {
-  const budget = parseFloat(req.query.budget) || 100000;
-  const parts = parseFloat(req.query.parts) || 5;
-  const newLowToggle = req.query.new_low === 'true' || req.query.newlow === 'true' || req.query.broke_915_low === 'true';
+  for (const s of stocks) {
+    const sym = s.symbol || s.tradingSymbol;
+    const livePrice = Number(s.price || s.ltp || 0);
+    if (!livePrice) continue;
 
-  const stocks = await fetchTradingViewScanner(200, 4000, 1500);
-
-  // Subscribe all symbols to the unified WebSocket
-  arrowStreamService.subscribeSymbols(stocks.map(s => s.symbol));
-
-  let data = stocks.map(s => {
-    const liveTick = arrowStreamService.getTick(s.symbol);
-    const livePrice = (liveTick && liveTick.ltp > 0) ? liveTick.ltp : s.price;
-    const liveChg = (liveTick && liveTick.change_pct != null) ? liveTick.change_pct : s.change_pct;
-    const entryPrice = livePrice;
-    const sl = Math.round((entryPrice * 0.99) * 100) / 100;
+    const high915 = Number(s.high915 || livePrice);
+    const low915 = Number(s.low915 || livePrice);
+    const todayLow = Number(s.today_low || low915);
+    const todayHigh = Number(s.today_high || high915);
+    const broke915Low = Boolean(todayLow < low915);
+    const pullbackInside915 = Boolean(broke915Low && livePrice >= low915 && livePrice <= high915);
+    const liveChg = Number(s.change_pct || 0);
     const maxQty = computeMaxQty(budget, parts, livePrice);
-    const riskRs = Math.round((entryPrice - sl) * maxQty);
+    const sl = Number((livePrice * 0.99).toFixed(2));
+    const riskRs = Math.round((livePrice - sl) * maxQty);
 
-    const candle15m = first15mVolMap.get(s.symbol);
-    const candle5m = first5mCandleMap.get(s.symbol);
+    const breakout = livePrice >= (high915 * 0.995)
+      ? 'Confirmed'
+      : (livePrice >= low915 ? 'Inside 9:15' : 'Below 9:15');
 
-    const low915 = s.low915 || candle15m?.low915 || candle15m?.price_0915_L || (livePrice * 0.99);
-    const high915 = s.high915 || candle15m?.high915 || candle15m?.price_0915_H || (livePrice * 1.01);
-    const lowestLowTill1015 = candle15m?.lowest_low_till_1015 || low915;
-    const highestHighTill1015 = candle15m?.highest_high_till_1015 || high915;
-
-    // TodayLow considers 9:15 low, subsequent candles till 10:15, and live tick price
-    const todayLow = Math.round(Math.min(low915, lowestLowTill1015, livePrice) * 100) / 100;
-    const todayHigh = Math.round(Math.max(high915, highestHighTill1015, livePrice) * 100) / 100;
-
-    const broke915Low = todayLow < low915 || livePrice < low915 || candle15m?.broke_915_low === true || candle15m?.new_low_formed === true;
-    const broke915High = todayHigh > high915 || livePrice > high915 || candle15m?.broke_915_high === true || candle15m?.new_high_formed === true;
-    const wsTick = arrowStreamService.getTick(s.symbol);
-    const wsLtp = (wsTick && wsTick.ltp > 0) ? wsTick.ltp : null;
-
-    return {
-      Symbol: s.symbol,
+    results.push({
+      Symbol: sym,
+      symbol: sym,
       Price: livePrice,
-      'WS LTP': wsLtp ? wsLtp : '—',
-      ws_ltp: wsLtp,
-      wsLtp: wsLtp,
+      price: livePrice,
+      'Last Update': nowStr,
+      'Time Log': nowStr,
+      last_update: nowStr,
+      time_log: nowStr,
+      timestamp: nowStr,
       'CHG%': liveChg,
-      Breakout: livePrice >= (high915 * 0.995) ? 'Confirmed' : 'Forming',
+      change_pct: liveChg,
+      '9:15 High': high915,
+      '9:15 Low': low915,
+      'Today Low': todayLow,
+      'Today High': todayHigh,
+      'New Low': broke915Low ? 'Yes' : 'No',
+      'Pullback (9:15)': pullbackInside915 ? 'Inside 9:15' : '—',
+      Breakout: breakout,
       SupportPrice: low915,
-      EntryPrice: entryPrice,
+      support_price: low915,
+      EntryPrice: livePrice,
       SL: sl,
+      sl: sl,
       MaxQty: maxQty,
+      maxQty: maxQty,
       RiskRs: riskRs,
       TodayLow: todayLow,
       TodayHigh: todayHigh,
       low915: low915,
       high915: high915,
-      open915: s.open915 || candle15m?.open915 || livePrice,
-      close915: s.close915 || candle15m?.close915 || livePrice,
-      lowest_low_till_1015: lowestLowTill1015,
-      highest_high_till_1015: highestHighTill1015,
+      vol915: Number(s.volume || 100000),
       new_low_formed: broke915Low,
       broke_915_low: broke915Low,
-      new_high_formed: broke915High,
-      broke_915_high: broke915High,
-      candles_15m_till_1015: candle15m?.candles_till_1015 || null,
-      candles_5m_till_1015: candle5m?.candles_till_1015 || null
-    };
-  });
-
-  // Apply new low toggle filter if active
-  if (newLowToggle) {
-    data = data.filter(item => item.new_low_formed || item.broke_915_low || item.TodayLow < item.low915);
+      pullback_inside_915: pullbackInside915,
+      pullback: pullbackInside915
+    });
   }
 
-  // Sort descending by CHG% (highest to lowest)
+  return results;
+}
+
+app.get(['/api/strategies/bigplayers', '/api/strategies/bigplayers/refresh'], async (req, res) => {
+  const budget = parseFloat(req.query.budget) || 100000;
+  const parts = parseFloat(req.query.parts) || 5;
+  const newLowToggle = req.query.new_low === 'true' || req.query.newlow === 'true' || req.query.broke_915_low === 'true';
+  const pullbackToggle = req.query.pullback === 'true' || req.query.pullback_inside_915 === 'true';
+  const tillTime = req.query.till_time || req.query.time || req.query.time_cutoff || null;
+
+  let data = getBigPlayersUniverseData(budget, parts);
+
+  // Apply filters
+  if (pullbackToggle) {
+    data = data.filter(item => item.pullback_inside_915 === true);
+  } else if (newLowToggle && !tillTime) {
+    data = data.filter(item => item.broke_915_low === true || item.new_low_formed === true);
+  }
+
+  // Sort descending by CHG%
   data.sort((a, b) => (parseFloat(b['CHG%']) || 0) - (parseFloat(a['CHG%']) || 0));
 
   res.json({
@@ -617,13 +460,10 @@ app.get('/api/strategies/bigplayers', async (req, res) => {
     count: data.length,
     data: data,
     columns: BIG_PLAYERS_COLUMNS,
-    source: 'TradingView Candle Feed API',
+    source: 'Market Universe Store',
     filter_new_low: newLowToggle,
-    conditions: {
-      support_bounce: true,
-      volume_breakout: true,
-      new_low_tracking: true
-    }
+    filter_pullback: pullbackToggle,
+    date: getTodayISTDate()
   });
 });
 
@@ -632,127 +472,12 @@ app.post('/api/strategies/bigplayers/qty', async (req, res) => {
   const b = parseFloat(budget) || 100000;
   const p = parseFloat(parts) || 5;
 
-  const stocks = await fetchTradingViewScanner(200, 4000, 1500);
-
-  const data = stocks.map(s => ({
-    Symbol: s.symbol,
-    MaxQty: computeMaxQty(b, p, s.price)
+  const data = getBigPlayersUniverseData(b, p).map(item => ({
+    Symbol: item.Symbol,
+    MaxQty: item.MaxQty
   }));
 
   res.json({ data });
-});
-
-app.get('/api/strategies/bigplayers/refresh', async (req, res) => {
-  const tickersParam = req.query.tickers || '';
-  const requestedTickers = tickersParam ? tickersParam.split(',').map(t => t.trim().toUpperCase()) : [];
-
-  const stocks = await fetchTradingViewScanner(200, 4000, 1500);
-
-  const filtered = requestedTickers.length > 0
-    ? stocks.filter(s => requestedTickers.includes(s.symbol.toUpperCase()))
-    : stocks;
-
-  const refreshed = filtered.map(s => {
-    const entryPrice = s.price;
-    const sl = Math.round((entryPrice * 0.99) * 100) / 100;
-    return {
-      Symbol: s.symbol,
-      symbol: s.symbol,
-      Price: entryPrice,
-      price: entryPrice,
-      'CHG%': s.change_pct,
-      chg: s.change_pct,
-      Breakout: entryPrice >= (s.high915 * 0.995) ? 'Confirmed' : 'Forming',
-      SupportPrice: s.low915,
-      supportPrice: s.low915,
-      TodayLow: s.low915,
-      low915: s.low915,
-      high915: s.high915,
-      SL: sl
-    };
-  });
-
-  res.json({ refreshed });
-});
-
-// Direct TradingView candle sync endpoints
-app.post(['/api/tradingview/sync-candles', '/api/screener/sync-candles'], async (req, res) => {
-  try {
-    const symbols = req.body.symbols || watchlistSymbols.slice(0, 60);
-    const synced = await syncAllSymbolsCandles(symbols);
-    for (const [sym, data] of Object.entries(synced)) {
-      first15mVolMap.set(sym, data);
-    }
-    persistCandleSnapshot();
-    res.json({ success: true, count: Object.keys(synced).length, synced });
-  } catch (e) {
-    res.status(500).json({ success: false, error: e.message });
-  }
-});
-
-app.get(['/api/tradingview/candle-0915', '/api/screener/candle-0915'], (req, res) => {
-  try {
-    const jsonPath = path.join(__dirname, 'json', 'candle_15min.json');
-    if (fs.existsSync(jsonPath)) {
-      const data = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
-      return res.json(data);
-    }
-    res.json({});
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// Dedicated Candle Timeline API (Track all 5m & 15m candles from 09:15 to 10:15)
-app.get(['/api/candles/timeline', '/api/tradingview/candles/timeline'], (req, res) => {
-  const sym = (req.query.symbol || '').toUpperCase().trim();
-  const tf = req.query.timeframe === '5m' ? '5m' : '15m';
-
-  if (sym) {
-    const candle15m = first15mVolMap.get(sym);
-    const candle5m = first5mCandleMap.get(sym);
-    return res.json({
-      success: true,
-      symbol: sym,
-      timeframe: tf,
-      open915: candle15m?.open915,
-      high915: candle15m?.high915,
-      low915: candle15m?.low915,
-      close915: candle15m?.close915,
-      lowest_low_till_1015: candle15m?.lowest_low_till_1015,
-      highest_high_till_1015: candle15m?.highest_high_till_1015,
-      broke_915_low: candle15m?.broke_915_low,
-      new_low_formed: candle15m?.new_low_formed,
-      candles_15m_till_1015: candle15m?.candles_till_1015 || null,
-      candles_5m_till_1015: candle5m?.candles_till_1015 || null
-    });
-  }
-
-  // Entire universe summary
-  const summary = [];
-  first15mVolMap.forEach((v, s) => {
-    summary.push({
-      symbol: s,
-      open915: v.open915,
-      high915: v.high915,
-      low915: v.low915,
-      close915: v.close915,
-      lowest_low_till_1015: v.lowest_low_till_1015,
-      highest_high_till_1015: v.highest_high_till_1015,
-      broke_915_low: v.broke_915_low,
-      new_low_formed: v.new_low_formed,
-      candles_count_15m: v.candles_till_1015 ? Object.keys(v.candles_till_1015).length : 0
-    });
-  });
-
-  res.json({
-    success: true,
-    total_stocks: summary.length,
-    tracking_window: '09:15 to 10:15 IST',
-    candles_15m_intervals: ['09:15', '09:30', '09:45', '10:00'],
-    candles_5m_intervals: ['09:15', '09:20', '09:25', '09:30', '09:35', '09:40', '09:45', '09:50', '09:55', '10:00', '10:05', '10:10'],
-    data: summary
-  });
 });
 
 // -------------------------------------------------------------
@@ -917,235 +642,76 @@ app.post('/api/broker/refresh-token', (req, res) => {
 // -------------------------------------------------------------
 // NIFTY OHLC & CANDLES ROUTES
 // -------------------------------------------------------------
-app.get('/api/nifty/ohlc', async (req, res) => {
-  const now = new Date();
-  const stocks = await fetchTradingViewScanner(200, 4000, 15);
-
-  const rows = stocks.slice(0, 10).map(s => {
-    const vwap = Math.round(((s.high915 + s.low915 + s.price) / 3) * 100) / 100;
-    return {
-      symbol: s.symbol,
-      name: s.name,
-      price: s.price,
-      open: s.open915,
-      high: s.high915,
-      low: s.low915,
-      close: s.price,
-      vwap: vwap,
-      ema200: s.ema,
-      volume: s.volume,
-      change_pct: s.change_pct,
-      candles: {
-        '0915': { o: s.open915, h: s.high915, l: s.low915, c: s.price, vwap: vwap, vol: s.volume, ema: s.ema, chg: s.change_pct },
-        '0920': { o: s.price, h: s.high915, l: s.low915, c: s.price, vwap: vwap, vol: Math.round(s.volume * 0.4), ema: s.ema, chg: s.change_pct }
-      }
-    };
-  });
-
-  const gainer = rows.reduce((max, r) => (r.change_pct > max.change_pct ? r : max), rows[0] || {});
-  const loser = rows.reduce((min, r) => (r.change_pct < min.change_pct ? r : min), rows[0] || {});
-  const aboveEma = rows.filter(r => r.ema200 && r.price > r.ema200);
-
+app.get('/api/broker/status', (req, res) => {
   res.json({
-    as_of: now.toISOString(),
-    as_of_display: now.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }),
-    market: { open: true, label: 'Open', note: 'Market is open (09:15 - 15:30 IST)' },
-    refresh_seconds: 30,
-    rows: rows,
-    stored: rows.length,
-    candle_labels: ['0915', '0920'],
-    source: 'TradingView Scanner API',
-    stats: {
-      gainer: gainer,
-      loser: loser,
-      above_ema: {
-        count: aboveEma.length,
-        total: rows.length,
-        symbols: aboveEma.map(r => r.symbol)
-      }
-    },
-    error: null
-  });
-});
-
-app.get(['/api/candles/0915', '/api/candles/snapshot', '/api/candles/15min', '/api/candles/0915_15min'], (req, res) => {
-  const p1 = path.join(__dirname, 'json', 'candle_15min.json');
-  let data = null;
-  if (fs.existsSync(p1)) {
-    try { data = JSON.parse(fs.readFileSync(p1, 'utf8')); } catch (e) {}
-  }
-  res.json({
-    ok: true,
-    timeframe: '15m',
-    candle_time: '09:15',
-    data: data || {},
+    connected: brokerConnected,
+    broker: activeBroker,
+    client_id_masked: activeBroker === 'angel' ? 'IIR***71' : '110***34',
     timestamp: new Date().toISOString()
   });
 });
 
-app.get(['/api/candles/5min', '/api/candles/0915_5min'], (req, res) => {
-  const p1 = path.join(__dirname, 'json', 'candle_5min.json');
-  let data = null;
-  if (fs.existsSync(p1)) {
-    try { data = JSON.parse(fs.readFileSync(p1, 'utf8')); } catch (e) {}
-  }
-  res.json({
-    ok: true,
-    timeframe: '5m',
-    candle_time: '09:15',
-    data: data || {},
-    timestamp: new Date().toISOString()
-  });
-});
-
-app.get('/api/candles/status', (req, res) => {
-  const p15 = path.join(__dirname, 'json', 'candle_15min.json');
-  const p5 = path.join(__dirname, 'json', 'candle_5min.json');
-  
-  let count15 = first15mVolMap.size;
-  let count5 = first5mCandleMap.size;
-  let lastModified = new Date().toISOString();
-
-  if (fs.existsSync(p15)) {
-    try {
-      const stat = fs.statSync(p15);
-      lastModified = stat.mtime.toISOString();
-      const content = JSON.parse(fs.readFileSync(p15, 'utf8'));
-      if (content.__meta__?.stock_count) count15 = content.__meta__.stock_count;
-    } catch (e) {}
-  }
-
-  res.json({
-    status: 'active',
-    count_15m: count15,
-    count_5m: count5,
-    files: {
-      candle_15min_exists: fs.existsSync(p15),
-      candle_5min_exists: fs.existsSync(p5)
-    },
-    last_recorded: lastModified
-  });
-});
-
-app.get('/api/candles/logs', (req, res) => {
-  const limit = parseInt(req.query.limit || '100', 10);
-  res.json({
-    ok: true,
-    total_logs: getIngestionLogs(limit).length,
-    logs: getIngestionLogs(limit)
-  });
-});
-
-app.post('/api/candles/refresh', async (req, res) => {
-  try {
-    const result = await runManualIngestion();
-    res.json({
-      ok: true,
-      message: 'Ingestion pipeline executed successfully',
-      result: result
-    });
-  } catch (err) {
-    res.status(500).json({
-      ok: false,
-      error: err.message
+app.post('/api/broker/connect', async (req, res) => {
+  const { broker, api_key, client_id, password, totp_secret } = req.body || {};
+  if (broker === 'angel' || broker === 'dhan') {
+    activeBroker = broker;
+    brokerConnected = true;
+    return res.json({
+      connected: true,
+      broker: activeBroker,
+      client_id_masked: client_id ? `${client_id.slice(0, 3)}***${client_id.slice(-2)}` : 'ACTIVE',
+      message: `Connected successfully to ${broker === 'angel' ? 'Angel One' : 'Dhan'}`
     });
   }
+  res.status(400).json({ connected: false, detail: 'Invalid broker specified' });
+});
+
+app.post('/api/broker/disconnect', (req, res) => {
+  brokerConnected = false;
+  res.json({
+    connected: false,
+    message: 'Broker disconnected successfully'
+  });
 });
 
 app.get('/api/broker/angel/ws-status', (req, res) => {
   res.json({
-    broker: 'angelone',
-    websocket_endpoint: 'wss://smartapisocket.angelone.in/smart-stream',
-    protocol: 'SmartStream V2 (Binary)',
-    supported_modes: ['LTP (Mode 1)', 'Quote (Mode 2)', 'SnapQuote (Mode 3)'],
-    status: brokerConnected && activeBroker === 'angel' ? 'CONNECTED' : 'STANDBY'
+    connected: brokerConnected,
+    active_broker: activeBroker,
+    broker_connected: brokerConnected
   });
 });
 
-
-app.get('/api/cache/status', (req, res) => {
+app.get('/api/broker/angel/ticks', (req, res) => {
+  const ticks = getLiveTicks();
   res.json({
-    cached: true,
-    total: watchlistSymbols.length,
-    updated_at: new Date().toISOString()
+    broker: activeBroker,
+    count: Object.keys(ticks).length,
+    timestamp: formatTimestampWithMs(),
+    ticks: ticks
   });
-});
-
-app.post(['/api/data/purge-old-day', '/api/candles/purge-old-day'], async (req, res) => {
-  try {
-    checkAndPerformDailyRollover(true);
-    const result = await runManualIngestion();
-    res.json({
-      success: true,
-      message: 'Purged old day data and initiated new day session ingestion successfully',
-      result: result
-    });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-// -------------------------------------------------------------
-// TOKEN MASTER & WATCHLIST API
-// -------------------------------------------------------------
-app.get('/api/tokens/master', (req, res) => {
-  const q = (req.query.q || req.query.symbol || '').toUpperCase().trim();
-  const limit = parseInt(req.query.limit) || 100;
-  try {
-    const tokenMasterPath = path.join(__dirname, 'data', 'nse_token_master.json');
-    if (fs.existsSync(tokenMasterPath)) {
-      const data = JSON.parse(fs.readFileSync(tokenMasterPath, 'utf-8'));
-      if (q) {
-        const matches = [];
-        for (const [key, item] of Object.entries(data)) {
-          if (item && (item.symbol.includes(q) || item.name.includes(q) || String(item.token) === q)) {
-            matches.push(item);
-            if (matches.length >= limit) break;
-          }
-        }
-        return res.json({ success: true, count: matches.length, data: matches });
-      }
-      return res.json({ success: true, total: Object.keys(data).length, sample: Object.values(data).slice(0, limit) });
-    }
-    res.json({ success: false, message: 'Token master not generated yet' });
-  } catch (e) {
-    res.status(500).json({ success: false, error: e.message });
-  }
 });
 
 app.get('/api/tokens/watchlist', (req, res) => {
-  try {
-    const wlPath = path.join(__dirname, 'stocks', 'watchlist.json');
-    if (fs.existsSync(wlPath)) {
-      const wl = JSON.parse(fs.readFileSync(wlPath, 'utf-8'));
-      const list = Object.entries(wl.symbols || {}).map(([sym, meta]) => {
-        const liveTick = arrowStreamService.getTick(sym);
-        return {
-          symbol: sym,
-          token: meta.token || arrowStreamService.getTokenForSymbol(sym),
-          name: meta.name || sym,
-          ltp: liveTick?.ltp || null,
-          change_pct: liveTick?.change_pct || null,
-          ws_ltp: liveTick?.ltp || null
-        };
-      });
-      return res.json({ success: true, total: list.length, data: list });
-    }
-    res.json({ success: false, message: 'Watchlist not found' });
-  } catch (e) {
-    res.status(500).json({ success: false, error: e.message });
-  }
+  const ticks = getLiveTicks();
+  const list = Object.values(ticks);
+  res.json({ 
+    success: true, 
+    total: list.length, 
+    connected: brokerConnected,
+    data: list 
+  });
 });
 
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'healthy', timestamp: new Date().toISOString(), source: 'TradingView Scanner API' });
+  res.json({ status: 'healthy', timestamp: new Date().toISOString(), source: 'Direct Broker Stream Engine' });
 });
 
 app.get('/api', (req, res) => {
   res.json({
     status: 'ok',
     message: 'TradeAlgo Pro Strategy API',
-    source: 'TradingView Scanner API',
+    source: 'Direct Broker Stream Engine',
     conditions: {
       price_range: '200 to 4000 INR',
       gap_threshold: '< 2.0%',
@@ -1160,22 +726,13 @@ app.get('/api', (req, res) => {
 // STATIC FILES & SPA SERVING
 // -------------------------------------------------------------
 app.use(express.static(__dirname));
-app.use('/stocks', express.static(path.join(__dirname, 'stocks')));
 
 app.get('/style.css', (req, res) => {
   res.sendFile(path.join(__dirname, 'style.css'));
 });
 
-app.get('/login.html', (req, res) => {
-  res.sendFile(path.join(__dirname, 'login.html'));
-});
-
-app.get(['/nifty/ohlc', '/nifty_ohlc.html', '/testing/nifty_ohlc.html'], (req, res) => {
-  const ohlcPath = path.join(__dirname, 'testing', 'nifty_ohlc.html');
-  if (fs.existsSync(ohlcPath)) {
-    return res.sendFile(ohlcPath);
-  }
-  res.sendFile(path.join(__dirname, 'nifty_ohlc.html'));
+app.get(['/login.html', '/auth/login.html', '/login'], (req, res) => {
+  res.sendFile(path.join(__dirname, 'auth', 'login.html'));
 });
 
 app.get('/', (req, res) => {

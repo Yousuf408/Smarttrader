@@ -294,11 +294,11 @@ function toggleNearHigh() {
     const hint = document.getElementById('nearHighHint');
     if (hint) hint.textContent = nearHighEnabled
         ? 'open within ±2% of prev high'
-        : 'full TradingView universe';
+        : 'full NSE universe';
     showToast(nearHighEnabled ? '🎯 Filter Near High ON' : '🎯 Filter Near High OFF',
         nearHighEnabled
             ? 'Keeping only stocks whose open is within ±2% of yesterday\'s high'
-            : 'Showing full TradingView universe');
+            : 'Showing full NSE universe');
     // Re-fetch with the new mode
     onStrategyChange();
 }
@@ -442,12 +442,47 @@ function orbCellValue(row, col) {
         } else {
             value = '';
         }
-    } else if (col === '1st High' || col === '9:15 HIGH') {
-        const high = parseFloat(row.high915);
-        value = Number.isFinite(high) ? high.toFixed(2) : '';
-    } else if (col === '1st Low') {
-        const low = parseFloat(row.low915);
-        value = Number.isFinite(low) ? low.toFixed(2) : '';
+    } else if (col === 'New Low' || col === 'new_low' || col === 'broke_915_low') {
+        if (row.broke_915_low || row.new_low_formed || row['New Low'] === 'Yes') {
+            const timeStr = row.new_low_time ? ` (${row.new_low_time})` : '';
+            value = `<span style="display:inline-flex;align-items:center;gap:4px;color:#ef4444;font-weight:600;font-size:11px;background:rgba(239,68,68,0.09);padding:1px 6px;border-radius:4px;border:1px solid rgba(239,68,68,0.22);white-space:nowrap;"><span style="width:5px;height:5px;border-radius:50%;background:#ef4444;flex-shrink:0;"></span>Yes${timeStr}</span>`;
+        } else {
+            value = `<span style="opacity:0.35;font-size:12px;">—</span>`;
+        }
+    } else if (col === 'Pullback (9:15)' || col === 'Pullback' || col === 'pullback_inside_915') {
+        if (row.pullback_inside_915 || row.pullback || row['Pullback (9:15)'] === 'Inside 9:15') {
+            const timeStr = row.pullback_time ? ` (${row.pullback_time})` : '';
+            value = `<span style="display:inline-flex;align-items:center;gap:4px;color:#22c55e;font-weight:600;font-size:11px;background:rgba(34,197,94,0.09);padding:1px 6px;border-radius:4px;border:1px solid rgba(34,197,94,0.22);white-space:nowrap;"><span style="width:5px;height:5px;border-radius:50%;background:#22c55e;flex-shrink:0;"></span>Inside 9:15${timeStr}</span>`;
+        } else {
+            value = `<span style="opacity:0.35;font-size:12px;">—</span>`;
+        }
+    } else if (col === '9:15 High' || col === '9:15 HIGH' || col === '1st High') {
+        const high = parseFloat(row.high915 ?? row['9:15 High']);
+        value = Number.isFinite(high) ? `₹${high.toFixed(2)}` : '';
+    } else if (col === '9:15 Low' || col === '9:15 LOW' || col === '1st Low') {
+        const low = parseFloat(row.low915 ?? row['9:15 Low']);
+        value = Number.isFinite(low) ? `₹${low.toFixed(2)}` : '';
+    } else if (col === 'Today Low' || col === 'TodayLow') {
+        const tl = parseFloat(row.TodayLow ?? row.today_low ?? row['Today Low']);
+        value = Number.isFinite(tl) ? `₹${tl.toFixed(2)}` : '';
+    } else if (col === 'Today High' || col === 'TodayHigh') {
+        const th = parseFloat(row.TodayHigh ?? row.today_high ?? row['Today High']);
+        value = Number.isFinite(th) ? `₹${th.toFixed(2)}` : '';
+    } else if (col === 'Support Price' || col === 'SupportPrice') {
+        const sp = parseFloat(row.SupportPrice ?? row.support_price ?? row.low915);
+        value = Number.isFinite(sp) ? `₹${sp.toFixed(2)}` : '';
+    } else if (col === 'SL') {
+        const sl = parseFloat(row.SL ?? row.sl);
+        value = Number.isFinite(sl) ? `₹${sl.toFixed(2)}` : '';
+    } else if (col === 'Breakout') {
+        const b = row.Breakout || '';
+        if (b === 'Confirmed') {
+            value = `<span class="badge-signal" style="background:rgba(34,197,94,0.18);color:var(--color-success);border:1px solid rgba(34,197,94,0.4);font-size:12px;padding:3px 8px;border-radius:4px;font-weight:700;">🚀 Confirmed</span>`;
+        } else if (b === 'Inside 9:15') {
+            value = `<span style="color:var(--color-primary, #38bdf8);font-weight:600;background:rgba(56,189,248,0.12);padding:2px 6px;border-radius:4px;">Range</span>`;
+        } else {
+            value = `<span style="color:var(--text-muted);opacity:0.7;">${b || 'Forming'}</span>`;
+        }
     } else if (col === '1st Range%') {
         const range = parseFloat(row.candle_range_pct);
         value = Number.isFinite(range) ? `${range.toFixed(2)}%` : '';
@@ -490,6 +525,13 @@ function orbCellValue(row, col) {
     } else if (col === 'Prev High' || col === 'PREV HIGH') {
         const ph = parseFloat(row.yesterday_high);
         value = Number.isFinite(ph) ? `₹${ph.toFixed(2)}` : '';
+    } else if (col === 'Last Update' || col === 'Time Log' || col === 'last_update' || col === 'time_log' || col === 'Time' || col === 'timestamp') {
+        const timeVal = row.last_update || row.time_log || row.timestamp || row['Last Update'] || row['Time Log'] || '';
+        if (timeVal) {
+            value = `<span class="time-log-val font-mono" style="font-size:12px;font-weight:600;color:var(--color-primary, #38bdf8);letter-spacing:0.5px;">${timeVal}</span>`;
+        } else {
+            value = `<span class="time-log-val text-muted" style="opacity:0.6;font-size:12px;">—</span>`;
+        }
     } else if (col === 'WS LTP' || col === 'ws_ltp' || col === 'we ltp' || col === 'WS Price' || col === 'WebSocket Price') {
         const wsVal = row.ws_ltp ?? row.wsLtp ?? row['WS LTP'] ?? row.ws_price ?? row.Price;
         if (wsVal != null && wsVal !== '' && wsVal !== '—') {
@@ -565,7 +607,12 @@ function setQuickFilter(filterName) {
         else summary.textContent = 'Showing all scanned stocks sorted by CHG% (highest to lowest)';
     }
 
-    if (lastAdvanceOrbData && typeof renderStrategyData === 'function') {
+    const strategyId = document.getElementById('strategySelect')?.value;
+    if (strategyId === 'bigplayers') {
+        if (window.lastBigPlayersData && typeof renderStrategyData === 'function') {
+            renderStrategyData(window.lastBigPlayersData);
+        }
+    } else if (lastAdvanceOrbData && typeof renderStrategyData === 'function') {
         renderStrategyData(lastAdvanceOrbData);
     }
 }
@@ -718,7 +765,43 @@ function renderStrategyData(result) {
     updateQuickFilterCounts(rawData);
 
     // Filter rows according to active quick tab and toggles
-    let data = (strategyId === 'advanceorb') ? rawData.filter(orbUnifiedFilter) : rawData;
+    let data = rawData;
+    if (strategyId === 'advanceorb') {
+        data = rawData.filter(orbUnifiedFilter);
+    } else if (strategyId === 'bigplayers') {
+        const isNewLowOn = document.getElementById('newLowToggle')?.checked || false;
+        const isPullbackOn = document.getElementById('pullbackToggle')?.checked || false;
+        const selectedTime = document.getElementById('bpTimeSelect')?.value || 'all';
+
+        data = rawData.filter(r => {
+            // Filter by New Low time window if selected
+            if (selectedTime !== 'all') {
+                if (!r.new_low_time) return false;
+                if (r.new_low_time > selectedTime) return false;
+            }
+
+            if (isPullbackOn && r.pullback_inside_915 !== true && r['Pullback (9:15)'] !== 'Inside 9:15') return false;
+            if (isNewLowOn && !isPullbackOn && r.broke_915_low !== true && r.new_low_formed !== true && r['New Low'] !== 'Yes') return false;
+
+            const price = parseFloat(r.Price ?? r.price);
+            if (Number.isFinite(price) && (price < 200 || price > 4000)) return false;
+
+            const high = parseFloat(r.high915 ?? r['9:15 High']);
+            const low = parseFloat(r.low915 ?? r['9:15 Low']);
+
+            if (currentQuickFilter === 'breakout') {
+                const isBreakout = r.Breakout === 'Confirmed' || (Number.isFinite(price) && Number.isFinite(high) && price >= high * 0.995);
+                if (!isBreakout) return false;
+            } else if (currentQuickFilter === 'near_high') {
+                const isNearHigh = (Number.isFinite(price) && Number.isFinite(high) && price >= high * 0.98);
+                if (!isNearHigh) return false;
+            } else if (currentQuickFilter === 'inside915') {
+                const isInside = (Number.isFinite(price) && Number.isFinite(low) && Number.isFinite(high) && price >= low && price <= high) || r.pullback_inside_915 === true;
+                if (!isInside) return false;
+            }
+            return true;
+        });
+    }
 
     // Sort table by CHG% descending (highest to lowest)
     data.sort((a, b) => getChgValue(b) - getChgValue(a));
@@ -727,7 +810,7 @@ function renderStrategyData(result) {
     const UNIFIED_ORB_COLUMNS = [
         'Symbol',
         'Price',
-        'WS LTP',
+        'Last Update',
         'CHG%',
         'Signal',
         'Extra 15m Vol',
@@ -769,7 +852,13 @@ function renderStrategyData(result) {
         }
     }
 
-    const countText = `Showing ${data.length} of ${rawData.length} stocks`;
+    let countText = `Showing ${data.length} of ${rawData.length} stocks`;
+    if (strategyId === 'bigplayers') {
+        const selectedTime = document.getElementById('bpTimeSelect')?.value || 'all';
+        if (selectedTime !== 'all') {
+            countText = `Showing ${data.length} of ${rawData.length} stocks (New Low formed by ${selectedTime} IST)`;
+        }
+    }
     const sc = document.getElementById('screenerCount');
     if (sc) sc.textContent = countText;
 
@@ -780,15 +869,29 @@ async function fetchBigPlayers() {
     try {
         const budget = _readBudget();
         const parts = _readParts();
-        const newLowToggle = document.getElementById('newLowToggle')?.checked ? 'true' : 'false';
-        const res = await fetch(`/api/strategies/bigplayers?budget=${budget}&parts=${parts}&new_low=${newLowToggle}`);
+        const res = await fetch(`/api/strategies/bigplayers?budget=${budget}&parts=${parts}`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return await res.json();
+        const json = await res.json();
+        if (json && json.data) {
+            window.allBigPlayersRawData = json;
+        }
+        return json;
     } catch (e) {
         console.warn('BigPlayers fetch error:', e);
         return null;
     }
 }
+
+function onBpTimeChange() {
+    if (window.allBigPlayersRawData) {
+        renderBigPlayersData(window.allBigPlayersRawData);
+    } else if (window.lastBigPlayersData) {
+        renderBigPlayersData(window.lastBigPlayersData);
+    } else {
+        fetchBigPlayers().then(d => { if (d) renderBigPlayersData(d); });
+    }
+}
+window.onBpTimeChange = onBpTimeChange;
 
 async function onNewLowToggle() {
     const isChecked = document.getElementById('newLowToggle')?.checked || false;
@@ -798,15 +901,35 @@ async function onNewLowToggle() {
         statusEl.className = isChecked ? 'toggle-item-status active' : 'toggle-item-status';
     }
 
-    const data = await fetchBigPlayers();
-    if (data) {
-        window.lastBigPlayersData = data;
-        renderBigPlayersData(data);
+    // Instant local memory filtering (0ms latency)
+    if (window.allBigPlayersRawData) {
+        renderBigPlayersData(window.allBigPlayersRawData);
+    } else {
+        const data = await fetchBigPlayers();
+        if (data) renderBigPlayersData(data);
+    }
+}
+
+async function onPullbackToggle() {
+    const isChecked = document.getElementById('pullbackToggle')?.checked || false;
+    const statusEl = document.getElementById('pullbackStatus');
+    if (statusEl) {
+        statusEl.textContent = isChecked ? 'ON' : 'OFF';
+        statusEl.className = isChecked ? 'toggle-item-status active' : 'toggle-item-status';
+    }
+
+    // Instant local memory filtering (0ms latency)
+    if (window.allBigPlayersRawData) {
+        renderBigPlayersData(window.allBigPlayersRawData);
+    } else {
+        const data = await fetchBigPlayers();
+        if (data) renderBigPlayersData(data);
     }
 }
 
 function renderBigPlayersData(data) {
     if (!data) return;
+    window.lastBigPlayersData = data;
     renderStrategyData(data);
 }
 
@@ -860,6 +983,10 @@ async function onStrategyChange() {
         if (countEl) countEl.textContent = 'Loading...';
 
         // Show Advance ORB toggles, hide Big Players-specific toggles
+        const tfEl = document.getElementById('tfWrap');
+        if (tfEl) tfEl.style.display = '';
+        const bpTimeEl = document.getElementById('bpTimeWrap');
+        if (bpTimeEl) bpTimeEl.style.display = 'none';
         const autoBuyEl = document.getElementById('autoBuyWrap');
         const nearHighEl = document.getElementById('nearHighWrap');
         const aboveEmaEl = document.getElementById('aboveEmaWrap');
@@ -872,6 +999,8 @@ async function onStrategyChange() {
         if (calcQtyEl) calcQtyEl.style.display = '';
         const nw = document.getElementById('newLowFilterWrap');
         if (nw) nw.style.display = 'none';
+        const pbw = document.getElementById('pullbackFilterWrap');
+        if (pbw) pbw.style.display = 'none';
         const bpab = document.getElementById('bpAutoBuyWrap');
         if (bpab) bpab.style.display = 'none';
 
@@ -898,11 +1027,15 @@ async function onStrategyChange() {
         const columns = [...strategy.columns];
         columns.push('Action');
         if (thead) thead.innerHTML = `<tr>${columns.map(col => `<th>${col}</th>`).join('')}</tr>`;
-        if (tbody) tbody.innerHTML = `<tr><td colspan="${columns.length}" style="text-align:center;padding:40px;">🏢 Fetching Big Players data…</td></tr>`;
+        if (tbody) tbody.innerHTML = `<tr><td colspan="${columns.length}" style="text-align:center;padding:40px;">🏢 Fetching Big Players data from TV15 Feed…</td></tr>`;
         const countEl = document.getElementById('screenerCount');
         if (countEl) countEl.textContent = 'Loading...';
 
         // Hide Advance ORB toggles, show Big Players-specific toggles
+        const tfEl = document.getElementById('tfWrap');
+        if (tfEl) tfEl.style.display = 'none';
+        const bpTimeEl = document.getElementById('bpTimeWrap');
+        if (bpTimeEl) bpTimeEl.style.display = '';
         const orbab = document.getElementById('autoBuyWrap');
         if (orbab) orbab.style.display = 'none';
         const nearHighEl = document.getElementById('nearHighWrap');
@@ -915,6 +1048,8 @@ async function onStrategyChange() {
         if (calcQtyEl) calcQtyEl.style.display = 'none';
         const nw = document.getElementById('newLowFilterWrap');
         if (nw) nw.style.display = '';
+        const pbw = document.getElementById('pullbackFilterWrap');
+        if (pbw) pbw.style.display = '';
         const bpab = document.getElementById('bpAutoBuyWrap');
         if (bpab) bpab.style.display = '';
 
@@ -1362,9 +1497,11 @@ async function autoBuyAllStocks() {
 // ================================================================
 let lastAdvanceOrbData = null;
 let advanceOrbAutoTimer = null;
-const AUTO_REFRESH_MS = 2500;
+let _isAdvanceOrbRefreshing = false;
+const AUTO_REFRESH_MS = 6000;
 
 async function fetchAdvanceORBRefresh(silent = true) {
+    if (_isAdvanceOrbRefreshing) return;
     if (!lastAdvanceOrbData || !lastAdvanceOrbData.data || lastAdvanceOrbData.data.length === 0) {
         return;
     }
@@ -1392,25 +1529,39 @@ async function fetchAdvanceORBRefresh(silent = true) {
                 }
             }
         } catch (e) {
-            console.warn('[candle-poller] full re-fetch failed:', e);
+            console.warn('[candle-poller] full re-fetch notice:', e?.message || e);
         }
         return;
     }
 
     const symbols = lastAdvanceOrbData.data.map(r => r.Symbol).filter(Boolean);
     if (symbols.length === 0) return;
+
+    _isAdvanceOrbRefreshing = true;
     try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 8000);
+
         const response = await fetch('/api/strategies/advanceorb/refresh', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ tickers: symbols, timeframe: orbTimeframe }),
-            cache: 'no-store'
+            cache: 'no-store',
+            signal: controller.signal
         });
-        if (!response.ok) return;
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+            _isAdvanceOrbRefreshing = false;
+            return;
+        }
         const result = await response.json();
 
         const refreshedList = Array.isArray(result?.refreshed) ? result.refreshed : [];
-        if (refreshedList.length === 0) return;
+        if (refreshedList.length === 0) {
+            _isAdvanceOrbRefreshing = false;
+            return;
+        }
         const bySymbol = {};
         for (const r of refreshedList) {
             if (r && r.Symbol) bySymbol[r.Symbol] = r;
@@ -1482,7 +1633,9 @@ async function fetchAdvanceORBRefresh(silent = true) {
             }
         }
     } catch (e) {
-        console.error('Refresh failed:', e);
+        console.warn('Background refresh skipped:', e?.message || e);
+    } finally {
+        _isAdvanceOrbRefreshing = false;
     }
 }
 
@@ -1517,20 +1670,54 @@ window.stopAdvanceOrbAutoRefresh = stopAdvanceOrbAutoRefresh;
 // Volume cells in-place on every pushed tick (~250 ms interval).
 // No polling — the server pushes changes as they happen.
 let _tickEventSource = null;
+// IST Time formatter for browser client
+function formatCurrentISTWithMs(d = new Date()) {
+    const dateObj = d instanceof Date ? d : new Date(d);
+    try {
+        const formatter = new Intl.DateTimeFormat('en-IN', {
+            timeZone: 'Asia/Kolkata',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false
+        });
+        const parts = formatter.formatToParts(dateObj);
+        let hh = '00', mm = '00', ss = '00';
+        for (const p of parts) {
+            if (p.type === 'hour') hh = p.value;
+            if (p.type === 'minute') mm = p.value;
+            if (p.type === 'second') ss = p.value;
+        }
+        const ms = String(dateObj.getMilliseconds()).padStart(3, '0');
+        return `${hh}:${mm}:${ss}.${ms}`;
+    } catch (_) {
+        const istTime = new Date(dateObj.getTime() + (5.5 * 60 + dateObj.getTimezoneOffset()) * 60000);
+        const pad = (n, len = 2) => String(n).padStart(len, '0');
+        const hh = pad(istTime.getHours());
+        const mm = pad(istTime.getMinutes());
+        const ss = pad(istTime.getSeconds());
+        const ms = pad(dateObj.getMilliseconds(), 3);
+        return `${hh}:${mm}:${ss}.${ms}`;
+    }
+}
+
 let _lastTickPayload = null;
 
 function _applyTicks(ticks) {
+    const strategyId = document.getElementById('strategySelect')?.value;
+    if (strategyId === 'bigplayers') return;
+
     const rows = document.querySelectorAll('#screenerBody tr');
     if (!rows.length) return;
     const headers = Array.from(document.querySelectorAll('#screenerHead th'));
     const priceIdx = headers.findIndex(h => h.textContent.trim() === 'Price');
-    const wsLtpIdx = headers.findIndex(h => {
+    const timeIdx  = headers.findIndex(h => {
         const t = h.textContent.trim().toLowerCase();
-        return t === 'ws ltp' || t === 'we ltp' || t === 'ws price' || t === 'websocket price';
+        return t === 'last update' || t === 'time log' || t === 'time';
     });
     const chgIdx   = headers.findIndex(h => h.textContent.trim() === 'CHG%');
     const volIdx   = headers.findIndex(h => h.textContent.trim() === 'Volume');
-    if (priceIdx < 0 && wsLtpIdx < 0) return;
+    if (priceIdx < 0 && timeIdx < 0) return;
 
     for (const tr of rows) {
         const cells = tr.querySelectorAll('td');
@@ -1561,25 +1748,14 @@ function _applyTicks(ticks) {
             }
         }
 
-        // Update WebSocket WS LTP column
-        if (wsLtpIdx >= 0 && wsLtpIdx < cells.length) {
-            const wsPrice = Number(tick.ws_ltp ?? tick.ltp);
-            if (!isNaN(wsPrice) && wsPrice > 0) {
-                const currentText = cells[wsLtpIdx].textContent.replace(/[₹,\s]/g, '');
-                const oldWsPrice = parseFloat(currentText);
-
-                cells[wsLtpIdx].innerHTML = `<span class="ws-ltp-val font-mono" style="font-weight:600;color:var(--color-primary, #38bdf8);">₹${wsPrice.toFixed(2)}</span>`;
-
-                if (!isNaN(oldWsPrice) && Math.abs(wsPrice - oldWsPrice) >= 0.01) {
-                    const isUptick = wsPrice > oldWsPrice;
-                    cells[wsLtpIdx].style.transition = 'background 0.15s ease-out';
-                    cells[wsLtpIdx].style.background = isUptick ? 'rgba(56, 189, 248, 0.3)' : 'rgba(239, 68, 68, 0.3)';
-                    setTimeout(() => {
-                        cells[wsLtpIdx].style.background = '';
-                    }, 400);
-                }
+        // Update Last Update / Time Log column
+        if (timeIdx >= 0 && timeIdx < cells.length) {
+            const timeStr = tick.time_log || tick.last_update || tick.timestamp || formatCurrentISTWithMs();
+            if (timeStr) {
+                cells[timeIdx].innerHTML = `<span class="time-log-val font-mono" style="font-size:12px;font-weight:600;color:var(--color-primary, #38bdf8);letter-spacing:0.5px;">${timeStr}</span>`;
             }
         }
+
         if (tick.change_pct != null && chgIdx >= 0 && chgIdx < cells.length) {
             const v = Number(tick.change_pct);
             const sign = v > 0 ? '+' : '';
@@ -1600,6 +1776,7 @@ function _applyTicks(ticks) {
             if (row) {
                 if (tick.ltp != null) row.Price = Number(tick.ltp);
                 if (tick.change_pct != null) row['CHG%'] = Number(tick.change_pct);
+                if (tick.time_log != null) row['Last Update'] = tick.time_log;
             }
         }
     }
@@ -1690,12 +1867,32 @@ window.stopLiveTickPoll  = stopLiveTickPoll;
 // ================================================================
 // REFRESH BUTTON (formerly "Run Screener")
 // ================================================================
-function refreshScreener() {
+async function refreshScreener() {
     const strategyId = document.getElementById('strategySelect')?.value;
     if (strategyId === 'advanceorb') {
         fetchAdvanceORBRefresh(false);
+    } else if (strategyId === 'bigplayers') {
+        try {
+            const budget = _readBudget();
+            const parts = _readParts();
+            const res = await fetch(`/api/strategies/bigplayers/refresh?budget=${budget}&parts=${parts}`);
+            if (res.ok) {
+                const json = await res.json();
+                if (json && json.data) {
+                    window.allBigPlayersRawData = json;
+                    window.lastBigPlayersData = json;
+                    renderBigPlayersData(json);
+                    if (typeof showToast === 'function') {
+                        showToast('✅ Feed Synced', `Latest Big Players feed loaded (${json.count} stocks)`);
+                    }
+                }
+            }
+        } catch (e) {
+            console.warn('BigPlayers refresh error:', e);
+            onStrategyChange();
+        }
     } else {
-        // SmartMoney / Big Players use hardcoded data; just re-render.
+        // SmartMoney / other use standard render
         onStrategyChange();
     }
 }

@@ -1,5 +1,5 @@
 <!-- ============================================================= -->
-<!-- SCREENER COMPONENT – TradingView Live Market Scanner -->
+<!-- SCREENER COMPONENT – Direct Broker Live Market Scanner -->
 <!-- ============================================================= -->
 <div id="page-screener" class="page active">
     <div class="panel-glass">
@@ -33,7 +33,33 @@
                         <option value="15">15 min</option>
                     </select>
                 </div>
-                <button class="btn btn-primary btn-refresh" onclick="refreshScreener()">🔄</button>
+
+                <!-- ===== TIME WINDOW (Big Players - New Low Created By) ===== -->
+                <div class="stepper stepper-narrow" id="bpTimeWrap" style="display:none;">
+                    <label for="bpTimeSelect" class="field-label">New Low By:</label>
+                    <select id="bpTimeSelect" class="strategy-select" onchange="onBpTimeChange()" title="Filter stocks that created a New Low at or before this candle time">
+                        <option value="all">⏱️ All Candles (Till 15:15)</option>
+                        <option value="09:30">Till 09:30</option>
+                        <option value="09:45">Till 09:45</option>
+                        <option value="10:00">Till 10:00</option>
+                        <option value="10:15">Till 10:15</option>
+                        <option value="10:30">Till 10:30</option>
+                        <option value="10:45">Till 10:45</option>
+                        <option value="11:00">Till 11:00</option>
+                        <option value="11:15">Till 11:15</option>
+                        <option value="11:30">Till 11:30</option>
+                        <option value="11:45">Till 11:45</option>
+                        <option value="12:00">Till 12:00</option>
+                        <option value="12:30">Till 12:30</option>
+                        <option value="13:00">Till 13:00</option>
+                        <option value="13:30">Till 13:30</option>
+                        <option value="14:00">Till 14:00</option>
+                        <option value="14:30">Till 14:30</option>
+                        <option value="15:00">Till 15:00</option>
+                        <option value="15:15">Till 15:15</option>
+                    </select>
+                </div>
+                <button class="btn btn-primary btn-refresh" onclick="refreshScreener()" title="Refresh / Sync Feed Data">🔄</button>
 
                 <!-- ===== TOGGLES GROUP (compact, flex row) ===== -->
                 <div class="toggle-group">
@@ -106,6 +132,16 @@
                             <span class="toggle-slider"></span>
                         </label>
                         <span class="toggle-item-status" id="newLowStatus">OFF</span>
+                    </div>
+
+                    <!-- PULLBACK INSIDE 9:15 (Big Players) -->
+                    <div class="toggle-item" id="pullbackFilterWrap" style="display:none;">
+                        <span class="toggle-item-label">Pullback (9:15)</span>
+                        <label class="toggle-switch toggle-xs">
+                            <input type="checkbox" id="pullbackToggle" onchange="onPullbackToggle()" />
+                            <span class="toggle-slider"></span>
+                        </label>
+                        <span class="toggle-item-status" id="pullbackStatus">OFF</span>
                     </div>
 
                     <!-- BP AUTO BUY (Big Players) -->

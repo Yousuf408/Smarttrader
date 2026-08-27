@@ -8,27 +8,26 @@
     <div class="panel-glass">
         <div class="panel-head">
             <h3>📡 Market Data Feed (WebSocket)</h3>
-            <span id="wsDataFeedBadge" class="badge badge-success" style="margin-left:auto;">🟢 Active: Arrow Trade</span>
+            <span id="wsDataFeedBadge" class="badge badge-success" style="margin-left:auto;">🟢 Active: Angel One (SmartStream V2)</span>
         </div>
         <div class="panel-body">
             <div class="settings-grid">
                 <div class="settings-group">
                     <label>Data Feed Provider</label>
                     <select id="dataFeedSelect" onchange="onDataFeedSelectChange()">
-                        <option value="arrow" selected>Arrow Trade (Ultra-Fast WebSocket)</option>
-                        <option value="angel">Angel One (SmartAPI WebSocket)</option>
+                        <option value="angel" selected>Angel One (SmartStream V2 WebSocket - Live LTP)</option>
                         <option value="dhan">Dhan (Live Market Feed)</option>
                     </select>
                 </div>
                 <div class="settings-group">
                     <label>Feed Status</label>
                     <div style="display:flex; align-items:center; gap:8px; height:38px;">
-                        <span id="wsLatencyBadge" class="badge" style="background:rgba(34,197,94,0.15); color:var(--color-success); font-weight:600;">⚡ Real-Time Ticks (Connected)</span>
+                        <span id="wsLatencyBadge" class="badge" style="background:rgba(34,197,94,0.15); color:var(--color-success); font-weight:600;">⚡ Angel One Live LTP Stream (Connected)</span>
                     </div>
                 </div>
             </div>
             <p class="broker-help-text" style="margin:8px 0 0 0; font-size:12px; opacity:0.75;">
-                Streams real-time tick-by-tick prices, volume, and breakouts across the Screener, Portfolio, and Dashboard. App ID: <strong>70de391959b7</strong>
+                Streams real-time tick-by-tick prices, volume, and breakouts across 724+ NSE watchlist stocks and indices via Angel One SmartStream V2 WebSocket.
             </p>
         </div>
     </div>

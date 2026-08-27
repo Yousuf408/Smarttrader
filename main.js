@@ -168,7 +168,6 @@ document.addEventListener('keydown', (e) => {
             'h': 'home',
             's': 'screener',
             'p': 'portfolio',
-            't': 'testing',
             'c': 'settings',
         };
         const key = e.key.toLowerCase();
@@ -182,8 +181,7 @@ document.addEventListener('keydown', (e) => {
             const active = document.querySelector('.page.active');
             if (active) {
                 const id = active.id.replace('page-', '');
-                if (id === 'testing') loadTestingData();
-                else if (id === 'screener') refreshScreener();
+                if (id === 'screener') refreshScreener();
                 else if (id === 'portfolio') loadPortfolio();
                 else if (id === 'home') loadHome();
             }
@@ -311,7 +309,7 @@ const STRATEGIES = {
         icon: '📈',
         entryRule: 'Opening Range Breakout',
         risk: '2%',
-        columns: ['Symbol', 'Price', 'WS LTP', 'CHG%', 'GAP%', 'Volume', 'RELVOL', 'Inside', 'Breakout', '200 EMA', '9:15 HIGH', 'PREV HIGH', 'MaxQty', 'Sector']
+        columns: ['Symbol', 'Price', 'Last Update', 'CHG%', 'GAP%', 'Volume', 'RELVOL', 'Inside', 'Breakout', '200 EMA', '9:15 HIGH', 'PREV HIGH', 'MaxQty', 'Sector']
         // ✅ data array removed - will come from backend API
     },
     smartmoney: {
@@ -320,7 +318,7 @@ const STRATEGIES = {
         icon: '💰',
         entryRule: 'Breakout + Volume Confirmation',
         risk: '2.5%',
-        columns: ['Symbol', 'Max Qty', 'Price / Chg%', 'WS LTP', 'Volume / Rel Vol', 'Signal Time', 'POC / Gap', 'Signal Price / % Chg', 'Prev High', 'Candle Status'],
+        columns: ['Symbol', 'Max Qty', 'Price / Chg%', 'Last Update', 'Volume / Rel Vol', 'Signal Time', 'POC / Gap', 'Signal Price / % Chg', 'Prev High', 'Candle Status'],
         data: [
             { symbol: 'CYIENTDLM', maxQty: '179', price: '698.15', change: '+12.06%', volume: '12.9M', relvol: 'N/A', signalTime: 'N/A', poc: 'N/A', gap: 'N/A', signalPrice: 'N/A', prevHigh: '9:45', candleStatus: '9:40 9:45 9:50' },
             { symbol: 'LOTUSDEV', maxQty: '768', price: '162.70', change: '+9.81%', volume: '18.4M', relvol: 'N/A', signalTime: 'N/A', poc: 'N/A', gap: 'N/A', signalPrice: 'N/A', prevHigh: '9:45', candleStatus: '9:40 9:45 9:50' },
@@ -333,10 +331,9 @@ const STRATEGIES = {
         id: 'bigplayers',
         name: 'Big Players',
         icon: '🏢',
-        entryRule: 'Support & Resistance',
+        entryRule: 'Support & Resistance + 9:15 Range & Pullback',
         risk: '1.8%',
-        columns: ['Symbol', 'Price', 'WS LTP', 'CHG%', 'Breakout', 'Support Price', '9:15 High', '9:15 Low', 'MaxQty'],
-        
+        columns: ['Symbol', 'Price', 'Last Update', 'CHG%', '9:15 High', '9:15 Low', 'Today Low', 'New Low', 'Pullback (9:15)', 'Breakout', 'SL', 'MaxQty']
     }
 };
 
@@ -422,21 +419,11 @@ const PAGE_CONFIG = {
             if (typeof onStrategyChange === 'function') onStrategyChange();
         }
     },
-    niftyohlc: {
-        url: '/nifty_ohlc/nifty_ohlc_page.html',
-        init: () => {}
-    },
     portfolio: {
         url: '/portfolio/portfolio.html',
         init: () => {
             if (typeof loadPortfolio === 'function') loadPortfolio();
             if (typeof refreshPortfolio === 'function') refreshPortfolio();
-        }
-    },
-    testing: {
-        url: '/testing/testing.html',
-        init: () => {
-            if (typeof loadTesting === 'function') loadTesting();
         }
     },
     settings: {
@@ -479,10 +466,6 @@ async function navigateTo(pageId) {
     // Stop portfolio simulation when navigating away
     if (currentPageId === 'portfolio' && pageId !== 'portfolio' && typeof stopSimulation === 'function') {
         stopSimulation();
-    }
-    // Stop testing auto-refresh when navigating away
-    if (currentPageId === 'testing' && pageId !== 'testing' && typeof stopTestingAutoRefresh === 'function') {
-        stopTestingAutoRefresh();
     }
 
     currentPageId = pageId;
